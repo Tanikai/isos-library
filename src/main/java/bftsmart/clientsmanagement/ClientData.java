@@ -31,11 +31,11 @@ public class ClientData {
 
     public static final int MAX_SIZE_ORDERED_REQUESTS = 5;
 
-    private Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     ReentrantLock clientLock = new ReentrantLock();
 
-    private int clientId;
+    private final int clientId;
     //private PublicKey publicKey = null;
 
     private int session = -1;
@@ -51,7 +51,7 @@ public class ClientData {
     private RequestList replyStore = new RequestList(MAX_SIZE_ORDERED_REQUESTS);
 
     private Signature signatureVerificator = null;
-    
+
     /**
      * Class constructor. Just store the clientId and creates a signature
      * verificator for a given client public key.
@@ -71,6 +71,7 @@ public class ClientData {
             }
         }
     }
+
 
     public int getClientId() {
         return clientId;

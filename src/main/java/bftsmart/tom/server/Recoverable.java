@@ -24,34 +24,30 @@ import bftsmart.tom.ReplicaContext;
 /**
  * Classes that implement this interface should implement a state transfer protocol.
  * Typically, classes should both implement this interface and one of the executables.
- *
  */
 public interface Recoverable {
-
-
     /**
      * Sets the replica context
      * @param replicaContext  The replica context
      */
-    public void setReplicaContext(ReplicaContext replicaContext);
-	
+    void setReplicaContext(ReplicaContext replicaContext);
+
     /**
-     * 
-     * This  method should return a representation of the application state
+     * This method should return a representation of the application state
      * @param cid Consensus up to which the application should return an Application state
      * @param sendState true if the replica should send a complete
      * representation of the state instead of only the hash. False otherwise
      * @return  A representation of the application state
      */
-    public ApplicationState getState(int cid, boolean sendState);
-    
+    ApplicationState getState(int cid, boolean sendState);
+
     /**
      * Sets the state to the representation obtained in the state transfer protocol
      * @param state State obtained in the state transfer protocol
-     * @return 
+     * @return
      */
-    public int setState(ApplicationState state);
-    
+    int setState(ApplicationState state);
+
     /**
      * Recoverers implementing this interface will have to chose among
      * different options of state managers like DurableStateManager or
@@ -59,15 +55,14 @@ public interface Recoverable {
      * strategy to manage the state and return it in this method.
      * @return the implementation of state manager that suplies the strategy defined
      */
-    public StateManager getStateManager();
+    StateManager getStateManager();
 
     /**
      * Recoverers implement this interface to access and save replies from the ClientManager as replies need to be
      * transfered to a recovering replica as part of its replica state (which is enriched by a replies storage object)
      * To access the clientManager, the recoverer needs to set its reference
      */
-    public void setClientsManager(ClientsManager clientsManager);
-
+    void setClientsManager(ClientsManager clientsManager);
 
     /**
      * This method is invoked by ServiceReplica to pass information that was
@@ -76,16 +71,14 @@ public interface Recoverable {
      * occur, so developers must take this behavior into consideration when developing
      * their own logging and checkpointing. If there is no information to be passed to
      * the application, noOp(...) is invoked instead.
-     * 
+     *
      * @param CID the consensus instance ID associated with the request
      * @param requests A request decided in CID
      * @param msgCtx Message context associated with the client request and the consensus instance
      * where it was ordered. msgCtx.getConsensusId() will be equal to CID.
-     * 
-     * 
      */
-    public void Op(int CID, byte[] requests, MessageContext msgCtx);
-    
+    void Op(int CID, byte[] requests, MessageContext msgCtx);
+
     /**
      * This method is invoked by ServiceReplica to indicate that a consensus instance
      * finished without delivering anything to the application (e.g., an instance
@@ -94,12 +87,12 @@ public interface Recoverable {
      * transfer protocol to execute correctly, it needs to be notified of this special case
      * In the current protocols included, it suffices to register a NOOP operation in the
      * logs used within the state transfer, but never deliver it to the application
-     * 
+     *
      * @param CID the consensus instance where the aforementioned condition occurred
      * @param operations Operations decided in CID
      * @param msgCtx Message context associated with the consensus instance. furthermore
      * msgCtx.getConsensusId() will be equal to CID.
      */
-    public void noOp(int CID, byte[][] operations, MessageContext msgCtx[]);
-	
+    void noOp(int CID, byte[][] operations, MessageContext msgCtx[]);
+
 }
