@@ -22,11 +22,11 @@ import bftsmart.tom.core.messages.TOMMessage;
  * @author Paulo
  */
 public interface CommunicationSystemServerSide {
-  public void send(int[] targets, TOMMessage sm, boolean serializeClassHeaders);
+  void send(int[] targets, TOMMessage sm, boolean serializeClassHeaders);
 
-  public int[] getClients();
+  int[] getClients();
 
-  public void setRequestReceiver(RequestReceiver requestReceiver);
+  void setRequestReceiver(RequestReceiver requestReceiver);
 
-  public void shutdown();
+  void shutdown();
 }

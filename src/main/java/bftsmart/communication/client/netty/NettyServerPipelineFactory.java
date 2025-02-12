@@ -14,6 +14,7 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.configuration.ConfigurationManager;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -26,24 +27,25 @@ import bftsmart.reconfiguration.ServerViewController;
 
 public class NettyServerPipelineFactory {
 
+  // TODO Kai: can be set to private?
+  ConfigurationManager configManager;
   NettyClientServerCommunicationSystemServerSide ncs;
   ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
-  ServerViewController controller;
   ReentrantReadWriteLock rl;
 
   public NettyServerPipelineFactory(
       NettyClientServerCommunicationSystemServerSide ncs,
       ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable,
-      ServerViewController controller,
+      ConfigurationManager configManager,
       ReentrantReadWriteLock rl) {
+    this.configManager = configManager;
     this.ncs = ncs;
     this.sessionTable = sessionTable;
-    this.controller = controller;
     this.rl = rl;
   }
 
   public ByteToMessageDecoder getDecoder() {
-    return new NettyTOMMessageDecoder(false, sessionTable, controller, rl);
+    return new NettyTOMMessageDecoder(false, sessionTable, configManager, rl);
   }
 
   public MessageToByteEncoder getEncoder() {

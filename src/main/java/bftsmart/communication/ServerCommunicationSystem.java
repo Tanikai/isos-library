@@ -23,6 +23,7 @@ import bftsmart.communication.client.CommunicationSystemServerSide;
 import bftsmart.communication.client.CommunicationSystemServerSideFactory;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.ServersCommunicationLayer;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.consensus.roles.Acceptor;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.tom.ServiceReplica;
@@ -41,29 +42,27 @@ public class ServerCommunicationSystem extends Thread {
 
   private boolean doWork = true;
   public final long MESSAGE_WAIT_TIME = 100;
-  private LinkedBlockingQueue<SystemMessage> inQueue =
-      null; // new LinkedBlockingQueue<SystemMessage>(IN_QUEUE_SIZE);
+  private LinkedBlockingQueue<SystemMessage> inQueue = null;
   protected MessageHandler messageHandler;
 
+  private ConfigurationManager configManager;
   private ServersCommunicationLayer serversConn;
   private CommunicationSystemServerSide clientsConn;
-  private ServerViewController controller;
 
   /** Creates a new instance of ServerCommunicationSystem */
-  public ServerCommunicationSystem(ServerViewController controller, ServiceReplica replica)
-      throws Exception {
+  public ServerCommunicationSystem(ConfigurationManager configManager) throws Exception {
     super("Server Comm. System");
 
-    this.controller = controller;
-
+    this.configManager = configManager;
     messageHandler = new MessageHandler();
 
-    inQueue = new LinkedBlockingQueue<SystemMessage>(controller.getStaticConf().getInQueueSize());
+    inQueue = new LinkedBlockingQueue<>(configManager.getStaticConf().getInQueueSize());
 
-    serversConn = new ServersCommunicationLayer(controller, inQueue, replica);
+    serversConn = new ServersCommunicationLayer(configManager, inQueue);
 
     // ******* EDUARDO BEGIN **************//
-    clientsConn = CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(controller);
+    clientsConn =
+        CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
     // ******* EDUARDO END **************//
   }
 
@@ -76,7 +75,7 @@ public class ServerCommunicationSystem extends Thread {
     this.serversConn.updateConnections();
     if (clientsConn == null) {
       clientsConn =
-          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(controller);
+          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
     }
   }
 
@@ -92,7 +91,7 @@ public class ServerCommunicationSystem extends Thread {
   public void setRequestReceiver(RequestReceiver requestReceiver) {
     if (clientsConn == null) {
       clientsConn =
-          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(controller);
+          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
     }
     clientsConn.setRequestReceiver(requestReceiver);
   }
@@ -100,7 +99,6 @@ public class ServerCommunicationSystem extends Thread {
   /** Thread method responsible for receiving messages sent by other servers. */
   @Override
   public void run() {
-
     long count = 0;
     while (doWork) {
       try {
@@ -155,7 +153,6 @@ public class ServerCommunicationSystem extends Thread {
   }
 
   public void shutdown() {
-
     logger.info("Shutting down communication layer");
 
     this.doWork = false;

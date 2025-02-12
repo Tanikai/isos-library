@@ -16,6 +16,7 @@ package bftsmart.communication.client.netty;
 
 import bftsmart.communication.client.CommunicationSystemServerSide;
 import bftsmart.communication.client.RequestReceiver;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.util.TOMUtil;
@@ -53,7 +54,7 @@ public class NettyClientServerCommunicationSystemServerSide
   private RequestReceiver requestReceiver;
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionReplicaToClient;
   private ReentrantReadWriteLock rl;
-  private ServerViewController controller;
+  private ConfigurationManager configManager;
   private boolean closed = false;
   private Channel mainChannel;
 
@@ -73,12 +74,12 @@ public class NettyClientServerCommunicationSystemServerSide
 
   /* Tulio Ribeiro */
 
-  public NettyClientServerCommunicationSystemServerSide(ServerViewController controller) {
+  public NettyClientServerCommunicationSystemServerSide(ConfigurationManager configManager) {
     try {
 
-      this.controller = controller;
+      this.configManager = configManager;
       /* Tulio Ribeiro */
-      privKey = controller.getStaticConf().getPrivateKey();
+      privKey = configManager.getStaticConf().getPrivateKey();
 
       sessionReplicaToClient = new ConcurrentHashMap<>();
       rl = new ReentrantReadWriteLock();
@@ -86,7 +87,7 @@ public class NettyClientServerCommunicationSystemServerSide
       // Configure the server.
 
       serverPipelineFactory =
-          new NettyServerPipelineFactory(this, sessionReplicaToClient, controller, rl);
+          new NettyServerPipelineFactory(this, sessionReplicaToClient, this.configManager, rl);
 
       EventLoopGroup bossGroup = new NioEventLoopGroup(bossThreads);
       EventLoopGroup workerGroup =
@@ -114,9 +115,9 @@ public class NettyClientServerCommunicationSystemServerSide
           .childOption(ChannelOption.TCP_NODELAY, true);
       String myAddress;
       String confAddress =
-          controller
+          configManager
               .getStaticConf()
-              .getRemoteAddress(controller.getStaticConf().getProcessId())
+              .getRemoteAddress(configManager.getStaticConf().getProcessId())
               .getAddress()
               .getHostAddress();
 
@@ -124,7 +125,7 @@ public class NettyClientServerCommunicationSystemServerSide
 
         myAddress = InetAddress.getLoopbackAddress().getHostAddress();
 
-      } else if (controller.getStaticConf().getBindAddress().isEmpty()) {
+      } else if (configManager.getStaticConf().getBindAddress().isEmpty()) {
 
         myAddress = InetAddress.getLocalHost().getHostAddress();
 
@@ -139,41 +140,45 @@ public class NettyClientServerCommunicationSystemServerSide
 
       } else {
 
-        myAddress = controller.getStaticConf().getBindAddress();
+        myAddress = configManager.getStaticConf().getBindAddress();
       }
 
-      int myPort = controller.getStaticConf().getPort(controller.getStaticConf().getProcessId());
+      int myPort =
+          configManager.getStaticConf().getPort(configManager.getStaticConf().getProcessId());
 
       ChannelFuture f = b.bind(new InetSocketAddress(myAddress, myPort)).sync();
 
-      logger.info("ID = " + controller.getStaticConf().getProcessId());
-      logger.info("N = " + controller.getCurrentViewN());
-      logger.info("F = " + controller.getCurrentViewF());
+      logger.info("ID = " + configManager.getStaticConf().getProcessId());
+      // FIXME Kai: getCurrentView quorum sizes have to be determined somewhere else
+      //      logger.info("N = " + controller.getCurrentViewN());
+      //      logger.info("F = " + controller.getCurrentViewF());
       logger.info(
           "Port (client <-> server) = "
-              + controller.getStaticConf().getPort(controller.getStaticConf().getProcessId()));
+              + configManager
+                  .getStaticConf()
+                  .getPort(configManager.getStaticConf().getProcessId()));
       logger.info(
           "Port (server <-> server) = "
-              + controller
+              + configManager
                   .getStaticConf()
-                  .getServerToServerPort(controller.getStaticConf().getProcessId()));
-      logger.info("requestTimeout = " + controller.getStaticConf().getRequestTimeout());
-      logger.info("maxBatch = " + controller.getStaticConf().getMaxBatchSize());
-      if (controller.getStaticConf().getUseSignatures() == 1) logger.info("Using Signatures");
-      else if (controller.getStaticConf().getUseSignatures() == 2)
+                  .getServerToServerPort(configManager.getStaticConf().getProcessId()));
+      logger.info("requestTimeout = " + configManager.getStaticConf().getRequestTimeout());
+      logger.info("maxBatch = " + configManager.getStaticConf().getMaxBatchSize());
+      if (configManager.getStaticConf().getUseSignatures() == 1) logger.info("Using Signatures");
+      else if (configManager.getStaticConf().getUseSignatures() == 2)
         logger.info("Using benchmark signature verification");
       logger.info("Binded replica to IP address " + myAddress);
       logger.info(
           "Optimizations: "
               + " Read-only Requests: "
-              + (controller.getStaticConf().useReadOnlyRequests() ? "enabled" : "disabled"));
+              + (configManager.getStaticConf().useReadOnlyRequests() ? "enabled" : "disabled"));
       // ******* EDUARDO END **************//
 
       /* Tulio Ribeiro */
       // SSL/TLS
       logger.info(
           "SSL/TLS enabled, protocol version: {}",
-          controller.getStaticConf().getSSLTLSProtocolVersion());
+          configManager.getStaticConf().getSSLTLSProtocolVersion());
 
       /* Tulio Ribeiro END */
 
@@ -354,8 +359,8 @@ public class NettyClientServerCommunicationSystemServerSide
               (int)
                   (1000
                       * // Double retry-timeout every time while approaching client's invokeOrdered
-                        // timeout
-                      ((double) controller.getStaticConf().getClientInvokeOrderedTimeout()
+                      // timeout
+                      ((double) configManager.getStaticConf().getClientInvokeOrderedTimeout()
                           * Math.pow(2, -1 * sm.retry)));
           sm.retry = sm.retry - 1;
           TOMMessage finalSm = sm;

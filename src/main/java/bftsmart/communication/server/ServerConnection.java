@@ -15,6 +15,7 @@
 package bftsmart.communication.server;
 
 import bftsmart.communication.SystemMessage;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.reconfiguration.VMMessage;
 import bftsmart.tom.ServiceReplica;
@@ -47,7 +48,7 @@ public class ServerConnection {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private static final long POOL_TIME = 5000;
-  private final ServerViewController controller;
+  private final ConfigurationManager configManager;
   private SSLSocket socket;
   private DataOutputStream socketOutStream = null;
   private DataInputStream socketInStream = null;
@@ -74,13 +75,12 @@ public class ServerConnection {
   private static final String SECRET = "MySeCreT_2hMOygBwY";
 
   public ServerConnection(
-      ServerViewController controller,
+      ConfigurationManager configManager,
       SSLSocket socket,
       int remoteId,
-      LinkedBlockingQueue<SystemMessage> inQueue,
-      ServiceReplica replica) {
+      LinkedBlockingQueue<SystemMessage> inQueue) {
 
-    this.controller = controller;
+    this.configManager = configManager;
 
     this.socket = socket;
 
@@ -88,7 +88,7 @@ public class ServerConnection {
 
     this.inQueue = inQueue;
 
-    this.outQueue = new LinkedBlockingQueue<>(this.controller.getStaticConf().getOutQueueSize());
+    this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
 
     // Connect to the remote process or just wait for the connection?
     if (isToConnect()) {
@@ -105,23 +105,31 @@ public class ServerConnection {
     }
 
     // ******* EDUARDO BEGIN **************//
-    this.useSenderThread = this.controller.getStaticConf().isUseSenderThread();
+    this.useSenderThread = this.configManager.getStaticConf().isUseSenderThread();
 
-    if (useSenderThread && (this.controller.getStaticConf().getTTPId() != remoteId)) {
+    if (useSenderThread && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
       new SenderThread().start();
     } else {
       sendLock = new ReentrantLock();
     }
 
-    if (!this.controller.getStaticConf().isTheTTP()) {
-      if (this.controller.getStaticConf().getTTPId() == remoteId) {
-        // Uma thread "diferente" para as msgs recebidas da TTP
-        new TTPReceiverThread(replica).start();
-      } else {
-        new ReceiverThread().start();
-      }
+    // TODO Kai: Is TTP relevant for ISOS or not?
+
+    //    if (!this.controller.getStaticConf().isTheTTP()) {
+    //      if (this.controller.getStaticConf().getTTPId() == remoteId) {
+    //        // Uma thread "diferente" para as msgs recebidas da TTP
+    //        new TTPReceiverThread(replica).start();
+    //      } else {
+    //        new ReceiverThread().start();
+    //      }
+    //    }
+
+    // New Version
+    if (!this.configManager.getStaticConf().isTheTTP()) {
+      new ReceiverThread().start();
     }
     // ******* EDUARDO END **************//
+
   }
 
   /**
@@ -207,52 +215,20 @@ public class ServerConnection {
   }
 
   // ******* EDUARDO BEGIN **************//
-  // return true of a process shall connect to the remote process, false otherwise
+  // return true if a process shall connect to the remote process, false otherwise
   private boolean isToConnect() {
-    if (this.controller.getStaticConf().getTTPId() == remoteId) {
+    if (this.configManager.getStaticConf().getTTPId() == remoteId) {
       // Need to wait for the connection request from the TTP, do not tray to connect to it
       return false;
-    } else if (this.controller.getStaticConf().getTTPId()
-        == this.controller.getStaticConf().getProcessId()) {
+    } else if (this.configManager.getStaticConf().getTTPId()
+        == this.configManager.getStaticConf().getProcessId()) {
       // If this is a TTP, one must connect to the remote process
       return true;
     }
     boolean ret = false;
-    if (this.controller.isInCurrentView()) {
 
-      // in this case, the node with higher ID starts the connection
-      if (this.controller.getStaticConf().getProcessId() > remoteId) {
-        ret = true;
-      }
-
-      /* JCS: I commented the code below to fix a bug, but I am not sure
-      whether its completely useless or not. The 'if' above was taken
-      from that same code (its the only part I understand why is necessary)
-      I keep the code commented just to be on the safe side
-
-
-
-      boolean me = this.controller.isInLastJoinSet(this.controller.getStaticConf().getProcessId());
-      boolean remote = this.controller.isInLastJoinSet(remoteId);
-
-      //either both endpoints are old in the system (entered the system in a previous view),
-      //or both entered during the last reconfiguration
-      if ((me && remote) || (!me && !remote)) {
-      //in this case, the node with higher ID starts the connection
-      if (this.controller.getStaticConf().getProcessId() > remoteId) {
-      ret = true;
-      }
-      //this process is the older one, and the other one entered in the last reconfiguration
-      } else if (!me && remote) {
-      ret = true;
-
-      } //else if (me && !remote) { //this process entered in the last reconfig and the other one is old
-      //ret=false; //not necessary, as ret already is false
-      //}
-
-      */
-    }
-    return ret;
+    // the node with higher ID starts the connection
+    return this.configManager.getStaticConf().getProcessId() > remoteId;
   }
 
   // ******* EDUARDO END **************//
@@ -417,9 +393,9 @@ public class ServerConnection {
 
   // ******* EDUARDO BEGIN: special thread for receiving messages indicating the entrance into the
   // system, coming from the TTP **************//
-  // Simly pass the messages to the replica, indicating its entry into the system
+  // Simply pass the messages to the replica, indicating its entry into the system
   // TODO: Ask eduardo why a new thread is needed!!!
-  // TODO2: Remove all duplicated code
+  // TODO 2: Remove all duplicated code
 
   /** Thread used to receive packets from the remote server. */
   protected class TTPReceiverThread extends Thread {
@@ -491,7 +467,7 @@ public class ServerConnection {
     try {
       fis =
           new FileInputStream(
-              "config/keysSSL_TLS/" + this.controller.getStaticConf().getSSLTLSKeyStore());
+              "config/keysSSL_TLS/" + this.configManager.getStaticConf().getSSLTLSKeyStore());
       ks = KeyStore.getInstance(KeyStore.getDefaultType());
       ks.load(fis, SECRET.toCharArray());
     } catch (KeyStoreException | NoSuchAlgorithmException | CertificateException | IOException e) {
@@ -512,7 +488,7 @@ public class ServerConnection {
       TrustManagerFactory trustMgrFactory = TrustManagerFactory.getInstance(algorithm);
       trustMgrFactory.init(ks);
       SSLContext context =
-          SSLContext.getInstance(this.controller.getStaticConf().getSSLTLSProtocolVersion());
+          SSLContext.getInstance(this.configManager.getStaticConf().getSSLTLSProtocolVersion());
       context.init(kmf.getKeyManagers(), trustMgrFactory.getTrustManagers(), new SecureRandom());
       socketFactory = context.getSocketFactory();
 
@@ -527,11 +503,11 @@ public class ServerConnection {
       this.socket =
           (SSLSocket)
               socketFactory.createSocket(
-                  this.controller.getStaticConf().getHost(remoteId),
-                  this.controller.getStaticConf().getServerToServerPort(remoteId));
+                  this.configManager.getStaticConf().getHost(remoteId),
+                  this.configManager.getStaticConf().getServerToServerPort(remoteId));
       this.socket.setKeepAlive(true);
       this.socket.setTcpNoDelay(true);
-      this.socket.setEnabledCipherSuites(this.controller.getStaticConf().getEnabledCiphers());
+      this.socket.setEnabledCipherSuites(this.configManager.getStaticConf().getEnabledCiphers());
 
       this.socket.addHandshakeCompletedListener(
           new HandshakeCompletedListener() {
@@ -548,7 +524,7 @@ public class ServerConnection {
 
       ServersCommunicationLayer.setSSLSocketOptions(this.socket);
       new DataOutputStream(this.socket.getOutputStream())
-          .writeInt(this.controller.getStaticConf().getProcessId());
+          .writeInt(this.configManager.getStaticConf().getProcessId());
 
     } catch (SocketException | UnknownHostException e) {
       logger.error("Connection refused", e);

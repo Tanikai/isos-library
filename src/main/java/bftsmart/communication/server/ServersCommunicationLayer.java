@@ -15,7 +15,9 @@
 package bftsmart.communication.server;
 
 import bftsmart.communication.SystemMessage;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.reconfiguration.ServerViewController;
+import bftsmart.reconfiguration.util.Configuration;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.util.TOMUtil;
 import org.slf4j.Logger;
@@ -55,7 +57,8 @@ public class ServersCommunicationLayer extends Thread {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  private final ServerViewController controller;
+  //  private final ServerViewController controller;
+  private final ConfigurationManager configManager;
   private final LinkedBlockingQueue<SystemMessage> inQueue;
   private final HashMap<Integer, ServerConnection> connections = new HashMap<>();
   private ServerSocket serverSocket;
@@ -64,7 +67,6 @@ public class ServersCommunicationLayer extends Thread {
   private final Lock connectionsLock = new ReentrantLock();
   private final ReentrantLock waitViewLock = new ReentrantLock();
   private final List<PendingConnection> pendingConn = new LinkedList<PendingConnection>();
-  private final ServiceReplica replica;
 
   /** Tulio A. Ribeiro SSL / TLS. */
   private static final String SECRET = "MySeCreT_2hMOygBwY";
@@ -73,24 +75,23 @@ public class ServersCommunicationLayer extends Thread {
   private final SSLServerSocket serverSocketSSLTLS;
 
   public ServersCommunicationLayer(
-      ServerViewController controller,
-      LinkedBlockingQueue<SystemMessage> inQueue,
-      ServiceReplica replica)
+      ConfigurationManager configManager,
+      LinkedBlockingQueue<SystemMessage> inQueue
+     )
       throws Exception {
 
-    this.controller = controller;
+    this.configManager = configManager;
     this.inQueue = inQueue;
-    this.me = controller.getStaticConf().getProcessId();
-    this.replica = replica;
-    String ssltlsProtocolVersion = controller.getStaticConf().getSSLTLSProtocolVersion();
+    this.me = configManager.getStaticConf().getProcessId();
+    String ssltlsProtocolVersion = configManager.getStaticConf().getSSLTLSProtocolVersion();
 
     String myAddress;
     String confAddress = "";
     try {
       confAddress =
-          controller
+          configManager
               .getStaticConf()
-              .getRemoteAddress(controller.getStaticConf().getProcessId())
+              .getRemoteAddress(configManager.getStaticConf().getProcessId())
               .getAddress()
               .getHostAddress();
     } catch (Exception e) {
@@ -98,16 +99,16 @@ public class ServersCommunicationLayer extends Thread {
       logger.debug(" ####### Debugging at setting up the Communication layer ");
       logger.debug(
           "my Id is "
-              + controller.getStaticConf().getProcessId()
+              + configManager.getStaticConf().getProcessId()
               + " my remote Address is  "
-              + controller
+              + configManager
                   .getStaticConf()
-                  .getRemoteAddress(controller.getStaticConf().getProcessId()));
+                  .getRemoteAddress(configManager.getStaticConf().getProcessId()));
     }
 
     if (InetAddress.getLoopbackAddress().getHostAddress().equals(confAddress)) {
       myAddress = InetAddress.getLoopbackAddress().getHostAddress();
-    } else if (controller.getStaticConf().getBindAddress().isEmpty()) {
+    } else if (configManager.getStaticConf().getBindAddress().isEmpty()) {
       myAddress = InetAddress.getLocalHost().getHostAddress();
       // If the replica binds to the loopback address, clients will not be able to connect to
       // replicas.
@@ -116,16 +117,18 @@ public class ServersCommunicationLayer extends Thread {
         myAddress = confAddress;
       }
     } else {
-      myAddress = controller.getStaticConf().getBindAddress();
+      myAddress = configManager.getStaticConf().getBindAddress();
     }
 
     int myPort =
-        controller.getStaticConf().getServerToServerPort(controller.getStaticConf().getProcessId());
+        configManager
+            .getStaticConf()
+            .getServerToServerPort(configManager.getStaticConf().getProcessId());
 
     KeyStore ks;
     try (FileInputStream fis =
         new FileInputStream(
-            "config/keysSSL_TLS/" + controller.getStaticConf().getSSLTLSKeyStore())) {
+            "config/keysSSL_TLS/" + configManager.getStaticConf().getSSLTLSKeyStore())) {
       ks = KeyStore.getInstance(KeyStore.getDefaultType());
       ks.load(fis, SECRET.toCharArray());
     }
@@ -145,7 +148,8 @@ public class ServersCommunicationLayer extends Thread {
         (SSLServerSocket)
             serverSocketFactory.createServerSocket(myPort, 100, InetAddress.getByName(myAddress));
 
-    serverSocketSSLTLS.setEnabledCipherSuites(this.controller.getStaticConf().getEnabledCiphers());
+    serverSocketSSLTLS.setEnabledCipherSuites(
+        this.configManager.getStaticConf().getEnabledCiphers());
 
     String[] ciphers = serverSocketFactory.getSupportedCipherSuites();
     for (String cipher : ciphers) {
@@ -165,20 +169,21 @@ public class ServersCommunicationLayer extends Thread {
 
     // Try connecting if a member of the current view. Otherwise, wait until the Join has been
     // processed!
-    if (controller.isInCurrentView()) {
-      int[] initialV = controller.getCurrentViewAcceptors();
-      for (int j : initialV) {
-        if (j != me) {
-          getConnection(j);
-        }
-      }
-    }
+    // FIXME Kai: remove controller from server communication layer
+    //    if (controller.isInCurrentView()) {
+    //      int[] initialV = controller.getCurrentViewAcceptors();
+    //      for (int j : initialV) {
+    //        if (j != me) {
+    //          getConnection(j);
+    //        }
+    //      }
+    //    }
 
     start();
   }
 
   public SecretKey getSecretKey(int id) {
-    if (id == controller.getStaticConf().getProcessId()) return selfPwd;
+    if (id == configManager.getStaticConf().getProcessId()) return selfPwd;
     else return connections.get(id).getSecretKey();
   }
 
@@ -186,32 +191,33 @@ public class ServersCommunicationLayer extends Thread {
   public void updateConnections() {
     connectionsLock.lock();
 
-    if (this.controller.isInCurrentView()) {
-
-      Iterator<Integer> it = this.connections.keySet().iterator();
-      List<Integer> toRemove = new LinkedList<>();
-      while (it.hasNext()) {
-        int rm = it.next();
-        if (!this.controller.isCurrentViewMember(rm)) {
-          toRemove.add(rm);
-        }
-      }
-      for (Integer integer : toRemove) {
-        this.connections.remove(integer).shutdown();
-      }
-
-      int[] newV = controller.getCurrentViewAcceptors();
-      for (int j : newV) {
-        if (j != me) {
-          getConnection(j);
-        }
-      }
-    } else {
-
-      for (Integer integer : this.connections.keySet()) {
-        this.connections.get(integer).shutdown();
-      }
-    }
+    // FIXME Kai: remove controller from server communication layer
+//    if (this.controller.isInCurrentView()) {
+//
+//      Iterator<Integer> it = this.connections.keySet().iterator();
+//      List<Integer> toRemove = new LinkedList<>();
+//      while (it.hasNext()) {
+//        int rm = it.next();
+//        if (!this.controller.isCurrentViewMember(rm)) {
+//          toRemove.add(rm);
+//        }
+//      }
+//      for (Integer integer : toRemove) {
+//        this.connections.remove(integer).shutdown();
+//      }
+//
+//      int[] newV = controller.getCurrentViewAcceptors();
+//      for (int j : newV) {
+//        if (j != me) {
+//          getConnection(j);
+//        }
+//      }
+//    } else {
+//
+//      for (Integer integer : this.connections.keySet()) {
+//        this.connections.get(integer).shutdown();
+//      }
+//    }
 
     connectionsLock.unlock();
   }
@@ -220,7 +226,7 @@ public class ServersCommunicationLayer extends Thread {
     connectionsLock.lock();
     ServerConnection ret = this.connections.get(remoteId);
     if (ret == null) {
-      ret = new ServerConnection(controller, null, remoteId, this.inQueue, this.replica);
+      ret = new ServerConnection(this.configManager, null, remoteId, this.inQueue);
       this.connections.put(remoteId, ret);
     }
     connectionsLock.unlock();
@@ -263,7 +269,6 @@ public class ServersCommunicationLayer extends Thread {
   }
 
   public void shutdown() {
-
     logger.info("Shutting down replica sockets");
 
     doWork = false;
@@ -300,7 +305,6 @@ public class ServersCommunicationLayer extends Thread {
   public void run() {
     while (doWork) {
       try {
-
         // System.out.println("Waiting for server connections");
 
         SSLSocket newSocket = (SSLSocket) serverSocketSSLTLS.accept();
@@ -310,7 +314,7 @@ public class ServersCommunicationLayer extends Thread {
 
         // ******* EDUARDO BEGIN **************//
         if (!this.controller.isInCurrentView()
-            && (this.controller.getStaticConf().getTTPId() != remoteId)) {
+            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
           waitViewLock.lock();
           pendingConn.add(new PendingConnection(newSocket, remoteId));
           waitViewLock.unlock();
@@ -340,7 +344,7 @@ public class ServersCommunicationLayer extends Thread {
 
   // ******* EDUARDO BEGIN **************//
   private void establishConnection(SSLSocket newSocket, int remoteId) throws IOException {
-    if ((this.controller.getStaticConf().getTTPId() == remoteId)
+    if ((this.configManager.getStaticConf().getTTPId() == remoteId)
         || this.controller.isCurrentViewMember(remoteId)) {
       connectionsLock.lock();
       if (this.connections.get(remoteId) == null) { // This must never happen!!!
@@ -384,15 +388,16 @@ public class ServersCommunicationLayer extends Thread {
   @Override
   public String toString() {
     StringBuilder str = new StringBuilder("inQueue=" + inQueue.toString());
-    int[] activeServers = controller.getCurrentViewAcceptors();
-    for (int activeServer : activeServers) {
-      if (me != activeServer) {
-        str.append(", connections[")
-            .append(activeServer)
-            .append("]: outQueue=")
-            .append(getConnection(activeServer).outQueue);
-      }
-    }
+    // FIXME: define active servers without viewAcceptors
+    //    int[] activeServers = controller.getCurrentViewAcceptors();
+    //    for (int activeServer : activeServers) {
+    //      if (me != activeServer) {
+    //        str.append(", connections[")
+    //            .append(activeServer)
+    //            .append("]: outQueue=")
+    //            .append(getConnection(activeServer).outQueue);
+    //      }
+    //    }
     return str.toString();
   }
 

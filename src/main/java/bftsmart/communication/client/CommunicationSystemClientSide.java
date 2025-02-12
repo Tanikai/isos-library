@@ -22,16 +22,16 @@ import bftsmart.tom.core.messages.TOMMessage;
  * @author Paulo
  */
 public interface CommunicationSystemClientSide {
-  public void send(boolean sign, int[] targets, TOMMessage sm);
+  void send(boolean sign, int[] targets, TOMMessage sm);
 
-  public void setReplyReceiver(ReplyReceiver trr);
+  void setReplyReceiver(ReplyReceiver trr);
 
-  public void sign(TOMMessage sm);
+  void sign(TOMMessage sm);
 
-  public void close();
+  void close();
 
   // ******* EDUARDO BEGIN **************//
-  public void updateConnections();
+  void updateConnections();
   // ******* EDUARDO END **************//
 
 }

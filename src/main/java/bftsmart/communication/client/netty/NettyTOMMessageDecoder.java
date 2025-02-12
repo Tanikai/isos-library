@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import bftsmart.configuration.ConfigurationManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,7 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
   private boolean isClient;
 
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
-  private ViewController controller;
+  private ConfigurationManager configManager;
   private boolean firstTime;
   private ReentrantReadWriteLock rl;
   private int bytesToSkip;
@@ -49,11 +50,10 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
   public NettyTOMMessageDecoder(
       boolean isClient,
       ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable,
-      ViewController controller,
+      ConfigurationManager configManager,
       ReentrantReadWriteLock rl) {
     this.isClient = isClient;
     this.sessionTable = sessionTable;
-    this.controller = controller;
     this.firstTime = true;
     this.rl = rl;
     this.bytesToSkip = 0;
@@ -65,7 +65,7 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
             + "\n\t firstTime: {};"
             + "\n\t rl: {};"
             + "\n\t signatureSize: {};",
-        new Object[] {isClient, sessionTable.toString(), controller, firstTime, rl});
+        new Object[] {isClient, sessionTable.toString(), firstTime, rl});
   }
 
   @Override
@@ -96,7 +96,7 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
       // Logger.println("Receiving message with "+dataLength+" bytes.");
 
       // Skip the request if it is too large
-      if (dataLength > controller.getStaticConf().getMaxRequestSize() && !isClient) {
+      if (dataLength > configManager.getStaticConf().getMaxRequestSize() && !isClient) {
         logger.warn("Discarding request with " + dataLength + " bytes");
         buffer.skipBytes(Integer.BYTES);
         int readableBytes = buffer.readableBytes();
