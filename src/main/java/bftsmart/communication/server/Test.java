@@ -17,6 +17,7 @@ package bftsmart.communication.server;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import bftsmart.communication.SystemMessage;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
@@ -32,8 +33,9 @@ public class Test {
     // ******* EDUARDO BEGIN **************//
     ServerViewController controller =
         new ServerViewController(Integer.parseInt(args[0]), null, null);
+    ConfigurationManager configManager = new ConfigurationManager(Integer.parseInt(args[0]), null, null);
     LinkedBlockingQueue<SystemMessage> inQueue = new LinkedBlockingQueue<SystemMessage>();
-    ServersCommunicationLayer scl = new ServersCommunicationLayer(controller, inQueue, null);
+    ServersCommunicationLayer scl = new ServersCommunicationLayer(configManager, inQueue);
 
     int id = controller.getStaticConf().getProcessId();
     int n = controller.getCurrentViewN();

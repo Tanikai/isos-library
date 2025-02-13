@@ -24,6 +24,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.StringTokenizer;
 
+import bftsmart.configuration.ConfigurationManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,11 +39,12 @@ import bftsmart.tom.util.KeyLoader;
 public class ViewManager {
 
     private Logger logger = LoggerFactory.getLogger(this.getClass());
-    
+
     private int id;
     private Reconfiguration rec = null;
     //private Hashtable<Integer, ServerConnection> connections = new Hashtable<Integer, ServerConnection>();
     private ServerViewController controller;
+    private ConfigurationManager configManager;
     //Need only inform those that are entering the systems, as those already
     //in the system will execute the reconfiguration request
     private List<Integer> addIds = new LinkedList<Integer>();
@@ -54,13 +56,14 @@ public class ViewManager {
     public ViewManager(String configHome, KeyLoader loader) {
         this.id = loadID(configHome);
         this.controller = new ServerViewController(id, configHome, loader);
+        this.configManager = new ConfigurationManager(id, configHome, loader);
         this.rec = new Reconfiguration(id, configHome, loader);
     }
 
     public void connect(){
         this.rec.connect();
     }
-    
+
     private int loadID(String configHome) {
         try {
             String path = "";
@@ -115,14 +118,14 @@ public class ViewManager {
 
         VMMessage msg = new VMMessage(id, r);
 
-        if (addIds.size() > 0) { 
+        if (addIds.size() > 0) {
             sendResponse(addIds.toArray(new Integer[1]), msg);
             addIds.clear();
         }
     }
 
     private ServerConnection getConnection(int remoteId) {
-         return new ServerConnection(controller, null, remoteId, null, null);
+         return new ServerConnection(configManager, null, remoteId, null);
     }
 
     public void sendResponse(Integer[] targets, VMMessage sm) {

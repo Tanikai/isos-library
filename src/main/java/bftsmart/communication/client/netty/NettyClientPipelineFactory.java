@@ -14,6 +14,7 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.configuration.ConfigurationManager;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -27,22 +28,22 @@ public class NettyClientPipelineFactory {
 
   NettyClientServerCommunicationSystemClientSide ncs;
   ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
-  ClientViewController controller;
+  ConfigurationManager configManager;
   ReentrantReadWriteLock rl;
 
   public NettyClientPipelineFactory(
       NettyClientServerCommunicationSystemClientSide ncs,
       ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable,
-      ClientViewController controller,
+      ConfigurationManager configManager,
       ReentrantReadWriteLock rl) {
     this.ncs = ncs;
     this.sessionTable = sessionTable;
     this.rl = rl;
-    this.controller = controller;
+    this.configManager = configManager;
   }
 
   public ByteToMessageDecoder getDecoder() {
-    return new NettyTOMMessageDecoder(true, sessionTable, controller, rl);
+    return new NettyTOMMessageDecoder(true, sessionTable, configManager, rl);
   }
 
   public MessageToByteEncoder getEncoder() {

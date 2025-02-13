@@ -75,9 +75,7 @@ public class ServersCommunicationLayer extends Thread {
   private final SSLServerSocket serverSocketSSLTLS;
 
   public ServersCommunicationLayer(
-      ConfigurationManager configManager,
-      LinkedBlockingQueue<SystemMessage> inQueue
-     )
+      ConfigurationManager configManager, LinkedBlockingQueue<SystemMessage> inQueue)
       throws Exception {
 
     this.configManager = configManager;
@@ -192,32 +190,32 @@ public class ServersCommunicationLayer extends Thread {
     connectionsLock.lock();
 
     // FIXME Kai: remove controller from server communication layer
-//    if (this.controller.isInCurrentView()) {
-//
-//      Iterator<Integer> it = this.connections.keySet().iterator();
-//      List<Integer> toRemove = new LinkedList<>();
-//      while (it.hasNext()) {
-//        int rm = it.next();
-//        if (!this.controller.isCurrentViewMember(rm)) {
-//          toRemove.add(rm);
-//        }
-//      }
-//      for (Integer integer : toRemove) {
-//        this.connections.remove(integer).shutdown();
-//      }
-//
-//      int[] newV = controller.getCurrentViewAcceptors();
-//      for (int j : newV) {
-//        if (j != me) {
-//          getConnection(j);
-//        }
-//      }
-//    } else {
-//
-//      for (Integer integer : this.connections.keySet()) {
-//        this.connections.get(integer).shutdown();
-//      }
-//    }
+    //    if (this.controller.isInCurrentView()) {
+    //
+    //      Iterator<Integer> it = this.connections.keySet().iterator();
+    //      List<Integer> toRemove = new LinkedList<>();
+    //      while (it.hasNext()) {
+    //        int rm = it.next();
+    //        if (!this.controller.isCurrentViewMember(rm)) {
+    //          toRemove.add(rm);
+    //        }
+    //      }
+    //      for (Integer integer : toRemove) {
+    //        this.connections.remove(integer).shutdown();
+    //      }
+    //
+    //      int[] newV = controller.getCurrentViewAcceptors();
+    //      for (int j : newV) {
+    //        if (j != me) {
+    //          getConnection(j);
+    //        }
+    //      }
+    //    } else {
+    //
+    //      for (Integer integer : this.connections.keySet()) {
+    //        this.connections.get(integer).shutdown();
+    //      }
+    //    }
 
     connectionsLock.unlock();
   }
@@ -245,8 +243,8 @@ public class ServersCommunicationLayer extends Thread {
 
     byte[] data = bOut.toByteArray();
 
-    // this shuffling is done to prevent the replica with the lowest ID/index  from being always
-    // the last one receiving the messages, which can result in that replica  to become consistently
+    // this shuffling is done to prevent the replica with the lowest ID/index from being always
+    // the last one receiving the messages, which can result in that replica to become consistently
     // delayed in relation to the others.
     /*Tulio A. Ribeiro*/
     Integer[] targetsShuffled = Arrays.stream(targets).boxed().toArray(Integer[]::new);
@@ -269,18 +267,15 @@ public class ServersCommunicationLayer extends Thread {
   }
 
   public void shutdown() {
-    logger.info("Shutting down replica sockets");
+    logger.info("Shutting down all replica sockets");
 
     doWork = false;
 
-    // ******* EDUARDO BEGIN **************//
-    int[] activeServers = controller.getCurrentViewAcceptors();
-
-    for (int activeServer : activeServers) {
-      if (me != activeServer) {
-        getConnection(activeServer).shutdown();
-      }
+    connectionsLock.lock();
+    for (var connection : this.connections.entrySet()) {
+      connection.getValue().shutdown();
     }
+    connectionsLock.unlock();
   }
 
   // ******* EDUARDO BEGIN **************//
@@ -312,17 +307,15 @@ public class ServersCommunicationLayer extends Thread {
 
         int remoteId = new DataInputStream(newSocket.getInputStream()).readInt();
 
-        // ******* EDUARDO BEGIN **************//
-        if (!this.controller.isInCurrentView()
-            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
-          waitViewLock.lock();
-          pendingConn.add(new PendingConnection(newSocket, remoteId));
-          waitViewLock.unlock();
-        } else {
+//        if (!this.controller.isInCurrentView()
+//            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
+//          waitViewLock.lock();
+//          pendingConn.add(new PendingConnection(newSocket, remoteId));
+//          waitViewLock.unlock();
+//        } else {
           logger.debug("Trying establish connection with Replica: {}", remoteId);
           establishConnection(newSocket, remoteId);
-        }
-        // ******* EDUARDO END **************//
+//        }
 
       } catch (SocketTimeoutException ex) {
         logger.trace("Server socket timed out, retrying");
@@ -343,26 +336,28 @@ public class ServersCommunicationLayer extends Thread {
   }
 
   // ******* EDUARDO BEGIN **************//
-  private void establishConnection(SSLSocket newSocket, int remoteId) throws IOException {
-    if ((this.configManager.getStaticConf().getTTPId() == remoteId)
-        || this.controller.isCurrentViewMember(remoteId)) {
-      connectionsLock.lock();
-      if (this.connections.get(remoteId) == null) { // This must never happen!!!
-        // first time that this connection is being established
-        // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
-        this.connections.put(
-            remoteId, new ServerConnection(controller, newSocket, remoteId, inQueue, replica));
-      } else {
-        // reconnection
-        logger.debug("ReConnecting with replica: {}", remoteId);
-        this.connections.get(remoteId).reconnect(newSocket);
-      }
-      connectionsLock.unlock();
 
+  /**
+   * Establish a new connection with a replica. Does not contain any logic and/or checks whether the
+   * replica is in the current view or not. This has to be done at a higher abstraction level.
+   *
+   * @param newSocket the socket to be used for the connection
+   * @param remoteId id of the replica
+   * @throws IOException
+   */
+  private void establishConnection(SSLSocket newSocket, int remoteId) throws IOException {
+    connectionsLock.lock();
+    if (this.connections.get(remoteId) == null) { // This must never happen!!!
+      // first time that this connection is being established
+      // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
+      this.connections.put(
+          remoteId, new ServerConnection(configManager, newSocket, remoteId, inQueue));
     } else {
-      logger.debug("Closing connection with replica: {}", remoteId);
-      newSocket.close();
+      // reconnection
+      logger.debug("Reconnecting with replica: {}", remoteId);
+      this.connections.get(remoteId).reconnect(newSocket);
     }
+    connectionsLock.unlock();
   }
 
   // ******* EDUARDO END **************//

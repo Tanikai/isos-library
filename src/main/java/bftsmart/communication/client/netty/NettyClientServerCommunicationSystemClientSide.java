@@ -39,6 +39,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
+import bftsmart.configuration.ConfigurationManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,9 +74,7 @@ public class NettyClientServerCommunicationSystemClientSide
 
   private int clientId;
   protected ReplyReceiver trr;
-  // ******* EDUARDO BEGIN **************//
-  private ClientViewController controller;
-  // ******* EDUARDO END **************//
+  private ConfigurationManager configManager;
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionClientToReplica =
       new ConcurrentHashMap<>();
   private ReentrantReadWriteLock rl;
@@ -99,7 +98,7 @@ public class NettyClientServerCommunicationSystemClientSide
   private boolean pendingRequestSign;
 
   public NettyClientServerCommunicationSystemClientSide(
-      int clientId, ClientViewController controller) {
+      int clientId, ConfigurationManager configManager) {
     super();
 
     this.clientId = clientId;
@@ -108,35 +107,34 @@ public class NettyClientServerCommunicationSystemClientSide
 
       this.secretKeyFactory = TOMUtil.getSecretFactory();
 
-      this.controller = controller;
+      this.configManager = configManager;
 
       /* Tulio Ribeiro */
-      privKey = controller.getStaticConf().getPrivateKey();
+      privKey = configManager.getStaticConf().getPrivateKey();
 
       this.listener = new SyncListener();
       this.rl = new ReentrantReadWriteLock();
 
-      int[] currV = controller.getCurrentViewProcesses();
+      // FIXME Kai: what about replicas not from the initial view?
+      int[] currV = configManager.getStaticConf().getInitialView();
 
-      for (int i = 0; i < currV.length; i++) {
-        int replicaId = currV[i];
+      for (int replicaId : currV) {
         try {
-
           ChannelFuture future = connectToReplica(replicaId, secretKeyFactory);
 
           logger.debug(
               "ClientID {}, connecting to replica {}, at address: {}",
               clientId,
               replicaId,
-              controller.getRemoteAddress(replicaId));
+              configManager.getStaticConf().getRemoteAddress(replicaId));
 
           future.awaitUninterruptibly();
 
           if (!future.isSuccess()) {
-            logger.error("Impossible to connect to " + replicaId);
+            logger.error("Failed to connect to {}", replicaId);
           }
 
-        } catch (java.lang.NullPointerException ex) {
+        } catch (NullPointerException ex) {
           // What is this??? This is not possible!!!
           logger.debug(
               "Should fix the problem, and I think it has no other implications :-), "
@@ -150,6 +148,7 @@ public class NettyClientServerCommunicationSystemClientSide
     }
   }
 
+  // TODO Kai: is this even needed for the communication channel? Can't this be solved somehow else?
   @Override
   public void updateConnections() {
     int[] currV = controller.getCurrentViewProcesses();
@@ -169,7 +168,7 @@ public class NettyClientServerCommunicationSystemClientSide
                 "ClientID {}, updating connection to replica {}, at address: {}",
                 clientId,
                 replicaId,
-                controller.getRemoteAddress(replicaId));
+                configManager.getStaticConf().getRemoteAddress(replicaId));
 
             future.awaitUninterruptibly();
 
@@ -191,15 +190,15 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   @Override
-  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-    if (cause instanceof ClosedChannelException) {
-      logger.error("Connection with replica closed.", cause);
-    } else if (cause instanceof ConnectException) {
-      logger.error("Impossible to connect to replica.", cause);
-    } else if (cause instanceof IOException) {
-      logger.error("Replica disconnected. Connection reset by peer.");
-    } else {
-      logger.error("Replica disconnected.", cause);
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    switch (cause) {
+      case ClosedChannelException closedChannelException ->
+          logger.error("Connection with replica closed.", cause);
+      case ConnectException connectException ->
+          logger.error("Impossible to connect to replica.", cause);
+      case IOException ioException ->
+          logger.error("Replica disconnected. Connection reset by peer.");
+      case null, default -> logger.error("Replica disconnected.", cause);
     }
   }
 
@@ -235,7 +234,7 @@ public class NettyClientServerCommunicationSystemClientSide
         int replicaId = ncss.getReplicaId();
         try {
 
-          if (controller.getRemoteAddress(replicaId) != null) {
+          if (configManager.getStaticConf().getRemoteAddress(replicaId) != null) {
 
             ChannelFuture future;
             try {
@@ -256,7 +255,7 @@ public class NettyClientServerCommunicationSystemClientSide
                 "ClientID {}, re-connection to replica {}, at address: {}",
                 clientId,
                 replicaId,
-                controller.getRemoteAddress(replicaId));
+                configManager.getStaticConf().getRemoteAddress(replicaId));
 
           } else {
             // This cleans an old server from the session table
@@ -276,6 +275,13 @@ public class NettyClientServerCommunicationSystemClientSide
     this.trr = trr;
   }
 
+  /**
+   * TODO Kai: Quorum size should be passed as parameter no?
+   *
+   * @param sign Sign the message if true.
+   * @param targets IDs of the replicas to send the message to.
+   * @param sm Message to be sent.
+   */
   @Override
   public void send(boolean sign, int[] targets, TOMMessage sm) {
 
@@ -312,10 +318,9 @@ public class NettyClientServerCommunicationSystemClientSide
     int sent = 0;
 
     for (int target : targetArray) {
-      // This is done to avoid a race condition with the writeAndFush method. Since
-      // the method is asynchronous,
-      // each iteration of this loop could overwrite the destination of the previous
-      // one
+      // This is done to avoid a race condition with the writeAndFlush method. Since the method
+      // is asynchronous, each iteration of this loop could overwrite the destination of the
+      // previous one
       try {
         sm = (TOMMessage) sm.clone();
       } catch (CloneNotSupportedException e) {
@@ -421,21 +426,19 @@ public class NettyClientServerCommunicationSystemClientSide
     }
   }
 
-  private ChannelInitializer getChannelInitializer() throws NoSuchAlgorithmException {
+  private ChannelInitializer<SocketChannel> getChannelInitializer() throws NoSuchAlgorithmException {
 
     final NettyClientPipelineFactory nettyClientPipelineFactory =
-        new NettyClientPipelineFactory(this, sessionClientToReplica, controller, rl);
+        new NettyClientPipelineFactory(this, sessionClientToReplica, configManager, rl);
 
-    ChannelInitializer channelInitializer =
-        new ChannelInitializer<SocketChannel>() {
-          @Override
-          public void initChannel(SocketChannel ch) throws Exception {
-            ch.pipeline().addLast(nettyClientPipelineFactory.getDecoder());
-            ch.pipeline().addLast(nettyClientPipelineFactory.getEncoder());
-            ch.pipeline().addLast(nettyClientPipelineFactory.getHandler());
-          }
-        };
-    return channelInitializer;
+    return new ChannelInitializer<>() {
+      @Override
+      public void initChannel(SocketChannel ch) throws Exception {
+        ch.pipeline().addLast(nettyClientPipelineFactory.getDecoder());
+        ch.pipeline().addLast(nettyClientPipelineFactory.getEncoder());
+        ch.pipeline().addLast(nettyClientPipelineFactory.getHandler());
+      }
+    };
   }
 
   @Override
@@ -557,7 +560,8 @@ public class NettyClientServerCommunicationSystemClientSide
     b.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectionTimeoutMsec);
     b.handler(getChannelInitializer());
 
-    ChannelFuture channelFuture = b.connect(controller.getRemoteAddress(replicaId));
+    ChannelFuture channelFuture =
+        b.connect(configManager.getStaticConf().getRemoteAddress(replicaId));
 
     NettyClientServerSession ncss =
         new NettyClientServerSession(channelFuture.channel(), replicaId);
