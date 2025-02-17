@@ -17,6 +17,7 @@ package bftsmart.tom.core;
 import bftsmart.communication.client.CommunicationSystemClientSide;
 import bftsmart.communication.client.CommunicationSystemClientSideFactory;
 import bftsmart.communication.client.ReplyReceiver;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.reconfiguration.ClientViewController;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
@@ -33,6 +34,7 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
 
   private final int me; // process id
   private final ClientViewController viewController;
+  private final ConfigurationManager configManager;
   private final int session; // session id
   private int sequence; // sequence number
   private int unorderedMessageSequence; // sequence number for readonly messages
@@ -52,13 +54,15 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
   public TOMSender(int processId, String configHome, KeyLoader loader) {
     if (configHome == null) {
       this.viewController = new ClientViewController(processId, loader);
+      this.configManager = new ConfigurationManager(processId, loader);
     } else {
       this.viewController = new ClientViewController(processId, configHome, loader);
+      this.configManager = new ConfigurationManager(processId, configHome, loader);
     }
     this.me = this.viewController.getStaticConf().getProcessId();
     this.cs =
         CommunicationSystemClientSideFactory.getCommunicationSystemClientSide(
-            processId, this.viewController);
+            processId, this.configManager);
     this.cs.setReplyReceiver(this); // This object itself shall be a reply receiver
     this.useSignatures = this.viewController.getStaticConf().getUseSignatures() == 1;
     this.session = new Random().nextInt();
@@ -96,15 +100,15 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
   }
 
   public void TOMulticast(TOMMessage sm) {
-    cs.send(useSignatures, this.viewController.getCurrentViewProcesses(), sm);
+    //    cs.send(useSignatures, this.viewController.getCurrentViewProcesses(), sm);
   }
 
   public void TOMulticast(byte[] m, int reqId, int operationId, TOMMessageType reqType) {
-    cs.send(
-        useSignatures,
-        viewController.getCurrentViewProcesses(),
-        new TOMMessage(
-            me, session, reqId, operationId, m, viewController.getCurrentViewId(), reqType));
+    //    cs.send(
+    //        useSignatures,
+    //        viewController.getCurrentViewProcesses(),
+    //        new TOMMessage(
+    //            me, session, reqId, operationId, m, viewController.getCurrentViewId(), reqType));
   }
 
   public void sendMessageToTargets(
@@ -112,11 +116,11 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
     if (this.getViewManager().getStaticConf().isTheTTP()) {
       type = TOMMessageType.ASK_STATUS;
     }
-    cs.send(
-        useSignatures,
-        targets,
-        new TOMMessage(
-            me, session, reqId, operationId, m, viewController.getCurrentViewId(), type));
+    //    cs.send(
+    //        useSignatures,
+    //        targets,
+    //        new TOMMessage(
+    //            me, session, reqId, operationId, m, viewController.getCurrentViewId(), type));
   }
 
   public int getSession() {

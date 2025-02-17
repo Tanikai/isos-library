@@ -69,10 +69,10 @@ public final class TOMLayer extends Thread implements RequestReceiver {
   private final ServerCommunicationSystem communication; // Communication system between replicas
   // private OutOfContextMessageThread ot; // Thread which manages messages that do not belong to
   // the current consensus
-  private final DeliveryThread dt; // Thread which delivers total ordered messages to the appication
+  private final DeliveryThread dt; // Thread which delivers total ordered messages to the application
   public StateManager stateManager; // object which deals with the state transfer protocol
 
-  // thread pool used to paralelise verification of requests contained in a batch
+  // thread pool used to parallelize verification of requests contained in a batch
   private final ExecutorService verifierExecutor;
 
   /** Manage timers for pending requests */
