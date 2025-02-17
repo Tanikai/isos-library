@@ -5,6 +5,7 @@ import bftsmart.tom.util.KeyLoader;
 
 public class ConfigurationManager {
   private final TOMConfiguration staticConf;
+  private int currentViewF;
 
   public ConfigurationManager(int procId, KeyLoader loader) {
     this.staticConf = new TOMConfiguration(procId, loader);
@@ -17,4 +18,5 @@ public class ConfigurationManager {
   public TOMConfiguration getStaticConf() {
     return staticConf;
   }
+
 }

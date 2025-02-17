@@ -151,42 +151,40 @@ public class NettyClientServerCommunicationSystemClientSide
   // TODO Kai: is this even needed for the communication channel? Can't this be solved somehow else?
   @Override
   public void updateConnections() {
-    int[] currV = controller.getCurrentViewProcesses();
-    try {
-      // open connections with new servers
-      for (int i = 0; i < currV.length; i++) {
-
-        int replicaId = currV[i];
-
-        rl.readLock().lock();
-        if (sessionClientToReplica.get(replicaId) == null) {
-          rl.readLock().unlock();
-          rl.writeLock().lock();
-          try {
-            ChannelFuture future = connectToReplica(replicaId, secretKeyFactory);
-            logger.debug(
-                "ClientID {}, updating connection to replica {}, at address: {}",
-                clientId,
-                replicaId,
-                configManager.getStaticConf().getRemoteAddress(replicaId));
-
-            future.awaitUninterruptibly();
-
-            if (!future.isSuccess()) {
-              logger.error("Impossible to connect to " + replicaId);
-            }
-
-          } catch (InvalidKeyException | InvalidKeySpecException ex) {
-            logger.error("Failed to initialize MAC engine", ex);
-          }
-          rl.writeLock().unlock();
-        } else {
-          rl.readLock().unlock();
-        }
-      }
-    } catch (NoSuchAlgorithmException ex) {
-      logger.error("Failed to initialzie secret key factory", ex);
-    }
+    return;
+    //    int[] currV = controller.getCurrentViewProcesses();
+    //    try {
+    //      // open connections with new servers
+    //      for (int replicaId : currV) {
+    //        rl.readLock().lock();
+    //        if (sessionClientToReplica.get(replicaId) == null) {
+    //          rl.readLock().unlock();
+    //          rl.writeLock().lock();
+    //          try {
+    //            ChannelFuture future = connectToReplica(replicaId, secretKeyFactory);
+    //            logger.debug(
+    //                "ClientID {}, updating connection to replica {}, at address: {}",
+    //                clientId,
+    //                replicaId,
+    //                configManager.getStaticConf().getRemoteAddress(replicaId));
+    //
+    //            future.awaitUninterruptibly();
+    //
+    //            if (!future.isSuccess()) {
+    //              logger.error("Impossible to connect to " + replicaId);
+    //            }
+    //
+    //          } catch (InvalidKeyException | InvalidKeySpecException ex) {
+    //            logger.error("Failed to initialize MAC engine", ex);
+    //          }
+    //          rl.writeLock().unlock();
+    //        } else {
+    //          rl.readLock().unlock();
+    //        }
+    //      }
+    //    } catch (NoSuchAlgorithmException ex) {
+    //      logger.error("Failed to initialzie secret key factory", ex);
+    //    }
   }
 
   @Override
@@ -215,7 +213,6 @@ public class NettyClientServerCommunicationSystemClientSide
 
   @Override
   public void channelActive(ChannelHandlerContext ctx) {
-
     if (closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
@@ -283,9 +280,8 @@ public class NettyClientServerCommunicationSystemClientSide
    * @param sm Message to be sent.
    */
   @Override
-  public void send(boolean sign, int[] targets, TOMMessage sm) {
-
-    int quorum = controller.getReplyQuorum();
+  public void send(boolean sign, int[] targets, TOMMessage sm, int quorumSize) {
+    int quorum = quorumSize;
 
     Integer[] targetArray = Arrays.stream(targets).boxed().toArray(Integer[]::new);
     Collections.shuffle(Arrays.asList(targetArray), new Random());
@@ -342,14 +338,16 @@ public class NettyClientServerCommunicationSystemClientSide
 
         sent++;
       } else {
-        logger.debug("Channel to " + target + " is not connected");
+        logger.debug("Channel to {} is not connected", target);
       }
     }
 
-    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF() + 1) {
-      // if less than f+1 servers are connected send an exception to the client
-      throw new RuntimeException("Impossible to connect to servers!");
-    }
+    // FIXME Kai: get F from somewhere else than controller
+    //    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF() +
+    // 1) {
+    //      // if less than f+1 servers are connected send an exception to the client
+    //      throw new RuntimeException("Impossible to connect to servers!");
+    //    }
     if (targets.length == 1 && sent == 0) throw new RuntimeException("Server not connected");
   }
 
@@ -426,7 +424,8 @@ public class NettyClientServerCommunicationSystemClientSide
     }
   }
 
-  private ChannelInitializer<SocketChannel> getChannelInitializer() throws NoSuchAlgorithmException {
+  private ChannelInitializer<SocketChannel> getChannelInitializer()
+      throws NoSuchAlgorithmException {
 
     final NettyClientPipelineFactory nettyClientPipelineFactory =
         new NettyClientPipelineFactory(this, sessionClientToReplica, configManager, rl);
@@ -512,21 +511,21 @@ public class NettyClientServerCommunicationSystemClientSide
       this.futureLock.unlock();
     }
 
+    /**
+     * If there are still remaining futures, wait until a set timeout expires. After the timeout
+     * expires, set the remaining futures to the passed value.
+     *
+     * @param n number of channels to wait for
+     */
     public void waitForChannels(int n) {
-
       this.futureLock.lock();
       if (this.remainingFutures > 0) {
-
         logger.debug(
-            "There are still "
-                + this.remainingFutures
-                + " channel operations pending, waiting to complete");
-
+            "There are still {} channel operations pending, waiting to complete",
+            this.remainingFutures);
         try {
-          this.enoughCompleted.await(
-              1000, TimeUnit.MILLISECONDS); // timeout if a malicous replica refuses to
-          // acknowledge the operation as
-          // completed
+          // timeout if a malicous replica refuses to acknowledge the operation as completed
+          this.enoughCompleted.await(1000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
           logger.error("Interruption while waiting on condition", ex);
         }
@@ -541,8 +540,16 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   /**
-   * Tulio Ribeiro Connect to specific replica and returns the ChannelFuture. sessionClientToReplica
-   * is replaced with the new connection. Removed redundant code.
+   * Connect to specific replica and returns the ChannelFuture. sessionClientToReplica is replaced
+   * with the new connection. Removed redundant code.
+   *
+   * @param replicaId
+   * @param fac
+   * @return
+   * @throws NoSuchAlgorithmException
+   * @throws InvalidKeySpecException
+   * @throws InvalidKeyException
+   * @author Tulio Ribeiro
    */
   public synchronized ChannelFuture connectToReplica(int replicaId, SecretKeyFactory fac)
       throws NoSuchAlgorithmException, InvalidKeySpecException, InvalidKeyException {
@@ -587,12 +594,10 @@ public class NettyClientServerCommunicationSystemClientSide
       return;
     }
     logger.info(
-        "Re-transmitting request from "
-            + sm.getSender()
-            + " with sequence number "
-            + sm.getSequence()
-            + " to "
-            + replicaId);
+        "Re-transmitting request from {} with sequence number {} to {}",
+        sm.getSender(),
+        sm.getSequence(),
+        replicaId);
     if (sm.serializedMessage == null) {
       serializeMessage(sm);
     }
@@ -613,7 +618,7 @@ public class NettyClientServerCommunicationSystemClientSide
       ChannelFuture f = channel.writeAndFlush(sm);
       f.addListener(listener);
     } else {
-      logger.info("Channel to " + replicaId + " is not connected");
+      logger.info("Channel to {} is not connected", replicaId);
     }
   }
 }

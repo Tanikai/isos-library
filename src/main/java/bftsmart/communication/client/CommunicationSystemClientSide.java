@@ -22,7 +22,7 @@ import bftsmart.tom.core.messages.TOMMessage;
  * @author Paulo
  */
 public interface CommunicationSystemClientSide {
-  void send(boolean sign, int[] targets, TOMMessage sm);
+  void send(boolean sign, int[] targets, TOMMessage sm, int quorumSize);
 
   void setReplyReceiver(ReplyReceiver trr);
 

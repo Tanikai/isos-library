@@ -16,9 +16,6 @@ package bftsmart.communication.server;
 
 import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.reconfiguration.ServerViewController;
-import bftsmart.reconfiguration.util.Configuration;
-import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.util.TOMUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +63,7 @@ public class ServersCommunicationLayer extends Thread {
   private boolean doWork = true;
   private final Lock connectionsLock = new ReentrantLock();
   private final ReentrantLock waitViewLock = new ReentrantLock();
-  private final List<PendingConnection> pendingConn = new LinkedList<PendingConnection>();
+  private final List<PendingConnection> pendingConn = new LinkedList<>();
 
   /** Tulio A. Ribeiro SSL / TLS. */
   private static final String SECRET = "MySeCreT_2hMOygBwY";
@@ -279,13 +276,15 @@ public class ServersCommunicationLayer extends Thread {
   }
 
   // ******* EDUARDO BEGIN **************//
+
+  /** Setup connections to other replicas in the current view. */
   public void joinViewReceived() {
     waitViewLock.lock();
     for (PendingConnection pc : pendingConn) {
       try {
         establishConnection(pc.s, pc.remoteId);
       } catch (Exception e) {
-        logger.error("Failed to establish connection to " + pc.remoteId, e);
+        logger.error("Failed to establish connection to {}", pc.remoteId, e);
       }
     }
 
@@ -307,15 +306,15 @@ public class ServersCommunicationLayer extends Thread {
 
         int remoteId = new DataInputStream(newSocket.getInputStream()).readInt();
 
-//        if (!this.controller.isInCurrentView()
-//            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
-//          waitViewLock.lock();
-//          pendingConn.add(new PendingConnection(newSocket, remoteId));
-//          waitViewLock.unlock();
-//        } else {
-          logger.debug("Trying establish connection with Replica: {}", remoteId);
-          establishConnection(newSocket, remoteId);
-//        }
+        //        if (!this.controller.isInCurrentView()
+        //            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
+        //          waitViewLock.lock();
+        //          pendingConn.add(new PendingConnection(newSocket, remoteId));
+        //          waitViewLock.unlock();
+        //        } else {
+        logger.debug("Trying establish connection with Replica: {}", remoteId);
+        establishConnection(newSocket, remoteId);
+        //        }
 
       } catch (SocketTimeoutException ex) {
         logger.trace("Server socket timed out, retrying");
@@ -347,7 +346,8 @@ public class ServersCommunicationLayer extends Thread {
    */
   private void establishConnection(SSLSocket newSocket, int remoteId) throws IOException {
     connectionsLock.lock();
-    if (this.connections.get(remoteId) == null) { // This must never happen!!!
+    if (this.connections.get(remoteId) == null) {
+      // This must never happen!!!
       // first time that this connection is being established
       // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
       this.connections.put(
@@ -399,7 +399,7 @@ public class ServersCommunicationLayer extends Thread {
   // ******* EDUARDO BEGIN: List entry that stores pending connections,
   // as a server may accept connections only after learning the current view,
   // i.e., after receiving the response to the join*************//
-  // This is for avoiding that the server accepts connectsion from everywhere
+  // This is for avoiding that the server accepts from everywhere
   public static class PendingConnection {
 
     public SSLSocket s;

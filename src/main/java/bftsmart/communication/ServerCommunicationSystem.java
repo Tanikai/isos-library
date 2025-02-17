@@ -14,6 +14,7 @@
  */
 package bftsmart.communication;
 
+import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -25,8 +26,6 @@ import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.ServersCommunicationLayer;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.consensus.roles.Acceptor;
-import bftsmart.reconfiguration.ServerViewController;
-import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.core.TOMLayer;
 import bftsmart.tom.core.messages.TOMMessage;
 
@@ -38,23 +37,28 @@ import org.slf4j.LoggerFactory;
  */
 public class ServerCommunicationSystem extends Thread {
 
-  private Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private boolean doWork = true;
   public final long MESSAGE_WAIT_TIME = 100;
   private LinkedBlockingQueue<SystemMessage> inQueue = null;
-  protected MessageHandler messageHandler;
 
-  private ConfigurationManager configManager;
-  private ServersCommunicationLayer serversConn;
+  /** This class handles the messages received from other servers. */
+  private final MessageHandler msgHandler;
+
+  private final ConfigurationManager configManager;
+  private final ServersCommunicationLayer serversConn;
+
+  /** This class handles the messages received from clients. */
   private CommunicationSystemServerSide clientsConn;
 
   /** Creates a new instance of ServerCommunicationSystem */
-  public ServerCommunicationSystem(ConfigurationManager configManager) throws Exception {
+  public ServerCommunicationSystem(ConfigurationManager configManager, MessageHandler msgHandler)
+      throws Exception {
     super("Server Comm. System");
 
     this.configManager = configManager;
-    messageHandler = new MessageHandler();
+    this.msgHandler = Objects.requireNonNullElseGet(msgHandler, TOMHandler::new);
 
     inQueue = new LinkedBlockingQueue<>(configManager.getStaticConf().getInQueueSize());
 
@@ -80,13 +84,6 @@ public class ServerCommunicationSystem extends Thread {
   }
 
   // ******* EDUARDO END **************//
-  public void setAcceptor(Acceptor acceptor) {
-    messageHandler.setAcceptor(acceptor);
-  }
-
-  public void setTOMLayer(TOMLayer tomLayer) {
-    messageHandler.setTOMLayer(tomLayer);
-  }
 
   public void setRequestReceiver(RequestReceiver requestReceiver) {
     if (clientsConn == null) {
@@ -96,24 +93,24 @@ public class ServerCommunicationSystem extends Thread {
     clientsConn.setRequestReceiver(requestReceiver);
   }
 
-  /** Thread method responsible for receiving messages sent by other servers. */
+  /** Thread method responsible for receiving messages sent by other replicas. */
   @Override
   public void run() {
     long count = 0;
     while (doWork) {
       try {
         if (count % 1000 == 0 && count > 0) {
-          logger.debug("After " + count + " messages, inQueue size=" + inQueue.size());
+          logger.debug("After {} messages, inQueue size={}", count, inQueue.size());
         }
 
         SystemMessage sm = inQueue.poll(MESSAGE_WAIT_TIME, TimeUnit.MILLISECONDS);
 
         if (sm != null) {
-          logger.debug("<-- receiving, msg:" + sm);
-          messageHandler.processData(sm);
+          logger.debug("<-- receiving, msg:{}", sm);
+          msgHandler.processData(sm);
           count++;
         } else {
-          messageHandler.verifyPending();
+          msgHandler.verifyPending();
         }
       } catch (InterruptedException e) {
 
@@ -137,6 +134,10 @@ public class ServerCommunicationSystem extends Thread {
       logger.debug("--> sending message from: {} -> {}" + sm.getSender(), targets);
       serversConn.send(targets, sm, true);
     }
+  }
+
+  public MessageHandler getMsgHandler() {
+    return msgHandler;
   }
 
   public ServersCommunicationLayer getServersConn() {

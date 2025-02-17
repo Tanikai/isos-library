@@ -50,8 +50,8 @@ public class TOMMessage extends SystemMessage implements Externalizable, Compara
   // for benchmarking purposes
   public transient long consensusStartTime = 0; // time the consensus is created
   public transient long proposeReceivedTime = 0; // time the propose is received
-  public transient long writeSentTime = 0; // time the replica' write message is sent
-  public transient long acceptSentTime = 0; // time the replica' accept message is sent
+  public transient long writeSentTime = 0; // time the replica's write message is sent
+  public transient long acceptSentTime = 0; // time the replica's accept message is sent
   public transient long decisionTime = 0; // time the decision is established
   public transient long deliveryTime = 0; // time the request is delivered
   public transient long executedTime = 0; // time the request is executed
@@ -64,7 +64,7 @@ public class TOMMessage extends SystemMessage implements Externalizable, Compara
   private TOMMessageType type; // request type: application or reconfiguration request
   private int session; // Sequence number defined by the client
   // Sequence number defined by the client.
-  // There is a sequence number for ordered and anothre for unordered messages
+  // There is a sequence number for ordered and another for unordered messages
   private int sequence;
   private int operationId; // Sequence number defined by the client
   private byte[] content = null; // Content of the message
@@ -139,6 +139,7 @@ public class TOMMessage extends SystemMessage implements Externalizable, Compara
       m.wExternal(dos);
       dos.flush();
     } catch (Exception e) {
+
     }
     return baos.toByteArray();
   }

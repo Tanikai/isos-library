@@ -21,13 +21,13 @@ import bftsmart.tom.leaderchange.CertifiedDecision;
 import java.io.Serializable;
 
 /**
- * This interface represents a state transfered from a replica to another. The state associated with the last
- * checkpoint together with all the batches of messages received do far, comprises the sender's
- * current state
- * 
- * IMPORTANT: The hash state MUST ALWAYS be present, regardless if the replica is supposed to
+ * This interface represents a state transferred from a replica to another. The state associated
+ * with the last * checkpoint together with all the batches of messages received do far, comprises
+ * the sender's * current state
+ *
+ * <p>IMPORTANT: The hash state MUST ALWAYS be present, regardless if the replica is supposed to
  * send the complete state or not
- * 
+ *
  * @author Joao Sousa
  */
 public interface ApplicationState extends Serializable {
@@ -36,50 +36,50 @@ public interface ApplicationState extends Serializable {
      * The consensus of the last batch of commands which the application was given
      * @return consensus of the last batch of commands which the application was given
      */
-    public int getLastCID();
-    
+    int getLastCID();
+
     /**
      * Retrieves the certified decision for the last consensus present in this object
      * @param controller
      * @return The certified decision for the last consensus present in this object
      */
-    public CertifiedDecision getCertifiedDecision(ServerViewController controller);
+    CertifiedDecision getCertifiedDecision(ServerViewController controller);
 
     /**
      * Indicates if the sender replica had the state requested by the recovering replica
      * @return true if the sender replica had the state requested by the recovering replica, false otherwise
      */
-    public boolean hasState();
+    boolean hasState();
 
     /**
      * Sets a byte array that must be a representation of the application state
      * @param state a byte array that must be a representation of the application state
      */
-    public void setSerializedState(byte[] state);
-    
+    void setSerializedState(byte[] state);
+
     /**
      * Byte array that must be a representation of the application state
      * @return A byte array that must be a representation of the application state
      */
-    public byte[] getSerializedState();
-    
+    byte[] getSerializedState();
+
     /**
      * Gets an secure hash of the application state
      * @return Secure hash of the application state
      */
-    public byte[] getStateHash();
+    byte[] getStateHash();
 
     /**
      * This method MUST be implemented. However, the attribute returned by getSerializedState()
      * should be ignored, and getStateHash() should be used instead
      */
     @Override
-    public abstract boolean equals(Object obj);
+    boolean equals(Object obj);
 
     /**
      * This method MUST be implemented. However, the attribute returned by getSerializedState()
      * should be ignored, and getStateHash() should be used instead
      */
     @Override
-    public abstract int hashCode();
+    int hashCode();
 }

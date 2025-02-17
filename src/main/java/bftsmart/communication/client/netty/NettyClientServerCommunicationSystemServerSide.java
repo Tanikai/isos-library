@@ -51,16 +51,17 @@ public class NettyClientServerCommunicationSystemServerSide
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
+  /**
+   * RequestReceiver is the class that receives messages from clients
+   */
   private RequestReceiver requestReceiver;
+
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionReplicaToClient;
   private ReentrantReadWriteLock rl;
   private ConfigurationManager configManager;
   private boolean closed = false;
   private Channel mainChannel;
 
-  // This locked seems to introduce a bottleneck and seems useless, but I cannot
-  // recall why I added it
-  // private ReentrantLock sendLock = new ReentrantLock();
   private NettyServerPipelineFactory serverPipelineFactory;
 
   /* Tulio Ribeiro */
@@ -71,7 +72,6 @@ public class NettyClientServerCommunicationSystemServerSide
       1024; /* pending connections boss thread will queue to accept */
   private static final int connectionTimeoutMsec = 40000; /* (40 seconds) */
   private PrivateKey privKey;
-
   /* Tulio Ribeiro */
 
   public NettyClientServerCommunicationSystemServerSide(ConfigurationManager configManager) {

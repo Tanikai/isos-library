@@ -24,7 +24,7 @@ public interface RequestReceiver {
    * The code to handle requests should be put here.
    *
    * @param msg The request delivered by the TOM layer
-   * @param fromClient The request was received from a client
+   * @param fromClient If the request was received from a client
    */
-  public void requestReceived(TOMMessage msg, boolean fromClient);
+  void requestReceived(TOMMessage msg, boolean fromClient);
 }

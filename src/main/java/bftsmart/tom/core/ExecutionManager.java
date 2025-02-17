@@ -45,7 +45,7 @@ public final class ExecutionManager {
     private ServerViewController controller;
     private Acceptor acceptor; // Acceptor role of the PaW algorithm
     private Proposer proposer; // Proposer role of the PaW algorithm
-    //******* EDUARDO BEGIN: now these variables are all concentrated in the Reconfigurationmanager **************//
+    //******* EDUARDO BEGIN: now these variables are all concentrated in the ReconfigurationManager **************//
     //private int me; // This process ID
     //private int[] acceptors; // Process ID's of all replicas, including this one
     //private int[] otherAcceptors; // Process ID's of all replicas, except this one
@@ -100,10 +100,10 @@ public final class ExecutionManager {
         //this.me = me;
 
         this.paxosHighMark = this.controller.getStaticConf().getPaxosHighMark();
-        /** THIS IS JOAO'S CODE, TO HANDLE THE STATE TRANSFER */
+        /* THIS IS JOAO'S CODE, TO HANDLE THE STATE TRANSFER */
         this.revivalHighMark = this.controller.getStaticConf().getRevivalHighMark();
         this.timeoutHighMark = this.controller.getStaticConf().getTimeoutHighMark();
-        /******************************************************************/
+        //******************************************************************/
         //******* EDUARDO END **************//
 
         // Get initial leader
@@ -260,7 +260,7 @@ public final class ExecutionManager {
                             msg.getNumber() + " is out of context, adding it to out of context set");
 
 
-                    //System.out.println("(ExecutionManager.checkLimits) Message for consensus " + 
+                    //System.out.println("(ExecutionManager.checkLimits) Message for consensus " +
                     //       msg.getNumber() + " is out of context, adding it to out of context set; isRetrievingState="+isRetrievingState);
 
                     addOutOfContextMessage(msg);
