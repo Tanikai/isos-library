@@ -22,6 +22,8 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import bftsmart.communication.ServerCommunicationSystem;
+import bftsmart.communication.TOMHandler;
+import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.core.ExecutionManager;
 import bftsmart.consensus.messages.MessageFactory;
 import bftsmart.consensus.roles.Acceptor;
@@ -69,6 +71,7 @@ public class ServiceReplica {
     private ServerCommunicationSystem cs = null;
     private ReplyManager repMan = null;
     private ServerViewController SVController;
+    private ConfigurationManager configManager;
     private ReentrantLock waitTTPJoinMsgLock = new ReentrantLock();
     private Condition canProceed = waitTTPJoinMsgLock.newCondition();
     private Executable executor = null;
@@ -145,7 +148,7 @@ public class ServiceReplica {
     // this method initializes the object
     private void init() {
         try {
-            cs = new ServerCommunicationSystem(this.SVController, this);
+            cs = new ServerCommunicationSystem(this.configManager, null);
         } catch (Exception ex) {
             logger.error("Failed to initialize replica-to-replica communication system", ex);
             throw new RuntimeException("Unable to build a communication system.");
@@ -460,7 +463,7 @@ public class ServiceReplica {
         MessageFactory messageFactory = new MessageFactory(id);
 
         Acceptor acceptor = new Acceptor(cs, messageFactory, SVController);
-        cs.setAcceptor(acceptor);
+        ((TOMHandler) cs.getMsgHandler()).setAcceptor(acceptor);
 
         Proposer proposer = new Proposer(cs, messageFactory, SVController);
 
@@ -474,7 +477,7 @@ public class ServiceReplica {
 
         SVController.setTomLayer(tomLayer);
 
-        cs.setTOMLayer(tomLayer);
+        ((TOMHandler) cs.getMsgHandler()).setTOMLayer(tomLayer);
         cs.setRequestReceiver(tomLayer);
 
         acceptor.setTOMLayer(tomLayer);
