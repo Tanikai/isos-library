@@ -93,6 +93,6 @@ public interface Recoverable {
      * @param msgCtx Message context associated with the consensus instance. furthermore
      * msgCtx.getConsensusId() will be equal to CID.
      */
-    void noOp(int CID, byte[][] operations, MessageContext msgCtx[]);
+    void noOp(int CID, byte[][] operations, MessageContext[] msgCtx);
 
 }
