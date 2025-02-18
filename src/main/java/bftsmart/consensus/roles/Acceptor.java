@@ -332,8 +332,7 @@ public final class Acceptor {
 					logger.debug(
 							"Speculative ACCEPT message for consensus {} matches the written value, sending it to the other replicas",
 							cid);
-
-					communication.getServersConn().send(targets, cm, true);
+          communication.send(targets, cm);
 
 				} else { // ... and if not, create the ACCEPT message again (with the correct value), and
 							// send it
@@ -346,9 +345,7 @@ public final class Acceptor {
 						logger.debug(
 								"Creating cryptographic proof for the correct ACCEPT message from consensus " + cid);
 						insertProof(correctAccept, epoch.deserializedPropValue);
-
-						communication.getServersConn().send(targets, correctAccept, true);
-
+            communication.send(targets, correctAccept);
 					});
 				}
 

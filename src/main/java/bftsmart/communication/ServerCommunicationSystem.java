@@ -25,14 +25,14 @@ import bftsmart.communication.client.CommunicationSystemServerSideFactory;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.ServersCommunicationLayer;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.consensus.roles.Acceptor;
-import bftsmart.tom.core.TOMLayer;
 import bftsmart.tom.core.messages.TOMMessage;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * Thread that manages Replica-Replica and Replica-Client communication.
+ *
  * @author alysson
  */
 public class ServerCommunicationSystem extends Thread {
@@ -41,18 +41,30 @@ public class ServerCommunicationSystem extends Thread {
 
   private boolean doWork = true;
   public final long MESSAGE_WAIT_TIME = 100;
-  private LinkedBlockingQueue<SystemMessage> inQueue = null;
-
-  /** This class handles the messages received from other servers. */
-  private final MessageHandler msgHandler;
 
   private final ConfigurationManager configManager;
+
+  // *** Replica-Replica (R-R) COMMUNICATION ***
+  /** This queue contains messages sent from other replicas. It is passed to serversConn. */
+  private final LinkedBlockingQueue<SystemMessage> inQueue;
+
+  /** This class handles connections and communication with other replicas. */
   private final ServersCommunicationLayer serversConn;
 
+  /** Callback class for received messages from replicas. */
+  private final MessageHandler msgHandler;
+
+  // *** Client-Replica (C-R) COMMUNICATION ***
   /** This class handles the messages received from clients. */
   private CommunicationSystemServerSide clientsConn;
 
-  /** Creates a new instance of ServerCommunicationSystem */
+  /**
+   * Creates a new instance of ServerCommunicationSystem
+   *
+   * @param configManager Provides configuration.
+   * @param msgHandler Object that handles messages from other replicas.
+   * @throws Exception
+   */
   public ServerCommunicationSystem(ConfigurationManager configManager, MessageHandler msgHandler)
       throws Exception {
     super("Server Comm. System");
@@ -70,29 +82,6 @@ public class ServerCommunicationSystem extends Thread {
     // ******* EDUARDO END **************//
   }
 
-  // ******* EDUARDO BEGIN **************//
-  public void joinViewReceived() {
-    serversConn.joinViewReceived();
-  }
-
-  public void updateServersConnections() {
-    this.serversConn.updateConnections();
-    if (clientsConn == null) {
-      clientsConn =
-          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
-    }
-  }
-
-  // ******* EDUARDO END **************//
-
-  public void setRequestReceiver(RequestReceiver requestReceiver) {
-    if (clientsConn == null) {
-      clientsConn =
-          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
-    }
-    clientsConn.setRequestReceiver(requestReceiver);
-  }
-
   /** Thread method responsible for receiving messages sent by other replicas. */
   @Override
   public void run() {
@@ -102,7 +91,6 @@ public class ServerCommunicationSystem extends Thread {
         if (count % 1000 == 0 && count > 0) {
           logger.debug("After {} messages, inQueue size={}", count, inQueue.size());
         }
-
         SystemMessage sm = inQueue.poll(MESSAGE_WAIT_TIME, TimeUnit.MILLISECONDS);
 
         if (sm != null) {
@@ -113,11 +101,38 @@ public class ServerCommunicationSystem extends Thread {
           msgHandler.verifyPending();
         }
       } catch (InterruptedException e) {
-
         logger.error("Error processing message", e);
       }
     }
     logger.info("ServerCommunicationSystem stopped.");
+  }
+
+  /**
+   * Establishes connections to pending connections to replicas from the new view.
+   *
+   * @author Eduardo
+   */
+  public void joinViewReceived() {
+    serversConn.joinViewReceived();
+  }
+
+  /**
+   * @author Eduardo
+   */
+  public void updateServersConnections() {
+    this.serversConn.updateConnections();
+    if (clientsConn == null) {
+      clientsConn =
+          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
+    }
+  }
+
+  public void setRequestReceiver(RequestReceiver requestReceiver) {
+    if (clientsConn == null) {
+      clientsConn =
+          CommunicationSystemServerSideFactory.getCommunicationSystemServerSide(this.configManager);
+    }
+    clientsConn.setRequestReceiver(requestReceiver);
   }
 
   /**
@@ -131,21 +146,9 @@ public class ServerCommunicationSystem extends Thread {
     if (sm instanceof TOMMessage) {
       clientsConn.send(targets, (TOMMessage) sm, false);
     } else {
-      logger.debug("--> sending message from: {} -> {}" + sm.getSender(), targets);
+      logger.debug("--> sending message from: {} -> {}", sm.getSender(), targets);
       serversConn.send(targets, sm, true);
     }
-  }
-
-  public MessageHandler getMsgHandler() {
-    return msgHandler;
-  }
-
-  public ServersCommunicationLayer getServersConn() {
-    return serversConn;
-  }
-
-  public CommunicationSystemServerSide getClientsConn() {
-    return clientsConn;
   }
 
   @Override
@@ -159,6 +162,11 @@ public class ServerCommunicationSystem extends Thread {
     this.doWork = false;
     clientsConn.shutdown();
     serversConn.shutdown();
+    try {
+      serversConn.join();
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public SecretKey getSecretKey(int id) {

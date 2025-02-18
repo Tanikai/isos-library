@@ -50,6 +50,7 @@ import java.util.concurrent.locks.ReentrantLock;
 // $keytool -importkeystore -srckeystore ./RSA_KeyPair_2048.pkcs12 -destkeystore
 // ./RSA_KeyPair_2048.pkcs12 -deststoretype pkcs12
 
+/** Thread that connects to other replicas. */
 public class ServersCommunicationLayer extends Thread {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -93,12 +94,11 @@ public class ServersCommunicationLayer extends Thread {
       // Now look what went wrong ...
       logger.debug(" ####### Debugging at setting up the Communication layer ");
       logger.debug(
-          "my Id is "
-              + configManager.getStaticConf().getProcessId()
-              + " my remote Address is  "
-              + configManager
-                  .getStaticConf()
-                  .getRemoteAddress(configManager.getStaticConf().getProcessId()));
+          "my Id is {}, my remote Address is {}",
+          configManager.getStaticConf().getProcessId(),
+          configManager
+              .getStaticConf()
+              .getRemoteAddress(configManager.getStaticConf().getProcessId()));
     }
 
     if (InetAddress.getLoopbackAddress().getHostAddress().equals(confAddress)) {
@@ -165,6 +165,7 @@ public class ServersCommunicationLayer extends Thread {
     // Try connecting if a member of the current view. Otherwise, wait until the Join has been
     // processed!
     // FIXME Kai: remove controller from server communication layer
+
     //    if (controller.isInCurrentView()) {
     //      int[] initialV = controller.getCurrentViewAcceptors();
     //      for (int j : initialV) {
@@ -187,6 +188,7 @@ public class ServersCommunicationLayer extends Thread {
     connectionsLock.lock();
 
     // FIXME Kai: remove controller from server communication layer
+
     //    if (this.controller.isInCurrentView()) {
     //
     //      Iterator<Integer> it = this.connections.keySet().iterator();
@@ -217,6 +219,12 @@ public class ServersCommunicationLayer extends Thread {
     connectionsLock.unlock();
   }
 
+  /**
+   * Get the connection to a id. If the connection does not exist, it will be created.
+   *
+   * @param remoteId remote replica id.
+   * @return Server Connection.
+   */
   private ServerConnection getConnection(int remoteId) {
     connectionsLock.lock();
     ServerConnection ret = this.connections.get(remoteId);
@@ -243,7 +251,7 @@ public class ServersCommunicationLayer extends Thread {
     // this shuffling is done to prevent the replica with the lowest ID/index from being always
     // the last one receiving the messages, which can result in that replica to become consistently
     // delayed in relation to the others.
-    /*Tulio A. Ribeiro*/
+    // Tulio A. Ribeiro
     Integer[] targetsShuffled = Arrays.stream(targets).boxed().toArray(Integer[]::new);
     Collections.shuffle(Arrays.asList(targetsShuffled), new Random(System.nanoTime()));
 
@@ -275,9 +283,11 @@ public class ServersCommunicationLayer extends Thread {
     connectionsLock.unlock();
   }
 
-  // ******* EDUARDO BEGIN **************//
-
-  /** Setup connections to other replicas in the current view. */
+  /**
+   * Setup connections to other replicas in the current view.
+   *
+   * @author Eduardo
+   */
   public void joinViewReceived() {
     waitViewLock.lock();
     for (PendingConnection pc : pendingConn) {
@@ -292,8 +302,6 @@ public class ServersCommunicationLayer extends Thread {
 
     waitViewLock.unlock();
   }
-
-  // ******* EDUARDO END **************//
 
   @Override
   public void run() {
@@ -334,8 +342,6 @@ public class ServersCommunicationLayer extends Thread {
     logger.info("ServerCommunicationLayer stopped.");
   }
 
-  // ******* EDUARDO BEGIN **************//
-
   /**
    * Establish a new connection with a replica. Does not contain any logic and/or checks whether the
    * replica is in the current view or not. This has to be done at a higher abstraction level.
@@ -343,6 +349,7 @@ public class ServersCommunicationLayer extends Thread {
    * @param newSocket the socket to be used for the connection
    * @param remoteId id of the replica
    * @throws IOException
+   * @author Eduardo
    */
   private void establishConnection(SSLSocket newSocket, int remoteId) throws IOException {
     connectionsLock.lock();
@@ -359,8 +366,6 @@ public class ServersCommunicationLayer extends Thread {
     }
     connectionsLock.unlock();
   }
-
-  // ******* EDUARDO END **************//
 
   public static void setSSLSocketOptions(SSLSocket socket) {
     try {
@@ -384,15 +389,16 @@ public class ServersCommunicationLayer extends Thread {
   public String toString() {
     StringBuilder str = new StringBuilder("inQueue=" + inQueue.toString());
     // FIXME: define active servers without viewAcceptors
-    //    int[] activeServers = controller.getCurrentViewAcceptors();
-    //    for (int activeServer : activeServers) {
-    //      if (me != activeServer) {
-    //        str.append(", connections[")
-    //            .append(activeServer)
-    //            .append("]: outQueue=")
-    //            .append(getConnection(activeServer).outQueue);
-    //      }
-    //    }
+
+    Integer[] activeConnections = this.connections.keySet().toArray(Integer[]::new);
+    for (int connId : activeConnections) {
+      if (me != connId) {
+        str.append(", connections[")
+            .append(connId)
+            .append("]: outQueue=")
+            .append(getConnection(connId).outQueue);
+      }
+    }
     return str.toString();
   }
 

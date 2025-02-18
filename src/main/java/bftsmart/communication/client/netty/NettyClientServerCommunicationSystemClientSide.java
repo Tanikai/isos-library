@@ -273,7 +273,7 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   /**
-   * TODO Kai: Quorum size should be passed as parameter no?
+   * Send a message from the client to a replica.
    *
    * @param sign Sign the message if true.
    * @param targets IDs of the replicas to send the message to.
@@ -289,12 +289,10 @@ public class NettyClientServerCommunicationSystemClientSide
     listener.waitForChannels(quorum); // wait for the previous transmission to complete
 
     logger.debug(
-        "Sending request from "
-            + sm.getSender()
-            + " with sequence number "
-            + sm.getSequence()
-            + " to "
-            + Arrays.toString(targetArray));
+        "Sending request from {} with sequence number {} to {}",
+        sm.getSender(),
+        sm.getSequence(),
+        Arrays.toString(targetArray));
 
     this.pendingRequest = sm;
     this.pendingRequestSign = sign;
@@ -343,6 +341,7 @@ public class NettyClientServerCommunicationSystemClientSide
     }
 
     // FIXME Kai: get F from somewhere else than controller
+
     //    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF() +
     // 1) {
     //      // if less than f+1 servers are connected send an exception to the client

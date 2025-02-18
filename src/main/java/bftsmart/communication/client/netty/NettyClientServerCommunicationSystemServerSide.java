@@ -51,9 +51,7 @@ public class NettyClientServerCommunicationSystemServerSide
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  /**
-   * RequestReceiver is the class that receives messages from clients
-   */
+  /** RequestReceiver is the class that receives messages from clients */
   private RequestReceiver requestReceiver;
 
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionReplicaToClient;
@@ -72,11 +70,11 @@ public class NettyClientServerCommunicationSystemServerSide
       1024; /* pending connections boss thread will queue to accept */
   private static final int connectionTimeoutMsec = 40000; /* (40 seconds) */
   private PrivateKey privKey;
+
   /* Tulio Ribeiro */
 
   public NettyClientServerCommunicationSystemServerSide(ConfigurationManager configManager) {
     try {
-
       this.configManager = configManager;
       /* Tulio Ribeiro */
       privKey = configManager.getStaticConf().getPrivateKey();
@@ -85,7 +83,6 @@ public class NettyClientServerCommunicationSystemServerSide
       rl = new ReentrantReadWriteLock();
 
       // Configure the server.
-
       serverPipelineFactory =
           new NettyServerPipelineFactory(this, sessionReplicaToClient, this.configManager, rl);
 
@@ -122,24 +119,18 @@ public class NettyClientServerCommunicationSystemServerSide
               .getHostAddress();
 
       if (InetAddress.getLoopbackAddress().getHostAddress().equals(confAddress)) {
-
         myAddress = InetAddress.getLoopbackAddress().getHostAddress();
 
       } else if (configManager.getStaticConf().getBindAddress().isEmpty()) {
-
         myAddress = InetAddress.getLocalHost().getHostAddress();
 
-        // If Netty binds to the loopback address, clients will not be able to connect
-        // to replicas.
-        // To solve that issue, we bind to the address supplied in config/hosts.config
-        // instead.
+        // If Netty binds to the loopback address, clients will not be able to connect to replicas.
+        // To solve that issue, we bind to the address supplied in config/hosts.config instead.
         if (InetAddress.getByName(myAddress).isLoopbackAddress()
             && !myAddress.equals(confAddress)) {
           myAddress = confAddress;
         }
-
       } else {
-
         myAddress = configManager.getStaticConf().getBindAddress();
       }
 
@@ -148,30 +139,24 @@ public class NettyClientServerCommunicationSystemServerSide
 
       ChannelFuture f = b.bind(new InetSocketAddress(myAddress, myPort)).sync();
 
-      logger.info("ID = " + configManager.getStaticConf().getProcessId());
+      logger.info("ID = {}", configManager.getStaticConf().getProcessId());
       // FIXME Kai: getCurrentView quorum sizes have to be determined somewhere else
+
       //      logger.info("N = " + controller.getCurrentViewN());
       //      logger.info("F = " + controller.getCurrentViewF());
-      logger.info(
-          "Port (client <-> server) = "
-              + configManager
-                  .getStaticConf()
-                  .getPort(configManager.getStaticConf().getProcessId()));
-      logger.info(
-          "Port (server <-> server) = "
-              + configManager
-                  .getStaticConf()
-                  .getServerToServerPort(configManager.getStaticConf().getProcessId()));
-      logger.info("requestTimeout = " + configManager.getStaticConf().getRequestTimeout());
-      logger.info("maxBatch = " + configManager.getStaticConf().getMaxBatchSize());
+      logger.info("Port (client <-> server) = {}", configManager
+              .getStaticConf()
+              .getPort(configManager.getStaticConf().getProcessId()));
+      logger.info("Port (server <-> server) = {}", configManager
+              .getStaticConf()
+              .getServerToServerPort(configManager.getStaticConf().getProcessId()));
+      logger.info("requestTimeout = {}", configManager.getStaticConf().getRequestTimeout());
+      logger.info("maxBatch = {}", configManager.getStaticConf().getMaxBatchSize());
       if (configManager.getStaticConf().getUseSignatures() == 1) logger.info("Using Signatures");
       else if (configManager.getStaticConf().getUseSignatures() == 2)
         logger.info("Using benchmark signature verification");
-      logger.info("Binded replica to IP address " + myAddress);
-      logger.info(
-          "Optimizations: "
-              + " Read-only Requests: "
-              + (configManager.getStaticConf().useReadOnlyRequests() ? "enabled" : "disabled"));
+      logger.info("Bound replica to IP address {}", myAddress);
+      logger.info("Optimizations:  Read-only Requests: {}", configManager.getStaticConf().useReadOnlyRequests() ? "enabled" : "disabled");
       // ******* EDUARDO END **************//
 
       /* Tulio Ribeiro */
@@ -252,7 +237,7 @@ public class NettyClientServerCommunicationSystemServerSide
       closeChannelAndEventLoop(ctx.channel());
       return;
     }
-    logger.info("Session Created, active clients=" + sessionReplicaToClient.size());
+    logger.info("Session Created, active clients={}", sessionReplicaToClient.size());
   }
 
   @Override

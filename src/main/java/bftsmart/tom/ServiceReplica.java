@@ -69,6 +69,7 @@ public class ServiceReplica {
   private ReplyManager repMan = null;
   private ServerViewController SVController;
   private ConfigurationManager configManager;
+  private TOMHandler tomHandler;
   private ReentrantLock waitTTPJoinMsgLock = new ReentrantLock();
   private Condition canProceed = waitTTPJoinMsgLock.newCondition();
   private Executable executor = null;
@@ -167,7 +168,8 @@ public class ServiceReplica {
   // this method initializes the object
   private void init() {
     try {
-      cs = new ServerCommunicationSystem(this.configManager, null);
+      this.tomHandler = new TOMHandler();
+      this.cs = new ServerCommunicationSystem(this.configManager, tomHandler);
     } catch (Exception ex) {
       logger.error("Failed to initialize replica-to-replica communication system", ex);
       throw new RuntimeException("Unable to build a communication system.");
@@ -555,10 +557,7 @@ public class ServiceReplica {
   }
 
   /**
-   * This method initializes the object
-   *
-   * @param cs Server side communication System
-   * @param conf Total order messaging configuration
+   * This method initializes the object.
    */
   private void initTOMLayer() {
     if (tomStackCreated) { // if this object was already initialized, don't do it again
@@ -573,7 +572,7 @@ public class ServiceReplica {
     MessageFactory messageFactory = new MessageFactory(id);
 
     Acceptor acceptor = new Acceptor(cs, messageFactory, SVController);
-    ((TOMHandler) cs.getMsgHandler()).setAcceptor(acceptor);
+    this.tomHandler.setAcceptor(acceptor);
 
     Proposer proposer = new Proposer(cs, messageFactory, SVController);
 
@@ -587,8 +586,8 @@ public class ServiceReplica {
     executionManager.setTOMLayer(tomLayer);
 
     SVController.setTomLayer(tomLayer);
+    this.tomHandler.setTOMLayer(tomLayer);
 
-    ((TOMHandler) cs.getMsgHandler()).setTOMLayer(tomLayer);
     cs.setRequestReceiver(tomLayer);
 
     acceptor.setTOMLayer(tomLayer);
