@@ -178,45 +178,90 @@ public class ServersCommunicationLayer extends Thread {
     start();
   }
 
+  /**
+   * Main loop of the thread that connects to other replicas. While it is running, it accepts new
+   * connections and creates new ServerConnection objects to handle them.
+   */
+  @Override
+  public void run() {
+    while (doWork) {
+      try {
+        SSLSocket newSocket = (SSLSocket) serverSocketSSLTLS.accept();
+        setSSLSocketOptions(newSocket);
+
+        int remoteId = new DataInputStream(newSocket.getInputStream()).readInt();
+
+        //        if (!this.controller.isInCurrentView()
+        //            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
+        //          waitViewLock.lock();
+        //          pendingConn.add(new PendingConnection(newSocket, remoteId));
+        //          waitViewLock.unlock();
+        //        } else {
+        logger.debug("Trying establish connection with Replica: {}", remoteId);
+        acceptConnection(newSocket, remoteId);
+        //        }
+
+      } catch (SocketTimeoutException ex) {
+        logger.trace("Server socket timed out, retrying");
+      } catch (SSLHandshakeException sslex) {
+        logger.error("SSL handshake failed", sslex);
+      } catch (IOException ex) {
+        logger.error("Problem during thread execution", ex);
+      }
+    }
+
+    try {
+      serverSocket.close();
+    } catch (IOException ex) {
+      logger.error("Failed to close server socket", ex);
+    }
+
+    logger.info("ServerCommunicationLayer stopped.");
+  }
+
   public SecretKey getSecretKey(int id) {
     if (id == configManager.getStaticConf().getProcessId()) return selfPwd;
     else return connections.get(id).getSecretKey();
   }
 
-  // ******* EDUARDO BEGIN **************//
+  /**
+   * Update the connections to other replicas. Call this method on startup or when the view changes.
+   *
+   * @author Eduardo, Kai
+   */
   public void updateConnections() {
     connectionsLock.lock();
+    try {
+      // FIXME Kai: remove controller from server communication layer
 
-    // FIXME Kai: remove controller from server communication layer
+      // TODO Kai: do we need to remove unused connections? can't we keep them alive and use a
+      // getter
+      // function to get all IDs for current
 
-    //    if (this.controller.isInCurrentView()) {
-    //
-    //      Iterator<Integer> it = this.connections.keySet().iterator();
-    //      List<Integer> toRemove = new LinkedList<>();
-    //      while (it.hasNext()) {
-    //        int rm = it.next();
-    //        if (!this.controller.isCurrentViewMember(rm)) {
-    //          toRemove.add(rm);
-    //        }
-    //      }
-    //      for (Integer integer : toRemove) {
-    //        this.connections.remove(integer).shutdown();
-    //      }
-    //
-    //      int[] newV = controller.getCurrentViewAcceptors();
-    //      for (int j : newV) {
-    //        if (j != me) {
-    //          getConnection(j);
-    //        }
-    //      }
-    //    } else {
-    //
-    //      for (Integer integer : this.connections.keySet()) {
-    //        this.connections.get(integer).shutdown();
-    //      }
-    //    }
+      //         // remove connections to replicas that are not in the current view
+      //          Iterator<Integer> it = this.connections.keySet().iterator();
+      //          List<Integer> toRemove = new LinkedList<>();
+      //          while (it.hasNext()) {
+      //            int rm = it.next();
+      //            if (!this.controller.isCurrentViewMember(rm)) {
+      //              toRemove.add(rm);
+      //            }
+      //          }
+      //          for (Integer integer : toRemove) {
+      //            this.connections.remove(integer).shutdown();
+      //          }
 
-    connectionsLock.unlock();
+      int[] newV = configManager.getCurrentViewIds();
+      logger.info("Update view connections: {}", Arrays.toString(newV));
+      for (int i : newV) {
+        if (i != me) {
+          logger.info("Connecting to replica: {}", i);
+          getOrCreateConnection(i);
+        }
+      }
+    } finally {
+      connectionsLock.unlock();
+    }
   }
 
   /**
@@ -224,19 +269,46 @@ public class ServersCommunicationLayer extends Thread {
    *
    * @param remoteId remote replica id.
    * @return Server Connection.
+   * @author Eduardo
    */
-  private ServerConnection getConnection(int remoteId) {
+  private ServerConnection getOrCreateConnection(int remoteId) {
     connectionsLock.lock();
-    ServerConnection ret = this.connections.get(remoteId);
-    if (ret == null) {
-      ret = new ServerConnection(this.configManager, null, remoteId, this.inQueue);
-      this.connections.put(remoteId, ret);
+    try {
+      ServerConnection ret = this.connections.get(remoteId);
+      if (ret == null) {
+        ret = new ServerConnection(this.configManager, null, remoteId, this.inQueue);
+        this.connections.put(remoteId, ret);
+      }
+      return ret;
+    } finally {
+      connectionsLock.unlock();
     }
-    connectionsLock.unlock();
-    return ret;
   }
 
-  // ******* EDUARDO END **************//
+  /**
+   * Retry connecting to the current view IDs until all connections are established. Should only be
+   * used initially during startup when the replicas have to be started manually. After that,
+   * **especially after view change**, connections should be updated with another method.
+   */
+  public void waitUntilViewConnected() {
+    Set<Integer> targetViewIds = new HashSet<>();
+    for (int i : this.configManager.getCurrentViewIds()) {
+      if (i != me) targetViewIds.add(i); // connect to everyone else but self
+    }
+    while (!this.connections.keySet().containsAll(targetViewIds)) {
+      logger.info("Not connected to initial replicas. Connecting...");
+      logger.info("Current connections: {}", this.connections.keySet());
+      logger.info("Target connections: {}", targetViewIds);
+      updateConnections();
+      // wait for a while before retrying
+      try {
+        Thread.sleep(5000);
+      } catch (InterruptedException ex) {
+        logger.error("Interrupted while waiting for connections", ex);
+      }
+    }
+    logger.info("Connected to initial replicas.");
+  }
 
   public final void send(int[] targets, SystemMessage sm, boolean useMAC) {
     ByteArrayOutputStream bOut = new ByteArrayOutputStream(248);
@@ -263,7 +335,7 @@ public class ServersCommunicationLayer extends Thread {
           logger.debug("Queueing (delivering) my own message, me:{}", target);
         } else {
           logger.debug("Sending message from:{} -> to:{}.", me, target);
-          getConnection(target).send(data);
+          getOrCreateConnection(target).send(data);
         }
       } catch (InterruptedException ex) {
         logger.error("Interruption while inserting message into inqueue", ex);
@@ -292,7 +364,7 @@ public class ServersCommunicationLayer extends Thread {
     waitViewLock.lock();
     for (PendingConnection pc : pendingConn) {
       try {
-        establishConnection(pc.s, pc.remoteId);
+        acceptConnection(pc.s, pc.remoteId);
       } catch (Exception e) {
         logger.error("Failed to establish connection to {}", pc.remoteId, e);
       }
@@ -301,45 +373,6 @@ public class ServersCommunicationLayer extends Thread {
     pendingConn.clear();
 
     waitViewLock.unlock();
-  }
-
-  @Override
-  public void run() {
-    while (doWork) {
-      try {
-        // System.out.println("Waiting for server connections");
-
-        SSLSocket newSocket = (SSLSocket) serverSocketSSLTLS.accept();
-        setSSLSocketOptions(newSocket);
-
-        int remoteId = new DataInputStream(newSocket.getInputStream()).readInt();
-
-        //        if (!this.controller.isInCurrentView()
-        //            && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
-        //          waitViewLock.lock();
-        //          pendingConn.add(new PendingConnection(newSocket, remoteId));
-        //          waitViewLock.unlock();
-        //        } else {
-        logger.debug("Trying establish connection with Replica: {}", remoteId);
-        establishConnection(newSocket, remoteId);
-        //        }
-
-      } catch (SocketTimeoutException ex) {
-        logger.trace("Server socket timed out, retrying");
-      } catch (SSLHandshakeException sslex) {
-        logger.error("SSL handshake failed", sslex);
-      } catch (IOException ex) {
-        logger.error("Problem during thread execution", ex);
-      }
-    }
-
-    try {
-      serverSocket.close();
-    } catch (IOException ex) {
-      logger.error("Failed to close server socket", ex);
-    }
-
-    logger.info("ServerCommunicationLayer stopped.");
   }
 
   /**
@@ -351,7 +384,7 @@ public class ServersCommunicationLayer extends Thread {
    * @throws IOException
    * @author Eduardo
    */
-  private void establishConnection(SSLSocket newSocket, int remoteId) throws IOException {
+  private void acceptConnection(SSLSocket newSocket, int remoteId) throws IOException {
     connectionsLock.lock();
     if (this.connections.get(remoteId) == null) {
       // This must never happen!!!
@@ -396,7 +429,7 @@ public class ServersCommunicationLayer extends Thread {
         str.append(", connections[")
             .append(connId)
             .append("]: outQueue=")
-            .append(getConnection(connId).outQueue);
+            .append(getOrCreateConnection(connId).outQueue);
       }
     }
     return str.toString();

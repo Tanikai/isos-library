@@ -16,7 +16,6 @@ package bftsmart.communication.server;
 
 import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.reconfiguration.VMMessage;
 import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.util.TOMUtil;
@@ -47,7 +46,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ServerConnection {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  private static final long POOL_TIME = 5000;
+  private static final long POLL_TIME = 5000;
   private final ConfigurationManager configManager;
   private SSLSocket socket;
   private DataOutputStream socketOutStream = null;
@@ -81,18 +80,16 @@ public class ServerConnection {
       LinkedBlockingQueue<SystemMessage> inQueue) {
 
     this.configManager = configManager;
-
     this.socket = socket;
-
     this.remoteId = remoteId;
-
     this.inQueue = inQueue;
-
     this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
 
     // Connect to the remote process or just wait for the connection?
     if (isToConnect()) {
       ssltlsCreateConnection();
+    } else {
+      logger.info("Remote has higher process ID, will wait for connection request.");
     }
 
     if (this.socket != null) {
@@ -100,7 +97,7 @@ public class ServerConnection {
         socketOutStream = new DataOutputStream(this.socket.getOutputStream());
         socketInStream = new DataInputStream(this.socket.getInputStream());
       } catch (IOException ex) {
-        logger.error("Error creating connection to " + remoteId, ex);
+        logger.error("Error creating connection to {}", remoteId, ex);
       }
     }
 
@@ -139,23 +136,14 @@ public class ServerConnection {
    */
   public SecretKey getSecretKey() {
     if (secretKey != null) return secretKey;
-    else {
-      SecretKeyFactory fac;
-      PBEKeySpec spec;
-      try {
-        fac = TOMUtil.getSecretFactory();
-        spec = TOMUtil.generateKeySpec(SECRET.toCharArray());
-        secretKey = fac.generateSecret(spec);
-      } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-        logger.error("Algorithm error.", e);
-      }
-    }
+
+    generateSecretKey();
     return secretKey;
   }
 
   /** Stop message sending and reception. */
   public void shutdown() {
-    logger.debug("SHUTDOWN for " + remoteId);
+    logger.debug("SHUTDOWN for {}", remoteId);
 
     doWork = false;
     closeSocket();
@@ -166,7 +154,7 @@ public class ServerConnection {
     if (useSenderThread) {
       // only enqueue messages if there queue is not full
       if (!outQueue.offer(data)) {
-        logger.debug("Out queue for " + remoteId + " full (message discarded).");
+        logger.warn("Out queue for {} full (message discarded).", remoteId);
       }
     } else {
       sendLock.lock();
@@ -214,24 +202,14 @@ public class ServerConnection {
     } while (doWork);
   }
 
-  // ******* EDUARDO BEGIN **************//
-  // return true if a process shall connect to the remote process, false otherwise
+  /**
+   * @return return true if a process shall connect to the remote process, false otherwise
+   * @author Eduardo
+   */
   private boolean isToConnect() {
-    if (this.configManager.getStaticConf().getTTPId() == remoteId) {
-      // Need to wait for the connection request from the TTP, do not tray to connect to it
-      return false;
-    } else if (this.configManager.getStaticConf().getTTPId()
-        == this.configManager.getStaticConf().getProcessId()) {
-      // If this is a TTP, one must connect to the remote process
-      return true;
-    }
-    boolean ret = false;
-
     // the node with higher ID starts the connection
     return this.configManager.getStaticConf().getProcessId() > remoteId;
   }
-
-  // ******* EDUARDO END **************//
 
   /**
    * (Re-)establish connection between peers.
@@ -240,14 +218,13 @@ public class ServerConnection {
    *     processId is less than remoteId)
    */
   protected void reconnect(SSLSocket newSocket) {
-
     connectLock.lock();
 
     if (socket == null || !socket.isConnected()) {
-
       if (isToConnect()) {
         ssltlsCreateConnection();
       } else {
+        logger.info("Remote has higher process ID, use Socket from received connection request.");
         socket = newSocket;
       }
 
@@ -292,7 +269,7 @@ public class ServerConnection {
   private void waitAndConnect() {
     if (doWork) {
       try {
-        Thread.sleep(POOL_TIME);
+        Thread.sleep(POLL_TIME);
       } catch (InterruptedException ie) {
         logger.error("Failed to sleep", ie);
       }
@@ -316,7 +293,7 @@ public class ServerConnection {
       while (doWork) {
         // get a message to be sent
         try {
-          data = outQueue.poll(POOL_TIME, TimeUnit.MILLISECONDS);
+          data = outQueue.poll(POLL_TIME, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
           logger.error("Failed to poll message from outQueue", ex);
         }
@@ -397,71 +374,15 @@ public class ServerConnection {
   // TODO: Ask eduardo why a new thread is needed!!!
   // TODO 2: Remove all duplicated code
 
-  /** Thread used to receive packets from the remote server. */
-  protected class TTPReceiverThread extends Thread {
-
-    private final ServiceReplica replica;
-
-    public TTPReceiverThread(ServiceReplica replica) {
-      super("TTPReceiver for " + remoteId);
-      this.replica = replica;
-    }
-
-    @Override
-    public void run() {
-
-      while (doWork) {
-        if (socket != null && socketInStream != null) {
-          try {
-            // read data length
-            int dataLength = socketInStream.readInt();
-
-            byte[] data = new byte[dataLength];
-
-            // read data
-            int read = 0;
-            do {
-              read += socketInStream.read(data, read, dataLength - read);
-            } while (read < dataLength);
-
-            SystemMessage sm =
-                (SystemMessage)
-                    (new ObjectInputStream(new ByteArrayInputStream(data)).readObject());
-
-            if (sm.getSender() == remoteId) {
-              this.replica.joinMsgReceived((VMMessage) sm);
-            }
-
-          } catch (ClassNotFoundException ex) {
-            logger.error("Failed to deserialize message", ex);
-          } catch (IOException ex) {
-            // ex.printStackTrace();
-            if (doWork) {
-              closeSocket();
-              waitAndConnect();
-            }
-          }
-        } else {
-          waitAndConnect();
-        }
-      }
-    }
-  }
-
   // ******* EDUARDO END **************//
 
-  /** Deal with the creation of SSL/TLS connection. Author: Tulio A. Ribeiro */
+  /**
+   * Deal with the creation of SSL/TLS connection.
+   *
+   * @author Tulio A. Ribeiro
+   */
   public void ssltlsCreateConnection() {
-
-    SecretKeyFactory fac;
-    PBEKeySpec spec;
-    try {
-      fac = TOMUtil.getSecretFactory();
-      spec = TOMUtil.generateKeySpec(SECRET.toCharArray());
-      secretKey = fac.generateSecret(spec);
-    } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
-      logger.error("Algorithm error.", e);
-    }
+    generateSecretKey();
 
     String algorithm = Security.getProperty("ssl.KeyManagerFactory.algorithm");
     try {
@@ -527,9 +448,26 @@ public class ServerConnection {
           .writeInt(this.configManager.getStaticConf().getProcessId());
 
     } catch (SocketException | UnknownHostException e) {
-      logger.error("Connection refused", e);
+      logger.error(
+          "Failed connection from replica {} -> replica {}: {}",
+          this.configManager.getStaticConf().getProcessId(),
+          this.remoteId,
+          e.getMessage());
+
     } catch (IOException e) {
       logger.error("IO error.", e);
+    }
+  }
+
+  private void generateSecretKey() {
+    SecretKeyFactory fac;
+    PBEKeySpec spec;
+    try {
+      fac = TOMUtil.getSecretFactory();
+      spec = TOMUtil.generateKeySpec(SECRET.toCharArray());
+      this.secretKey = fac.generateSecret(spec);
+    } catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+      logger.error("Algorithm error.", e);
     }
   }
 }

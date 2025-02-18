@@ -127,6 +127,13 @@ public class ServerCommunicationSystem extends Thread {
     }
   }
 
+  /**
+   * Retry to establish connections to replicas that are not connected yet.
+   */
+  public void waitUntilViewConnected() {
+    serversConn.waitUntilViewConnected();
+  }
+
   public void setRequestReceiver(RequestReceiver requestReceiver) {
     if (clientsConn == null) {
       clientsConn =
