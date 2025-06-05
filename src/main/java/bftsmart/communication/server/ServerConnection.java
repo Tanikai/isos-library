@@ -16,8 +16,6 @@ package bftsmart.communication.server;
 
 import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.reconfiguration.VMMessage;
-import bftsmart.tom.ServiceReplica;
 import bftsmart.tom.util.TOMUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,9 +50,14 @@ public class ServerConnection {
   private DataOutputStream socketOutStream = null;
   private DataInputStream socketInStream = null;
   private final int remoteId;
+
+  // Sender
+  private SenderThread msgSender;
+
+  // Receiver
+
   private final boolean useSenderThread;
-  protected LinkedBlockingQueue<byte[]>
-      outQueue; // = new LinkedBlockingQueue<byte[]>(SEND_QUEUE_SIZE);
+  protected final LinkedBlockingQueue<byte[]> outQueue;
   private final LinkedBlockingQueue<SystemMessage> inQueue;
 
   private final Lock connectLock = new ReentrantLock();
@@ -63,6 +66,7 @@ public class ServerConnection {
   private Lock sendLock;
 
   private boolean doWork = true;
+  private ReceiverThread msgReceiver;
 
   private SecretKey secretKey = null;
 
@@ -85,31 +89,19 @@ public class ServerConnection {
     this.inQueue = inQueue;
     this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
 
-    logger.info("Create Serverconnection {} -> {}", this.configManager.getStaticConf().getProcessId(), remoteId);
+    logger.info(
+        "Create Serverconnection {} -> {}",
+        this.configManager.getStaticConf().getProcessId(),
+        remoteId);
 
     reconnect(socket);
-
-    // Connect to the remote process or just wait for the connection?
-    //    if (isToConnect()) {
-    //      ssltlsCreateConnection();
-    //    } else {
-    //      logger.info("Remote has higher process ID, will wait for connection request.");
-    //    }
-    //
-    //    if (this.socket != null) {
-    //      try {
-    //        socketOutStream = new DataOutputStream(this.socket.getOutputStream());
-    //        socketInStream = new DataInputStream(this.socket.getInputStream());
-    //      } catch (IOException ex) {
-    //        logger.error("Error creating connection to {}", remoteId, ex);
-    //      }
-    //    }
 
     // ******* EDUARDO BEGIN **************//
     this.useSenderThread = this.configManager.getStaticConf().isUseSenderThread();
 
     if (useSenderThread && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
-      new SenderThread().start();
+      this.msgSender = new SenderThread();
+      this.msgSender.start();
     } else {
       sendLock = new ReentrantLock();
     }
@@ -127,15 +119,14 @@ public class ServerConnection {
 
     // New Version
     if (!this.configManager.getStaticConf().isTheTTP()) {
-      new ReceiverThread().start();
+      this.msgReceiver = new ReceiverThread();
+      this.msgReceiver.start();
     }
     // ******* EDUARDO END **************//
-
   }
 
   /**
-   * Tulio A. Ribeiro.
-   *
+   * @author Tulio A. Ribeiro.
    * @return SecretKey
    */
   public SecretKey getSecretKey() {
@@ -155,14 +146,13 @@ public class ServerConnection {
 
   /** Used to send packets to the remote server. */
   public final void send(byte[] data) throws InterruptedException {
+    // should send be blocking / throw error if disconnected?
     if (useSenderThread) {
       //      logger.info("Send with senderThread");
       // only enqueue messages if there queue is not full
       if (!outQueue.offer(data)) {
         logger.warn("Out queue for {} full (message discarded).", remoteId);
       }
-
-//      logger.info("OutQueue current size: {}", outQueue.size());
     } else {
       logger.info("Send with lock");
       sendLock.lock();
@@ -229,7 +219,8 @@ public class ServerConnection {
    */
   protected void reconnect(SSLSocket newSocket) {
     if (socket != null && socket.isConnected()) {
-      logger.info("Reconnect called, but already connected");
+      //      logger.info("Reconnect called, but already connected");
+      //      logger.info("Trace {}", (Object) Thread.currentThread().getStackTrace());
       return; // do nothing if current socket is already connected
     }
 
@@ -245,7 +236,9 @@ public class ServerConnection {
         ssltlsCreateConnection();
       } else {
         logger.info("Remote has higher process ID, use Socket from received connection request.");
+        // Save socket from accepted connection
         socket = newSocket;
+
         if (socket == null) {
           logger.warn(
               "Connection to remote should be established by {}, but newSocket is null",
@@ -253,6 +246,8 @@ public class ServerConnection {
         }
       }
 
+      // After establishing the connection (independent from who initiated), create an Output- and
+      // InputStream
       if (socket != null) {
         try {
           socketOutStream = new DataOutputStream(socket.getOutputStream());
@@ -274,6 +269,10 @@ public class ServerConnection {
     connectLock.lock();
 
     if (socket != null) {
+      logger.info(
+          "Close Socket {} -> {}",
+          this.configManager.getStaticConf().getProcessId(),
+          this.remoteId);
       try {
         socketOutStream.flush();
         socket.close();
@@ -291,10 +290,11 @@ public class ServerConnection {
     connectLock.unlock();
   }
 
+  /** Waits 1s and then tries to reconnect. */
   private void waitAndConnect() {
     if (doWork) {
       try {
-        Thread.sleep(POLL_TIME);
+        Thread.sleep(1000);
       } catch (InterruptedException ie) {
         logger.error("Failed to sleep", ie);
       }
@@ -347,15 +347,24 @@ public class ServerConnection {
 
       while (doWork) {
         // if socket of connection is null
-        if (socket == null || socketInStream == null) {
-          logger.info("!!! ReceiverThread run: socket is null, or inStream is null, reconnecting");
+        if (socket == null) {
+          logger.info("ReceiverThread: socket is null, reconnecting");
+          waitAndConnect();
+          continue;
+        }
+
+        if (socketInStream == null) {
+          logger.info("ReceiverThread: inStream is null, reconnecting");
           waitAndConnect();
           continue;
         }
 
         try {
           // read data length
-          // FIXME Kai: possible DoS attack by using really long messages, thus reserving large arrays?
+          // FIXME Kai: possible DoS attack by using really long messages, thus reserving large
+          // arrays?
+
+          // if there are disconnection issues, does the socketInStream get renewed?
           int dataLength = socketInStream.readInt();
           byte[] data = new byte[dataLength];
 
@@ -364,7 +373,6 @@ public class ServerConnection {
           do {
             read += socketInStream.read(data, read, dataLength - read);
           } while (read < dataLength);
-
 
           byte hasMAC = socketInStream.readByte();
 
@@ -383,7 +391,11 @@ public class ServerConnection {
               	logger.trace("Message: {} queued, remoteId: {}", sm.toString(), sm.getSender());
               }*/
           } else {
-            logger.info("ReceiverThread: Mismatch of Senders: {} (Message) - {} (Connection) (Actual message: {})", sm.getSender(), remoteId, sm);
+            logger.info(
+                "ReceiverThread: Mismatch of Senders: {} (Message) - {} (Connection) (Actual message: {})",
+                sm.getSender(),
+                remoteId,
+                sm);
           }
         } catch (ClassNotFoundException ex) {
           logger.info("Invalid message received. Ignoring!");

@@ -51,30 +51,20 @@ public class MessagingReplica extends Thread {
     this.serverComms.start();
     logger.info("Wait until view is connected");
     this.serverComms.waitUntilViewConnected();
-    logger.info("View connected");
 
     // wait until everyone is connected
     // send message to all replicas
     var receivers = this.configManager.getStaticConf().getInitialView();
     logger.info("Sending message to replicas {}", receivers);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 100; i++) {
       // send a message to all replicas
       var msg = new TestMessage(procId, "Hello " + i + " from " + procId);
       this.serverComms.send(receivers, msg);
       // wait a bit
       try {
-        Thread.sleep(1000);
+        Thread.sleep(500);
       } catch (InterruptedException e) {
         logger.error("Interrupted while waiting", e);
-      }
-    }
-
-    while (true) {
-      try {
-        Thread.sleep(10000);
-        // busy waiting
-      } catch (InterruptedException e) {
-        throw new RuntimeException(e);
       }
     }
   }
