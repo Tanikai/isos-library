@@ -1,8 +1,18 @@
-# Byzantine Fault-Tolerant (BFT) State Machine Replication (SMaRt) v2.0
+# Egalitarian Byzantine Fault Tolerance (ISOS) Implementation in Java
 
-This is a Byzantine fault-tolerant state machine replication project named BFT-SMaRt, a Java open source library maintained by the LASIGE Computer Science and Engineering Research Centre at the University of Lisbon.
+## About
 
-This package contains the source code (src/), dependencies (lib/), documentation (docs/), running scripts (runscripts/), and configuration files (config/) for version 2.0 of the project.
+This repository contains a (currently WIP) implementation
+of [ISOS](https://doi.org/10.1109/PRDC53464.2021.00019), a leaderless byzantine
+fault tolerant consensus algorithm. It uses the BFT SMaRt networking stack as a
+baseline. The implementation of the consensus algorithm is based on the
+[provided pseudocode of the extended version](https://arxiv.org/pdf/2109.06811).
+
+See [README-isos](README-isos.md) for ISOS-specific documentation and development notes.
+
+This package contains the source code (src/), dependencies (lib/),
+documentation (docs/), running scripts (runscripts/), and configuration files (
+config/) of the project.
 
 ## Quick start
 
