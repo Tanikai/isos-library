@@ -41,7 +41,8 @@ remotes {
     }
 }
 
-task remoteDeploy(dependsOn: installDist) {
+tasks.register('remoteDeploy') {
+    dependsOn installDist
     doLast {
         def fileSeparator = System.getProperty("file.separator")
         def src = project.buildDir.name + fileSeparator + "install" + fileSeparator + project.name
@@ -54,7 +55,8 @@ task remoteDeploy(dependsOn: installDist) {
     }
 }
 
-task localDeploy(dependsOn: installDist) {
+tasks.register('localDeploy') {
+    dependsOn installDist
     doLast {
         int nServers = 4
         int nClients = 1
@@ -105,7 +107,8 @@ def setupIntegrationTestingEnvironment(nWorkers, workingDirectory) {
     }
 }
 
-task setupIntegrationTestingEnvironment(dependsOn: installDist) {
+tasks.register('setupIntegrationTestingEnvironment') {
+    dependsOn installDist
     doFirst {
         def f = 1
         def nWorkers = 3 * f + 2
@@ -132,7 +135,8 @@ task setupIntegrationTestingEnvironment(dependsOn: installDist) {
     }
 }
 
-task runIntegrationTest(type: JavaExec, dependsOn: installDist) {
+tasks.register('runIntegrationTest', JavaExec) {
+    dependsOn installDist
     int f = 1
     int nWorkers = 3 * f + 2;
     def fileSeparator = System.getProperty("file.separator")
@@ -162,32 +166,32 @@ distributions {
     }
 }
 
-tasks.withType(Javadoc) {
+tasks.withType(Javadoc).configureEach {
     failOnError false
     options.addStringOption('Xdoclint:none', '-quiet')
-    options.addStringOption('encoding', 'UTF-8')
+    options.encoding = "UTF-8"
     options.addStringOption('charSet', 'UTF-8')
 }
 
 dependencies {
     implementation fileTree('lib') { include '*.jar' }
     // https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk15on
-    implementation 'org.bouncycastle:bcpkix-jdk15on:1.69'
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.80'
 
     // https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk15on
-    implementation 'org.bouncycastle:bcprov-jdk15on:1.69'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.80'
 
     // https://mvnrepository.com/artifact/commons-codec/commons-codec
     implementation 'commons-codec:commons-codec:1.15'
 
     // https://mvnrepository.com/artifact/ch.qos.logback/logback-core
-    implementation 'ch.qos.logback:logback-core:1.2.5'
+    implementation 'ch.qos.logback:logback-core:1.5.13'
 
     // https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
+    implementation 'ch.qos.logback:logback-classic:1.5.13'
 
     // https://mvnrepository.com/artifact/io.netty/netty-all
-    implementation 'io.netty:netty-all:4.1.67.Final'
+    implementation 'io.netty:netty-all:4.1.94.Final'
 
     // https://mvnrepository.com/artifact/org.slf4j/slf4j-api
     implementation 'org.slf4j:slf4j-api:1.7.32'
