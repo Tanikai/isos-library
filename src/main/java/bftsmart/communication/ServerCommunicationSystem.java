@@ -69,7 +69,7 @@ public class ServerCommunicationSystem extends Thread {
    */
   public ServerCommunicationSystem(ConfigurationManager configManager, MessageHandler msgHandler)
       throws Exception {
-    super("Server Comm. System");
+    super("SCommS");
 
     this.configManager = configManager;
     this.msgHandler = Objects.requireNonNullElseGet(msgHandler, TOMHandler::new);

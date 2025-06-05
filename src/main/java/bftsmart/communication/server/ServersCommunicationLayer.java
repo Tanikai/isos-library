@@ -76,6 +76,8 @@ public class ServersCommunicationLayer extends Thread {
       ConfigurationManager configManager, LinkedBlockingQueue<SystemMessage> inQueue)
       throws Exception {
 
+    super("SCommL");
+
     this.configManager = configManager;
     this.inQueue = inQueue;
     this.me = configManager.getStaticConf().getProcessId();

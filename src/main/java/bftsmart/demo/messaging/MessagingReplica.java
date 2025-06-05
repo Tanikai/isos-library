@@ -31,7 +31,7 @@ public class MessagingReplica extends Thread {
   private Lock readyLock;
 
   public MessagingReplica(int procId, String configHome, KeyLoader loader) {
-    super("Messaging Replica ID " + procId);
+    super("Application ID " + procId);
     this.procId = procId;
 
     this.configManager = new ConfigurationManager(procId, configHome, loader);

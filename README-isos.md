@@ -27,3 +27,8 @@ To exit, press Ctrl+C multiple times, or `tmux action key` + `&`, then confirm w
 ```bash
  ./gradlew build && ./copy_library.sh && ./quad-replica.sh
 ```
+
+## Documentation of Thread Names
+
+- `SCommS`: ServerCommunicationSystem
+- `SCommL`: ServerCommunicationLayer
