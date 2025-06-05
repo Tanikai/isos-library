@@ -58,7 +58,7 @@ public abstract class DefaultSingleRecoverable implements Recoverable, SingleExe
 
     private MessageDigest md;
 
-    private StateLog log;
+    private StateLog log; // TODO KAI: History of state changes (?)
     private List<byte[]> commands = new ArrayList<>();
 
     private List<byte[]> replies = new ArrayList<>();

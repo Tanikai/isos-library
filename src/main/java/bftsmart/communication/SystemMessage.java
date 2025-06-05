@@ -22,7 +22,7 @@ import java.io.ObjectOutput;
 /** This is the super-class for all other kinds of messages created by JBP */
 public abstract class SystemMessage implements Externalizable {
 
-  protected int sender; // ID of the process which sent the message
+  protected int sender = -1; // ID of the process which sent the message
   public transient boolean authenticated; // set to TRUE if the message was received
 
   // with a (valid) mac, FALSE if no mac was given

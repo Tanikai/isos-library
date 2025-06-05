@@ -34,9 +34,8 @@ import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * This class implements a TOMSender and represents a proxy to be used on the client side of the
- * replicated system. It sends a request to the replicas, receives the reply, and delivers it to the
- * application.
+ * This class implements a TOMSender and represents a proxy to be used on the Clients. It sends a
+ * request to the replicas, receives the reply, and delivers it to the application.
  */
 public class ServiceProxy extends TOMSender {
   private final Logger logger = LoggerFactory.getLogger("bftsmart.proxy");
@@ -201,12 +200,11 @@ public class ServiceProxy extends TOMSender {
     try {
       canSendLock.lock();
 
-      requestHandler = createRequestHandler(reqType);
-
+      this.requestHandler = createRequestHandler(reqType);
       TOMMessage requestMessage = requestHandler.createRequest(request);
 
       logger.debug("Sending request ({}) with seqId = {}", reqType, requestHandler.getSequenceId());
-      TOMulticast(requestMessage);
+      this.TOMulticast(requestMessage); // multicast
 
       logger.debug("Expected number of matching replies: {}", requestHandler.getReplyQuorumSize());
 
@@ -231,7 +229,7 @@ public class ServiceProxy extends TOMSender {
       }
 
       TOMMessage response = requestHandler.getResponse();
-      logger.debug("Response extracted: " + response);
+      logger.debug("Response extracted: {}", response);
 
       if (response == null) {
         // the response can be null if n-f replies are received but there isn't
@@ -240,48 +238,48 @@ public class ServiceProxy extends TOMSender {
 
         if (reqType == TOMMessageType.UNORDERED_REQUEST
             || reqType == TOMMessageType.UNORDERED_HASHED_REQUEST) {
-          // invoke the operation again, whitout the read-only flag
+          // invoke the operation again, without the read-only flag
           logger.debug("###################RETRY#######################");
           return invokeOrdered(request);
         } else {
           requestHandler.printState();
           throw new RuntimeException("Received n-f replies without f+1 of them matching.");
         }
-      } else {
-        if (response.getViewID() == getViewManager().getCurrentViewId()) { // normal operation
-          return response.getContent();
-        } else if (response.getViewID() > getViewManager().getCurrentViewId()) {
-          if (reqType == TOMMessageType.ORDERED_REQUEST) {
-            reconfigureTo((View) TOMUtil.getObject(response.getContent()));
-            return invokeOrdered(request);
-          } else if (reqType == TOMMessageType.UNORDERED_REQUEST
-              || reqType == TOMMessageType.UNORDERED_HASHED_REQUEST) {
-            // Ignore the response and request again because servers are in a later view
-            return invokeOrdered(request);
-          } else { // Reply to a reconfigure request!
-            logger.debug("Reconfiguration request' reply received!");
-            Object r = TOMUtil.getObject(response.getContent());
-            if (r
-                instanceof
-                View) { // did not execute the request because it is using an outdated view
-              reconfigureTo((View) r);
-              return invoke(request, reqType);
-            } else if (r instanceof ReconfigureReply) { // reconfiguration executed!
-              reconfigureTo(((ReconfigureReply) r).getView());
-              return response.getContent();
-            } else {
-              logger.error("Unknown response type: {}", response.getReqType());
-            }
-          }
-        } else {
-          logger.error("My view is ahead of the servers' view. This should never happen!");
-        }
-        return null;
       }
+
+      if (response.getViewID() == getViewManager().getCurrentViewId()) { // normal operation
+        return response.getContent();
+      } else if (response.getViewID() > getViewManager().getCurrentViewId()) {
+        if (reqType == TOMMessageType.ORDERED_REQUEST) {
+          reconfigureTo((View) TOMUtil.getObject(response.getContent()));
+          return invokeOrdered(request);
+        } else if (reqType == TOMMessageType.UNORDERED_REQUEST
+            || reqType == TOMMessageType.UNORDERED_HASHED_REQUEST) {
+          // Ignore the response and request again because servers are in a later view
+          return invokeOrdered(request);
+        } else { // Reply to a reconfigure request!
+          logger.debug("Reconfiguration request' reply received!");
+          Object r = TOMUtil.getObject(response.getContent());
+          if (r
+              instanceof View) { // did not execute the request because it is using an outdated view
+            reconfigureTo((View) r);
+            return invoke(request, reqType);
+          } else if (r instanceof ReconfigureReply) { // reconfiguration executed!
+            reconfigureTo(((ReconfigureReply) r).getView());
+            return response.getContent();
+          } else {
+            logger.error("Unknown response type: {}", response.getReqType());
+          }
+        }
+      } else {
+        logger.error("My view is ahead of the servers' view. This should never happen!");
+      }
+      return null;
 
     } catch (InterruptedException e) {
       logger.error("Failed to wait for a response. Returning null as response.", e);
       return null;
+
     } finally {
       canSendLock.unlock(); // always release lock
     }
@@ -294,7 +292,7 @@ public class ServiceProxy extends TOMSender {
    * @return Request handler
    */
   private AbstractRequestHandler createRequestHandler(TOMMessageType requestType) {
-    AbstractRequestHandler requestHandler;
+    AbstractRequestHandler result;
     int replyQuorumSize = getReplyQuorum(); // size of the reply quorum
     int sequenceId = generateRequestId(requestType);
     int operationId = generateOperationId();
@@ -306,7 +304,7 @@ public class ServiceProxy extends TOMSender {
           getProcessId(),
           replyServer,
           getViewManager().getCurrentViewPos(replyServer));
-      requestHandler =
+      result =
           new HashedRequestHandler(
               getProcessId(),
               getSession(),
@@ -319,7 +317,7 @@ public class ServiceProxy extends TOMSender {
               replyQuorumSize,
               replyServer);
     } else { // ORDERED_REQUEST or UNORDERED_REQUEST
-      requestHandler =
+      result =
           new NormalRequestHandler(
               getProcessId(),
               getSession(),
@@ -334,7 +332,7 @@ public class ServiceProxy extends TOMSender {
               extractor);
     }
 
-    return requestHandler;
+    return result;
   }
 
   // ******* EDUARDO BEGIN **************//

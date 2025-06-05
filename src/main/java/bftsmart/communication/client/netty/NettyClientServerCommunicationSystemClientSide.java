@@ -64,6 +64,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.GenericFutureListener;
 
 /**
+ * This class is an implementation of the ServerCommunicationSystemClientSide
+ *
  * @author Paulo
  */
 @Sharable

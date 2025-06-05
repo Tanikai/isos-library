@@ -21,7 +21,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
-
+ * A view is a specific configuration of the system that replicas agree at a given moment. It can
+ * for example include: Id Number ("Epoch Number"), Leader (not relevant for ISOS), Replicas
+ * participating in the consensus.
  *
  * @author eduardo
  */

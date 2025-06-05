@@ -31,7 +31,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Thread that manages Replica-Replica and Replica-Client communication.
+ * Top-level thread that manages Replica-Replica and Replica-Client communication.
+ * Client Comms: CommunicationSystemServerSide
+ * Replica Comms: ServersCommunicationLayer
  *
  * @author alysson
  */
@@ -91,6 +93,7 @@ public class ServerCommunicationSystem extends Thread {
         if (count % 1000 == 0 && count > 0) {
           logger.debug("After {} messages, inQueue size={}", count, inQueue.size());
         }
+
         SystemMessage sm = inQueue.poll(MESSAGE_WAIT_TIME, TimeUnit.MILLISECONDS);
 
         if (sm != null) {

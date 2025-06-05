@@ -50,17 +50,17 @@ import java.util.concurrent.locks.ReentrantLock;
 // $keytool -importkeystore -srckeystore ./RSA_KeyPair_2048.pkcs12 -destkeystore
 // ./RSA_KeyPair_2048.pkcs12 -deststoretype pkcs12
 
-/** Thread that connects to other replicas. */
+/** Thread that connects to other replicas and sends messages. */
 public class ServersCommunicationLayer extends Thread {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
+  private final int me;
   //  private final ServerViewController controller;
   private final ConfigurationManager configManager;
   private final LinkedBlockingQueue<SystemMessage> inQueue;
   private final HashMap<Integer, ServerConnection> connections = new HashMap<>();
   private ServerSocket serverSocket;
-  private final int me;
   private boolean doWork = true;
   private final Lock connectionsLock = new ReentrantLock();
   private final ReentrantLock waitViewLock = new ReentrantLock();
@@ -165,15 +165,17 @@ public class ServersCommunicationLayer extends Thread {
     // Try connecting if a member of the current view. Otherwise, wait until the Join has been
     // processed!
     // FIXME Kai: remove controller from server communication layer
+    // FIXME Kai: How to remove controller from here?
 
-    //    if (controller.isInCurrentView()) {
-    //      int[] initialV = controller.getCurrentViewAcceptors();
-    //      for (int j : initialV) {
-    //        if (j != me) {
-    //          getConnection(j);
+    // For every
+    //        if (controller.isInCurrentView()) {
+    //          int[] initialV = controller.getCurrentViewAcceptors();
+    //          for (int j : initialV) {
+    //            if (j != me) {
+    //              getConnection(j);
+    //            }
+    //          }
     //        }
-    //      }
-    //    }
 
     start();
   }
@@ -197,7 +199,7 @@ public class ServersCommunicationLayer extends Thread {
         //          pendingConn.add(new PendingConnection(newSocket, remoteId));
         //          waitViewLock.unlock();
         //        } else {
-        logger.debug("Trying establish connection with Replica: {}", remoteId);
+        logger.info("Received connection offer from {}", remoteId);
         acceptConnection(newSocket, remoteId);
         //        }
 
@@ -209,6 +211,7 @@ public class ServersCommunicationLayer extends Thread {
         logger.error("Problem during thread execution", ex);
       }
     }
+    // When doWork is set to false, the thread stops working
 
     try {
       serverSocket.close();
@@ -235,8 +238,7 @@ public class ServersCommunicationLayer extends Thread {
       // FIXME Kai: remove controller from server communication layer
 
       // TODO Kai: do we need to remove unused connections? can't we keep them alive and use a
-      // getter
-      // function to get all IDs for current
+      // getter function to get all IDs for current
 
       //         // remove connections to replicas that are not in the current view
       //          Iterator<Integer> it = this.connections.keySet().iterator();
@@ -302,12 +304,12 @@ public class ServersCommunicationLayer extends Thread {
       updateConnections();
       // wait for a while before retrying
       try {
-        Thread.sleep(5000);
+        Thread.sleep(1000);
       } catch (InterruptedException ex) {
         logger.error("Interrupted while waiting for connections", ex);
       }
     }
-    logger.info("Connected to initial replicas.");
+    logger.info("Connected to initial replicas: {}", this.connections.keySet());
   }
 
   public final void send(int[] targets, SystemMessage sm, boolean useMAC) {
@@ -332,9 +334,10 @@ public class ServersCommunicationLayer extends Thread {
         if (target == me) {
           sm.authenticated = true;
           inQueue.put(sm);
-          logger.debug("Queueing (delivering) my own message, me:{}", target);
+//          logger.info("Queueing (delivering) my own message, me:{}", target);
+//          logger.info("inqueue length: {}", inQueue.size());
         } else {
-          logger.debug("Sending message from:{} -> to:{}.", me, target);
+//          logger.info("Sending message: {} -> {}.", me, target);
           getOrCreateConnection(target).send(data);
         }
       } catch (InterruptedException ex) {
@@ -385,19 +388,24 @@ public class ServersCommunicationLayer extends Thread {
    * @author Eduardo
    */
   private void acceptConnection(SSLSocket newSocket, int remoteId) throws IOException {
-    connectionsLock.lock();
-    if (this.connections.get(remoteId) == null) {
-      // This must never happen!!!
-      // first time that this connection is being established
-      // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
-      this.connections.put(
-          remoteId, new ServerConnection(configManager, newSocket, remoteId, inQueue));
-    } else {
+    try {
+      connectionsLock.lock();
+      if (this.connections.get(remoteId) == null) {
+        // This must never happen!!!
+        // first time that this connection is being established
+        // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
+        logger.info("!!! should not happen");
+        this.connections.put(
+            remoteId, new ServerConnection(configManager, newSocket, remoteId, inQueue));
+        return;
+      }
+
       // reconnection
-      logger.debug("Reconnecting with replica: {}", remoteId);
+      logger.info("!!! Accept connection from replica {}", remoteId);
       this.connections.get(remoteId).reconnect(newSocket);
+    } finally {
+      connectionsLock.unlock();
     }
-    connectionsLock.unlock();
   }
 
   public static void setSSLSocketOptions(SSLSocket socket) {

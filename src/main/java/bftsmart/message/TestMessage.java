@@ -9,7 +9,7 @@ import java.io.ObjectOutput;
 
 public class TestMessage extends SystemMessage implements Externalizable {
 
-  private int sender; // sender of message
+  // sender is already in SystemMessage
   private String msg; // message
 
   public TestMessage() {
@@ -30,8 +30,8 @@ public class TestMessage extends SystemMessage implements Externalizable {
 
   @Override
   public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
-    sender = in.readInt();
-    msg = in.readUTF();
+    this.sender = in.readInt();
+    this.msg = in.readUTF();
   }
 
   @Override

@@ -333,11 +333,9 @@ public class NettyClientServerCommunicationSystemServerSide
          */
         // should I wait for the client?
         // cb: the below code fixes an issue that occurs if a replica tries to send a reply back to
-        // some client
-        // *before* the connection to that client is successfully established. The client may then
-        // fail to
-        // gather enough responses and run in a timeout. In this fix we periodically retry to send
-        // that response
+        // some client *before* the connection to that client is successfully established. The
+        // client may then fail to gather enough responses and run in a timeout. In this fix we
+        // periodically retry to send that response
 
         if (sm.retry > 0) {
           int retryAfterMillis =

@@ -29,7 +29,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-/** This class is used to multicast messages to replicas and receive replies. */
+/**
+ * This class is used to multicast messages to replicas and receive replies. It has knowledge about
+ * the current view and required quorum size through the viewController.
+ */
 public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseable {
 
   private final int me; // process id
@@ -38,9 +41,10 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
   private final int session; // session id
   private int sequence; // sequence number
   private int unorderedMessageSequence; // sequence number for readonly messages
+
+  // The CommunicationSystemClientSide is used to
   private final CommunicationSystemClientSide cs; // Client side communication system
-  private final Lock lock =
-      new ReentrantLock(); // lock to manage concurrent access to this object by other threads
+  private final Lock requestIdLock = new ReentrantLock(); // lock to manage concurrent access for generating new requestIDs
   private final boolean useSignatures;
   private final AtomicInteger opCounter = new AtomicInteger(0);
 
@@ -85,12 +89,12 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
   }
 
   public int generateRequestId(TOMMessageType type) {
-    lock.lock();
+    requestIdLock.lock();
     int id;
     if (type == TOMMessageType.ORDERED_REQUEST || type == TOMMessageType.ORDERED_HASHED_REQUEST)
       id = sequence++;
     else id = unorderedMessageSequence++;
-    lock.unlock();
+    requestIdLock.unlock();
 
     return id;
   }
@@ -99,16 +103,34 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
     return opCounter.getAndIncrement();
   }
 
+  /**
+   * Multicast from Client to Replicas
+   *
+   * @param sm
+   */
   public void TOMulticast(TOMMessage sm) {
-    //    cs.send(useSignatures, this.viewController.getCurrentViewProcesses(), sm);
+    cs.send(
+        useSignatures,
+        this.viewController.getCurrentViewProcesses(),
+        sm,
+        this.viewController.getReplyQuorum());
   }
 
+  /**
+   * Multicast from Client to Replicas
+   *
+   * @param m
+   * @param reqId
+   * @param operationId
+   * @param reqType
+   */
   public void TOMulticast(byte[] m, int reqId, int operationId, TOMMessageType reqType) {
-    //    cs.send(
-    //        useSignatures,
-    //        viewController.getCurrentViewProcesses(),
-    //        new TOMMessage(
-    //            me, session, reqId, operationId, m, viewController.getCurrentViewId(), reqType));
+    cs.send(
+        useSignatures,
+        viewController.getCurrentViewProcesses(),
+        new TOMMessage(
+            me, session, reqId, operationId, m, viewController.getCurrentViewId(), reqType),
+        this.viewController.getReplyQuorum());
   }
 
   public void sendMessageToTargets(

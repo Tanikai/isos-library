@@ -49,17 +49,15 @@ public class MessagingReplica extends Thread {
 
     // start listening for messages
     this.serverComms.start();
+    logger.info("Wait until view is connected");
     this.serverComms.waitUntilViewConnected();
-
+    logger.info("View connected");
 
     // wait until everyone is connected
-//    readyLock.
-
-
     // send message to all replicas
     var receivers = this.configManager.getStaticConf().getInitialView();
     logger.info("Sending message to replicas {}", receivers);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 5; i++) {
       // send a message to all replicas
       var msg = new TestMessage(procId, "Hello " + i + " from " + procId);
       this.serverComms.send(receivers, msg);
@@ -70,8 +68,18 @@ public class MessagingReplica extends Thread {
         logger.error("Interrupted while waiting", e);
       }
     }
+
+    while (true) {
+      try {
+        Thread.sleep(10000);
+        // busy waiting
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    }
   }
 
+  /** The MessageHandler is passed to the ServerCommunicationSystem */
   class TestMessageHandler implements MessageHandler {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -80,6 +88,10 @@ public class MessagingReplica extends Thread {
 
     @Override
     public void processData(SystemMessage sm) {
+      if (sm.getSender() == procId) {
+        // ignore messages from self
+        return;
+      }
       logger.info("Replica {} received message {}", procId, sm);
     }
   }

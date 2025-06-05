@@ -16,7 +16,7 @@ package bftsmart.communication.client;
 
 import bftsmart.tom.core.messages.TOMMessage;
 
-/** Interface meant for objects that receive requests from clients */
+/** Interface that receives requests/commands from **Clients** */
 public interface RequestReceiver {
 
   /**

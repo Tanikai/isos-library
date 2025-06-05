@@ -585,7 +585,7 @@ public class ServiceReplica {
 
     executionManager.setTOMLayer(tomLayer);
 
-    SVController.setTomLayer(tomLayer);
+//    SVController.setTomLayer(tomLayer);
     this.tomHandler.setTOMLayer(tomLayer);
 
     cs.setRequestReceiver(tomLayer);

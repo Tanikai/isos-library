@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ServerViewController extends ViewController {
 
-  private Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   public static final int ADD_SERVER = 0;
   public static final int REMOVE_SERVER = 1;
@@ -40,9 +40,8 @@ public class ServerViewController extends ViewController {
   private int quorumBFT; // ((n + f) / 2) replicas
   private int quorumCFT; // (n / 2) replicas
   private int[] otherProcesses;
-  private int[] lastJoinStet;
-  private List<TOMMessage> updates = new LinkedList<TOMMessage>();
-  private TOMLayer tomLayer;
+  private int[] lastJoinSet;
+  private final List<TOMMessage> updates = new LinkedList<TOMMessage>();
 
   // protected View initialView;
 
@@ -63,14 +62,14 @@ public class ServerViewController extends ViewController {
       logger.info("Creating current view from configuration file");
       reconfigureTo(
           new View(
-              0, getStaticConf().getInitialView(), getStaticConf().getF(), getInitAdddresses()));
+              0, getStaticConf().getInitialView(), getStaticConf().getF(), getInitAddresses()));
     } else {
       logger.info("Using view stored on disk");
       reconfigureTo(cv);
     }
   }
 
-  private InetSocketAddress[] getInitAdddresses() {
+  private InetSocketAddress[] getInitAddresses() {
 
     int nextV[] = getStaticConf().getInitialView();
     InetSocketAddress[] addresses = new InetSocketAddress[nextV.length];
@@ -79,10 +78,6 @@ public class ServerViewController extends ViewController {
     }
 
     return addresses;
-  }
-
-  public void setTomLayer(TOMLayer tomLayer) {
-    this.tomLayer = tomLayer;
   }
 
   public boolean isInCurrentView() {
@@ -182,25 +177,35 @@ public class ServerViewController extends ViewController {
     return false;
   }
 
+  /**
+   * @param jSetInfo
+   * @param jSet Set of processes that join
+   * @param rSet Set of processes to remove (?)
+   * @param f
+   * @param cid
+   * @return
+   */
   private byte[] reconfigure(
       List<String> jSetInfo, List<Integer> jSet, List<Integer> rSet, int f, int cid) {
-    lastJoinStet = new int[jSet.size()];
+
+    lastJoinSet = new int[jSet.size()];
     int[] nextV = new int[currentView.getN() + jSet.size() - rSet.size()];
     int p = 0;
 
-    boolean forceLC = false;
     for (int i = 0; i < jSet.size(); i++) {
-      lastJoinStet[i] = jSet.get(i);
+      lastJoinSet[i] = jSet.get(i);
       nextV[p++] = jSet.get(i);
     }
 
     for (int i = 0; i < currentView.getProcesses().length; i++) {
       if (!contains(currentView.getProcesses()[i], rSet)) {
         nextV[p++] = currentView.getProcesses()[i];
-      } else if (tomLayer.execManager.getCurrentLeader() == currentView.getProcesses()[i]) {
-
-        forceLC = true;
       }
+
+      // Irrelevant for ISOS
+      //      else if (tomLayer.execManager.getCurrentLeader() == currentView.getProcesses()[i]) {
+      //        forceLC = true;
+      //      }
     }
 
     if (f < 0) {
@@ -218,27 +223,14 @@ public class ServerViewController extends ViewController {
     logger.info("Installed on CID: " + cid);
     logger.info("lastJoinSet: " + jSet);
 
-    // TODO:Remove all information stored about each process in rSet
+    // TODO: Remove all information stored about each process in rSet
     // processes execute the leave!!!
     reconfigureTo(newV);
 
-    for (int process : newV.getProcesses()) {
-      tomLayer.loadPublicKey(process);
-    }
+    // Removed code: tomLayer.loadPublicKey for every process
+    // -> Should not be required though?
 
-    if (forceLC) {
-
-      // TODO: Reactive it and make it work
-      logger.info("Shortening LC timeout");
-      tomLayer.requestsTimer.stopTimer();
-      tomLayer.requestsTimer.setShortTimeout(3000);
-      tomLayer.requestsTimer.startTimer();
-      // tomLayer.triggerTimeout(new LinkedList<TOMMessage>());
-
-    }
-    return TOMUtil.getBytes(
-        new ReconfigureReply(
-            newV, jSetInfo.toArray(new String[0]), cid, tomLayer.execManager.getCurrentLeader()));
+    return TOMUtil.getBytes(new ReconfigureReply(newV, jSetInfo.toArray(new String[0]), cid, -1));
   }
 
   public TOMMessage[] clearUpdates() {
@@ -251,13 +243,16 @@ public class ServerViewController extends ViewController {
   }
 
   public boolean isInLastJoinSet(int id) {
-    if (lastJoinStet != null) {
-      for (int i = 0; i < lastJoinStet.length; i++) {
-        if (lastJoinStet[i] == id) {
-          return true;
-        }
+    if (lastJoinSet == null) {
+      return false;
+    }
+
+    for (int j : lastJoinSet) {
+      if (j == id) {
+        return true;
       }
     }
+
     return false;
   }
 
@@ -266,15 +261,15 @@ public class ServerViewController extends ViewController {
 
     String[] s = r.getJoinSet();
 
-    this.lastJoinStet = new int[s.length];
+    this.lastJoinSet = new int[s.length];
 
     for (int i = 0; i < s.length; i++) {
       StringTokenizer str = new StringTokenizer(s[i], ":");
       int id = Integer.parseInt(str.nextToken());
-      this.lastJoinStet[i] = id;
+      this.lastJoinSet[i] = id;
       String host = str.nextToken();
-      int port = Integer.valueOf(str.nextToken());
-      int portRR = Integer.valueOf(str.nextToken());
+      int port = Integer.parseInt(str.nextToken());
+      int portRR = Integer.parseInt(str.nextToken());
       this.getStaticConf().addHostInfo(id, host, port, portRR);
     }
   }
@@ -305,15 +300,7 @@ public class ServerViewController extends ViewController {
     }
   }
 
-  /*public int getQuorum2F() {
-      return quorum2F;
-  }*/
-
   public int getQuorum() {
     return getStaticConf().isBFT() ? quorumBFT : quorumCFT;
-  }
-
-  public TOMLayer getTOMLayer() {
-    return tomLayer;
   }
 }
