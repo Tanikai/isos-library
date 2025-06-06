@@ -55,6 +55,7 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
     this.isClient = isClient;
     this.sessionTable = sessionTable;
     this.firstTime = true;
+    this.configManager = configManager;
     this.rl = rl;
     this.bytesToSkip = 0;
     logger.debug("new NettyTOMMessageDecoder!!, isClient=" + isClient);
@@ -96,7 +97,7 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
       // Logger.println("Receiving message with "+dataLength+" bytes.");
 
       // Skip the request if it is too large
-      if (dataLength > configManager.getStaticConf().getMaxRequestSize() && !isClient) {
+      if (dataLength > this.configManager.getStaticConf().getMaxRequestSize() && !isClient) {
         logger.warn("Discarding request with " + dataLength + " bytes");
         buffer.skipBytes(Integer.BYTES);
         int readableBytes = buffer.readableBytes();
