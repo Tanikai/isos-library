@@ -10,5 +10,8 @@ public enum ISOSMessageType {
   DEP_COMMIT,
   // Reconciliation Path
   REC_PREPARE,
-  REC_COMMIT
+  REC_COMMIT,
+  // View Change
+  VC_VIEWCHANGE,
+  VC_NEWVIEW,
 }
