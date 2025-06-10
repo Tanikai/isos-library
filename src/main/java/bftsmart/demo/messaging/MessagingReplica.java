@@ -69,7 +69,9 @@ public class MessagingReplica extends Thread {
     }
   }
 
-  /** The MessageHandler is passed to the ServerCommunicationSystem */
+  /**
+   * Class that handles incoming messages from other replicas. Passed to the ServerCommunicationSystem.
+   */
   class TestMessageHandler implements MessageHandler {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -91,7 +93,9 @@ public class MessagingReplica extends Thread {
 
     @Override
     public void requestReceived(TOMMessage msg, boolean fromClient) {
-      logger.info("Received request from client {}", msg.getSender());
+      logger.info("Received request from client {}, message: {}", msg.getSender(), new String(msg.serializedMessage));
+
+      // TODO Kai: send reply
     }
   }
 
