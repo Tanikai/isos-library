@@ -1,3 +1,5 @@
 package isos.message;
 
-public class ClientRequest {}
+import bftsmart.tom.core.messages.TOMMessage;
+
+public class ClientRequest extends TOMMessage {}
