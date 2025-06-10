@@ -36,8 +36,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * This class represents a connection with other server. ServerConnections are created by
- * ServerCommunicationLayer.
+ * This class represents a connection with other server and manages sending and receiving messages.
+ * ServerConnections are created by ServerCommunicationLayer.
  *
  * @author alysson
  */
@@ -162,43 +162,63 @@ public class ServerConnection {
   }
 
   /**
+   * Converts an integer to a bytearray of length 4.
+   *
+   * @param value (4-byte) Integer to convert
+   * @return Byte Array of length 4
+   */
+  public static byte[] intToByteArray(int value) {
+    return new byte[] {
+      (byte) (value >>> 24), (byte) (value >>> 16), (byte) (value >>> 8), (byte) value
+    };
+  }
+
+  /**
+   * Builds the data of the message that is sent to other replicas.
+   *
+   * @param payload Actual payload for the recipient
+   * @return Message that is ready for sending to recipient
+   */
+  public static byte[] buildMessage(byte[] payload) {
+    int msgLength = payload.length;
+    // TODO Kai: why is length 5 used here?
+    byte[] data = new byte[5 + msgLength]; // without MAC
+
+    // Bytes 0-3: Message Length (including message length int and null byte)
+    System.arraycopy(ServerConnection.intToByteArray(msgLength), 0, data, 0, 4);
+    // Bytes 4-n+4: Payload (with n as payload length)
+    System.arraycopy(payload, 0, data, 4, msgLength);
+    // Byte n+4+1: Nullbyte as Message Terminator (?)
+    System.arraycopy(new byte[] {(byte) 0}, 0, data, 4 + msgLength, 1);
+    return data;
+  }
+
+  /**
    * Try to send a message through the socket. If some problem is detected, a reconnection is done.
    */
   private void sendBytes(byte[] messageData) {
     boolean abort = false;
     do {
       if (abort) return; // if there is a need to reconnect, abort this method
-      if (socket != null && socketOutStream != null) {
-        try {
-          // do an extra copy of the data to be sent, but on a single out stream write
-          byte[] data = new byte[5 + messageData.length]; // without MAC
-          int value = messageData.length;
-
-          System.arraycopy(
-              new byte[] {
-                (byte) (value >>> 24), (byte) (value >>> 16), (byte) (value >>> 8), (byte) value
-              },
-              0,
-              data,
-              0,
-              4);
-          System.arraycopy(messageData, 0, data, 4, messageData.length);
-          System.arraycopy(new byte[] {(byte) 0}, 0, data, 4 + messageData.length, 1);
-
-          socketOutStream.write(data);
-
-          return;
-        } catch (IOException ex) {
-          logger.info("IO Exception while sendBytes: {}", ex.getMessage());
-          closeSocket();
-          waitAndConnect();
-          abort = true;
-        }
-      } else {
+      if (socket == null || socketOutStream == null) {
         logger.info("SendBytes: Socket is null, or outStream is null");
         waitAndConnect();
         abort = true;
+        return;
       }
+
+      // We have a working outStream / connection, which allows us to send the data
+      try {
+        // do an extra copy of the data to be sent, but on a single out stream write
+        byte[] data = ServerConnection.buildMessage(messageData);
+        socketOutStream.write(data);
+      } catch (IOException ex) {
+        logger.info("IO Exception while sendBytes: {}", ex.getMessage());
+        closeSocket();
+        waitAndConnect();
+        abort = true;
+      }
+
     } while (doWork);
   }
 
@@ -220,7 +240,6 @@ public class ServerConnection {
   protected void reconnect(SSLSocket newSocket) {
     if (socket != null && socket.isConnected()) {
       //      logger.info("Reconnect called, but already connected");
-      //      logger.info("Trace {}", (Object) Thread.currentThread().getStackTrace());
       return; // do nothing if current socket is already connected
     }
 
