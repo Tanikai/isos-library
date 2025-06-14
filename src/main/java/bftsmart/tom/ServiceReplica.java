@@ -165,7 +165,13 @@ public class ServiceReplica {
     this.replier.setReplicaContext(replicaCtx);
   }
 
-  // this method initializes the object
+  /**
+   * Initializes the ServiceReplica by:
+   * <ul>
+   *   <li>Initializing the TOMLayer (responsible for Consensus)
+   *   <li>Initializing the Replica
+   * </ul>
+   */
   private void init() {
     try {
       this.tomHandler = new TOMHandler();
@@ -557,7 +563,7 @@ public class ServiceReplica {
   }
 
   /**
-   * This method initializes the object.
+   * This method initializes the TOMLayer and starts it (i.e. the thread).
    */
   private void initTOMLayer() {
     if (tomStackCreated) { // if this object was already initialized, don't do it again

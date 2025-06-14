@@ -32,4 +32,9 @@ public class AgreementSlotSequence {
 
     throw new NotImplementedException();
   }
+
+  public Map<SequenceNumber, AgreementSlot> getAgreementSlots() {
+    // TODO: return read-only
+    return slots;
+  }
 }

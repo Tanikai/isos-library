@@ -20,6 +20,10 @@ public class DependencySet implements Externalizable {
     this.depSet = new HashSet<>();
   }
 
+  public DependencySet(Set<SequenceNumber> depSet) {
+    this.depSet = new HashSet<>(depSet); // we want to have a hashset
+  }
+
   @Override
   public void writeExternal(ObjectOutput out) throws IOException {
     throw new NotImplementedException();

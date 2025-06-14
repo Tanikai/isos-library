@@ -27,6 +27,8 @@ import bftsmart.tom.leaderchange.LCMessage;
 import bftsmart.tom.util.TOMUtil;
 
 /**
+ * This class handles received requests from other Replicas in BFT SMaRt.
+ *
  * @author edualchieri
  */
 public class TOMHandler implements MessageHandler {
@@ -53,6 +55,7 @@ public class TOMHandler implements MessageHandler {
       int myId = tomLayer.controller.getStaticConf().getProcessId();
 
       ConsensusMessage consMsg = (ConsensusMessage) sm;
+
 
       if (consMsg.authenticated || consMsg.getSender() == myId) acceptor.deliver(consMsg);
       else {

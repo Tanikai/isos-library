@@ -28,7 +28,9 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import org.slf4j.LoggerFactory;
 
-/** This class represents a total ordered message */
+/** This class represents a total ordered message used in BFT-SMaRt, sent by the client to a replica.
+ *
+ * @see isos.message.ClientRequest */
 public class TOMMessage extends SystemMessage implements Externalizable, Comparable, Cloneable {
 
   public transient long timestamp = 0; // timestamp to be used by the application
