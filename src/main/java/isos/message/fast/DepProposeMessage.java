@@ -15,16 +15,16 @@ public class DepProposeMessage extends ISOSMessage {
   private ReplicaId coordinatorId; // co: coordinator ID
   private String requestHash; // h(r): Hash of client request
   private DependencySet depSet; // D: dependency set determined by coordinator
-  private Set<ReplicaId> followerQuorum; // F: Quorum containing IDs of 2f followers with lowest communication delay
+  private Set<ReplicaId>
+      followerQuorum; // F: Quorum containing IDs of 2f followers with lowest communication delay
 
   public DepProposeMessage(
-          ReplicaId senderId, // physical sender of this message
-          SequenceNumber seqNum,
-          ReplicaId coordinatorId,
-          String requestHash,
-          DependencySet depSet,
-          Set<ReplicaId> followerQuorum
-  ) {
+      ReplicaId senderId, // physical sender of this message
+      SequenceNumber seqNum,
+      ReplicaId coordinatorId,
+      String requestHash,
+      DependencySet depSet,
+      Set<ReplicaId> followerQuorum) {
     super();
     this.msgType = ISOSMessageType.DEP_PROPOSE;
     this.sender = senderId.value();

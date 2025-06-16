@@ -48,9 +48,9 @@ public class ISOSApplication {
     Set<ReplicaId> followerSet = null; // get quorum of 2f followers with the lowest latency
     DepProposeMessage dp =
         new DepProposeMessage(
-            -1,
+            new ReplicaId(-1),
             seqNum,
-            -1,
+            new ReplicaId(-1),
             r.calculateHash(),
             new DependencySet(depSet),
             followerSet); // TODO: create constructor / factory method to create message
