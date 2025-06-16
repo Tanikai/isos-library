@@ -1,16 +1,17 @@
 package isos.api;
 
-import com.yahoo.ycsb.Client;
+import bftsmart.communication.ServerCommunicationSystem;
 import isos.consensus.AgreementSlotSequence;
 import isos.consensus.DependencySet;
 import isos.consensus.SequenceNumber;
+import isos.consensus.TimeoutConfiguration;
 import isos.message.ClientRequest;
 import isos.message.fast.DepProposeMessage;
 import isos.utils.NotImplementedException;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import javax.sound.midi.Sequence;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,12 +22,8 @@ import java.util.stream.Collectors;
  */
 public class ISOSApplication {
 
-  long delta;
-  long proposeTimeout;
-  long commitTimeout;
-  long viewChangeTimeout;
-  long viewChangeCommitTimeout;
-  long queryExecTimeout;
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final TimeoutConfiguration timeoutConf = new TimeoutConfiguration(1000);
 
   // DECISION Kai: AgreementSlotSequence that contains slots of all replicas, or
   // AgreementSlotSequence per replica?
