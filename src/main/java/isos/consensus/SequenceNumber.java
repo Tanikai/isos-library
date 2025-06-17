@@ -7,7 +7,13 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-/** A sequence number used to index an agreement slot. Requirements: - Comparable (total order) */
+/**
+ * A sequence number used to index an agreement slot. Requirements:
+ *
+ * <ul>
+ *   <li>Comparable (total order)
+ * </ul>
+ */
 public record SequenceNumber(int replicaId, int sequenceCounter)
     implements Externalizable, Comparable<SequenceNumber>, Cloneable {
 

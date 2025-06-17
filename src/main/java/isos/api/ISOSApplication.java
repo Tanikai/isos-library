@@ -1,10 +1,8 @@
 package isos.api;
 
 import bftsmart.communication.ServerCommunicationSystem;
-import isos.consensus.AgreementSlotSequence;
-import isos.consensus.DependencySet;
-import isos.consensus.SequenceNumber;
-import isos.consensus.TimeoutConfiguration;
+import bftsmart.configuration.ConfigurationManager;
+import isos.consensus.*;
 import isos.message.ClientRequest;
 import isos.message.fast.DepProposeMessage;
 import isos.utils.NotImplementedException;
@@ -12,8 +10,10 @@ import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 
 /**
@@ -24,10 +24,11 @@ public class ISOSApplication {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
   private final TimeoutConfiguration timeoutConf = new TimeoutConfiguration(1000);
+  private final ReplicaId ownReplicaId;
 
   // DECISION Kai: AgreementSlotSequence that contains slots of all replicas, or
   // AgreementSlotSequence per replica?
-  private AgreementSlotSequence agreementSlots;
+  private AgreementSlotManager agrSlotManager;
 
   /**
    * Send and receive messages with scs.
@@ -38,6 +39,20 @@ public class ISOSApplication {
    * </ul>
    */
   private ServerCommunicationSystem scs;
+
+  private ConfigurationManager configManager;
+
+  private final BiPredicate<ClientRequest, ClientRequest> defaultConflict;
+  private BiPredicate<ClientRequest, ClientRequest> applicationConflict;
+
+  public ISOSApplication(ConfigurationManager configManager) {
+    this.configManager = configManager;
+    this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
+    this.agrSlotManager = new AgreementSlotManager();
+
+    // if
+    this.defaultConflict = (a, b) -> a.getSender() == b.getSender();
+  }
 
   /**
    * Requirement: To start the fast path, the coordinator selects its agreement slot
@@ -51,17 +66,20 @@ public class ISOSApplication {
 
     // TODO Kai line 11: assert r correctly signed (-> should be done in the Networking Layer)
 
-    SequenceNumber seqNum = this.agreementSlots.getLowestUnusedSequenceNumber();
+    SequenceNumber seqNum = this.agrSlotManager.createLowestUnusedSequenceNumberEntry(ownReplicaId);
     Set<SequenceNumber> depSet = conflicts(r);
-    Set<ReplicaId> followerSet = null; // get quorum of 2f followers with the lowest latency
+    // TODO: Get Quroum of 2f followers with lowest latency
+    // For now, get random two followers
+    Set<ReplicaId> followerSet = null;
     DepProposeMessage dp =
         new DepProposeMessage(
-            new ReplicaId(-1),
+            ownReplicaId,
             seqNum,
-            new ReplicaId(-1),
+            ownReplicaId,
             r.calculateHash(),
             new DependencySet(depSet),
             followerSet); // TODO: create constructor / factory method to create message
+
     throw new NotImplementedException();
     // TODO Line 17: set step of this agreement slot to proposed
     // TODO Line 18: Broadcast message to all replicas
@@ -93,13 +111,16 @@ public class ISOSApplication {
     // Answer: parallelStream() uses fork/join in background
 
     Set<SequenceNumber> result =
-        agreementSlots
-            .getAgreementSlots()
-            .entrySet()
-            .stream() // allow for parallelStream() as well, as dependencies can be calculated
-            // independently
+        agrSlotManager
+            .getUsedAgreementSlots()
+            // value is List<AgreementSlot>
+            .values()
+            // allow for parallelStream() as well, as dependencies can be calculated independently
+            .stream()
+            // turn the Stream<List<AgreementSlot>> into Stream<AgreementSlot>
+            .flatMap(Collection::stream)
             // if they conflict, return the sequence number, else return null for "no conflict"
-            .map(slot -> conflict(r, slot.getValue().request()) ? slot.getKey() : null)
+            .map(slot -> conflict(r, slot.request()) ? slot.seqNum() : null)
             .filter(Objects::nonNull) // filter out the "no conflict"s
             .collect(Collectors.toSet());
 
@@ -121,6 +142,7 @@ public class ISOSApplication {
    * @param a
    * @param b
    * @return
+   * @Deprecated (?) See BiPredicate applicationConflict.
    */
   public boolean conflict(ClientRequest a, ClientRequest b) {
     // Requirement: Requests of the same client are automatically treated as conflicting with each
