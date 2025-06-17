@@ -61,7 +61,7 @@ public class ServerCommunicationSystem extends Thread {
   /**
    * View Controller
    */
-  private final ServerViewController viewController = new ServerViewController();
+//  private final ServerViewController viewController = new ServerViewController();
 
 
   // *** Client-Replica (C-R) COMMUNICATION ********************************************************
@@ -163,7 +163,7 @@ public class ServerCommunicationSystem extends Thread {
    *
    * @param targets the target receivers of the message
    * @param sm the message to be sent
-   * @deprecated Use explicit clientSend / replicaSend instead
+   * @Deprecated Use explicit clientSend / replicaSend instead
    */
   public void send(int[] targets, SystemMessage sm) {
     if (sm instanceof TOMMessage) {
@@ -172,6 +172,27 @@ public class ServerCommunicationSystem extends Thread {
       logger.debug("--> sending message from: {} -> {}", sm.getSender(), targets);
       serversConn.send(targets, sm, true);
     }
+  }
+
+  public void clientSend(int[] targets, SystemMessage sm) {
+    throw new NotImplementedException();
+
+    // FIXME Kai: be able to send messages that are not TOMMessages
+//    clientsConn.send(targets, (TOMMessage) sm, false);
+  }
+
+  public void replicaSend(int[] targets, SystemMessage sm) {
+    throw new NotImplementedException();
+
+
+    // FIXME Kai: be able to send messages that are not TOMMessages
+//    serversConn.send(targets, sm, true);
+  }
+
+  public void replicaBroadcast(SystemMessage sm) {
+    throw new NotImplementedException();
+    // TODO kai: how to get targets? -> from viewController
+//    serversConn.send(new int[0], sm, true);
   }
 
   @Override
