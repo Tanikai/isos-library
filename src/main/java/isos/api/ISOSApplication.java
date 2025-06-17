@@ -30,7 +30,18 @@ public class ISOSApplication {
   private AgreementSlotSequence agreementSlots;
 
   /**
+   * Send and receive messages with scs.
+   *
+   * <ul>
+   *   <li>MessageHandler: Callback for messages received from other replicas.
+   *   <li>requestReceiver: Callback for requests from clients.
+   * </ul>
+   */
+  private ServerCommunicationSystem scs;
+
+  /**
    * Requirement: To start the fast path, the coordinator selects its agreement slot
+   *
    * <p>Pseudocode line 10-19
    *
    * @param r
@@ -61,8 +72,9 @@ public class ISOSApplication {
   }
 
   /**
-   * Requirement: The coordinator [...] computes the dependency set [...] with request r.
-   * Method: Iterate over all requests with r, check with predicate `conflict(a, b)`, add SequenceNumber to dependency set if true
+   * Requirement: The coordinator [...] computes the dependency set [...] with request r. Method:
+   * Iterate over all requests with r, check with predicate `conflict(a, b)`, add SequenceNumber to
+   * dependency set if true
    *
    * <p>Pseudocode line 66, 67
    *

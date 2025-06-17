@@ -25,8 +25,10 @@ import bftsmart.communication.client.CommunicationSystemServerSideFactory;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.ServersCommunicationLayer;
 import bftsmart.configuration.ConfigurationManager;
+import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.tom.core.messages.TOMMessage;
 
+import isos.utils.NotImplementedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +48,7 @@ public class ServerCommunicationSystem extends Thread {
 
   private final ConfigurationManager configManager;
 
-  // *** Replica-Replica (R-R) COMMUNICATION ***
+  // *** Replica-Replica (R-R) COMMUNICATION *******************************************************
   /** This queue contains messages sent from other replicas. It is passed to serversConn. */
   private final LinkedBlockingQueue<SystemMessage> inQueue;
 
@@ -56,16 +58,22 @@ public class ServerCommunicationSystem extends Thread {
   /** Callback class for received messages from replicas. */
   private final MessageHandler msgHandler;
 
-  // *** Client-Replica (C-R) COMMUNICATION ***
+  /**
+   * View Controller
+   */
+  private final ServerViewController viewController = new ServerViewController();
+
+
+  // *** Client-Replica (C-R) COMMUNICATION ********************************************************
   /** This class handles the messages received from clients. */
   private CommunicationSystemServerSide clientsConn;
 
   /**
-   * Creates a new instance of ServerCommunicationSystem
+   * Creates a new instance of ServerCommunicationSystem.
    *
    * @param configManager Provides configuration.
-   * @param msgHandler Object that handles messages from other replicas.
-   * @throws Exception
+   * @param msgHandler Object that handles messages from other replicas. For client messages, see ServerCommunicationSystem.setRequestReceiver
+   * @throws Exception TODO Kai: Constructor shouldn't throw exception (?)
    */
   public ServerCommunicationSystem(ConfigurationManager configManager, MessageHandler msgHandler)
       throws Exception {
@@ -137,6 +145,10 @@ public class ServerCommunicationSystem extends Thread {
     serversConn.waitUntilViewConnected();
   }
 
+  /**
+   * Sets the request receiver, which handles incoming messages from clients
+   * @param requestReceiver
+   */
   public void setRequestReceiver(RequestReceiver requestReceiver) {
     if (clientsConn == null) {
       clientsConn =
@@ -151,6 +163,7 @@ public class ServerCommunicationSystem extends Thread {
    *
    * @param targets the target receivers of the message
    * @param sm the message to be sent
+   * @deprecated Use explicit clientSend / replicaSend instead
    */
   public void send(int[] targets, SystemMessage sm) {
     if (sm instanceof TOMMessage) {

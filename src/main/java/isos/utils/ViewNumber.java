@@ -1,3 +1,5 @@
 package isos.utils;
 
-public record ViewNumber(int value) {}
+public record ViewNumber(int value) {
+
+}

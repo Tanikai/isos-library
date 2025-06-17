@@ -19,7 +19,10 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 
-/** This is the super-class for all other kinds of messages created by JBP */
+/**
+ * This is the super-class for all messages used in ISOS. This class and any other inheriting
+ * classes should be used primarily as data classes and should not contain any business logic.
+ */
 public abstract class SystemMessage implements Externalizable {
 
   protected int sender = -1; // ID of the process which sent the message
@@ -28,6 +31,7 @@ public abstract class SystemMessage implements Externalizable {
   // with a (valid) mac, FALSE if no mac was given
   // note that if the message arrives with an
   // invalid MAC, it won't be delivered
+  // TODO Kai: What is a MAC? MAC-Address?
 
   /** Creates a new instance of SystemMessage */
   public SystemMessage() {}

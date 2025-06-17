@@ -9,9 +9,7 @@ import java.io.ObjectOutput;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Requirement: DependencySet has to be sent to other replicas.
- */
+/** Requirement: DependencySet has to be sent to other replicas. */
 public class DependencySet implements Externalizable {
   private Set<SequenceNumber> depSet;
 
