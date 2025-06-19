@@ -8,14 +8,12 @@ import isos.utils.ViewNumber;
 import isos.viewchange.ViewChangeCertificate;
 
 /**
- * @param sender physical sender of this message
  * @param seqNum agreement slot
  * @param viewNumber New view number
  * @param replicaId Replica ID of sender
  * @param certificate Describes in what state the agreement slot was prior to view
  */
 public record NewViewMessage(
-    int sender,
     SequenceNumber seqNum,
     ViewNumber viewNumber,
     ReplicaId replicaId,

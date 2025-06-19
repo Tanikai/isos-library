@@ -73,7 +73,6 @@ public class ISOSApplication {
     Set<ReplicaId> followerSet = null;
     DepProposeMessage dp =
         new DepProposeMessage(
-            ownReplicaId,
             seqNum,
             ownReplicaId,
             r.calculateHash(),

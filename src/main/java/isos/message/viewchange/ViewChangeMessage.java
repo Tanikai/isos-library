@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * @param sender physical sender of this message
  * @param seqNum agreement slot
  * @param viewNumber New view number
  * @param coordinatorId Newly selected coordinator of view
@@ -20,7 +19,6 @@ import java.util.Set;
  * @param viewChanges Set of 2f+1 ViewChanges
  */
 public record ViewChangeMessage(
-    int sender,
     SequenceNumber seqNum,
     ViewNumber viewNumber,
     ReplicaId coordinatorId,

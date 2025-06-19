@@ -8,7 +8,6 @@ import isos.utils.ReplicaId;
 import java.util.Set;
 
 /**
- * @param sender physical sender of this message
  * @param seqNum agreement slot
  * @param coordinatorId coordinator ID
  * @param requestHash Hash of client request
@@ -16,7 +15,6 @@ import java.util.Set;
  * @param followerQuorum Quorum containing IDs of 2f followers with lowest communication delay
  */
 public record DepProposeMessage(
-    int sender,
     SequenceNumber seqNum,
     ReplicaId coordinatorId,
     String requestHash,
