@@ -1,5 +1,6 @@
 package isos.message.reconciliation;
 
+import java.io.Serializable;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
@@ -14,7 +15,7 @@ import isos.utils.ViewNumber;
  */
 public record PrepareMessage(
     SequenceNumber seqNum, ViewNumber viewNumber, ReplicaId replicaId, String depVerifiesHash)
-    implements ISOSMessage {
+    implements ISOSMessage, Serializable {
 
   @Override
   public ISOSMessageType msgType() {

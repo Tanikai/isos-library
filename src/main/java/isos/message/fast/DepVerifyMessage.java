@@ -1,5 +1,6 @@
 package isos.message.fast;
 
+import java.io.Serializable;
 import isos.consensus.DependencySet;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessage;
@@ -14,7 +15,7 @@ import isos.utils.ReplicaId;
  */
 public record DepVerifyMessage(
     SequenceNumber seqNum, ReplicaId followerId, String depProposeHash, DependencySet depSet)
-    implements ISOSMessage {
+    implements ISOSMessage, Serializable {
 
   @Override
   public ISOSMessageType msgType() {

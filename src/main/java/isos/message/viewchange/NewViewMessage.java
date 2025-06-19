@@ -6,6 +6,7 @@ import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import isos.viewchange.ViewChangeCertificate;
+import java.io.Serializable;
 
 /**
  * @param seqNum agreement slot
@@ -18,7 +19,7 @@ public record NewViewMessage(
     ViewNumber viewNumber,
     ReplicaId replicaId,
     ViewChangeCertificate certificate)
-    implements ISOSMessage {
+    implements ISOSMessage, Serializable {
 
   @Override
   public ISOSMessageType msgType() {

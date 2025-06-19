@@ -1,10 +1,10 @@
 package isos.utils;
 
-public record ViewNumber(int value) {
+import java.io.Serializable;
 
-  /**
-   * Default ViewNumber starts with -1.
-   */
+public record ViewNumber(int value) implements Serializable {
+
+  /** Default ViewNumber starts with -1. */
   public ViewNumber() {
     this(-1);
   }

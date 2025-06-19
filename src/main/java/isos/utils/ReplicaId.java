@@ -1,5 +1,7 @@
 package isos.utils;
 
-public record ReplicaId(int value) {
+import java.io.Serializable;
+
+public record ReplicaId(int value) implements Serializable {
 
 }

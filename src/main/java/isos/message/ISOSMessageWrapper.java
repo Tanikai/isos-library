@@ -23,6 +23,8 @@ public class ISOSMessageWrapper extends SystemMessage {
 
   private ISOSMessage payload;
 
+  public ISOSMessageWrapper() {}
+
   public ISOSMessageWrapper(ISOSMessage payload) {
     this.payload = payload;
   }
@@ -33,11 +35,13 @@ public class ISOSMessageWrapper extends SystemMessage {
 
   @Override
   public void writeExternal(ObjectOutput out) throws IOException {
+    out.writeInt(this.sender);
     out.writeObject(payload);
   }
 
   @Override
   public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+    sender = in.readInt();
     Object obj = in.readObject();
     if (!(obj instanceof ISOSMessage)) {
       throw new IOException("Invalid payload type");

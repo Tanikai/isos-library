@@ -1,11 +1,6 @@
 package isos.consensus;
 
-import isos.utils.NotImplementedException;
-
-import java.io.Externalizable;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import java.io.Serializable;
 
 /**
  * A sequence number used to index an agreement slot. Requirements:
@@ -15,7 +10,7 @@ import java.io.ObjectOutput;
  * </ul>
  */
 public record SequenceNumber(int replicaId, int sequenceCounter)
-    implements Externalizable, Comparable<SequenceNumber>, Cloneable {
+    implements Comparable<SequenceNumber>, Serializable {
 
   @Override
   public int compareTo(SequenceNumber o) {
@@ -36,13 +31,7 @@ public record SequenceNumber(int replicaId, int sequenceCounter)
   }
 
   @Override
-  public void writeExternal(ObjectOutput out) throws IOException {}
-
-  @Override
-  public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {}
-
-  @Override
-  public Object clone() throws CloneNotSupportedException {
-    throw new NotImplementedException();
+  public String toString() {
+    return String.format("%d.%d", this.replicaId, this.sequenceCounter);
   }
 }

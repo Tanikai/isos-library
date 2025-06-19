@@ -5,6 +5,7 @@ import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import java.io.Serializable;
 
 /**
  * @param seqNum agreement slot
@@ -14,7 +15,7 @@ import isos.utils.ViewNumber;
  */
 public record CommitMessage(
     SequenceNumber seqNum, ViewNumber viewNumber, ReplicaId replicaId, String depVerifiesHash)
-    implements ISOSMessage {
+    implements ISOSMessage, Serializable {
 
   @Override
   public ISOSMessageType msgType() {

@@ -7,6 +7,7 @@ import isos.message.fast.DepProposeMessage;
 import isos.message.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
 
@@ -25,7 +26,7 @@ public record ViewChangeMessage(
     DepProposeMessage depPropose,
     List<DepVerifyMessage> depVerifies,
     Set<NewViewMessage> viewChanges)
-    implements ISOSMessage {
+    implements ISOSMessage, Serializable {
 
   @Override
   public ISOSMessageType msgType() {

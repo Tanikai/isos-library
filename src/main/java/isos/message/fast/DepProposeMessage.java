@@ -5,6 +5,7 @@ import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
+import java.io.Serializable;
 import java.util.Set;
 
 /**
@@ -20,7 +21,7 @@ public record DepProposeMessage(
     String requestHash,
     DependencySet depSet,
     Set<ReplicaId> followerQuorum)
-    implements ISOSMessage {
+    implements ISOSMessage, Serializable {
 
   @Override
   public ISOSMessageType msgType() {
