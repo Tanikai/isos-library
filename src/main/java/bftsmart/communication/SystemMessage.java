@@ -22,6 +22,7 @@ import java.io.ObjectOutput;
 /**
  * This is the super-class for all messages used in ISOS. This class and any other inheriting
  * classes should be used primarily as data classes and should not contain any business logic.
+ * TODO Kai: Might be better as a record?
  */
 public abstract class SystemMessage implements Externalizable {
 

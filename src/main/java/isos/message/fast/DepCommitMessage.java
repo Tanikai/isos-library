@@ -5,20 +5,21 @@ import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
 
-public class DepCommitMessage extends ISOSMessage {
-  // Message Fields:
-  // msgType in parent
-  // s_i: agreement slot, in parent
-  private ReplicaId replicaId; // r_i: Replica ID of sender
-  private String depVerifiesHash; // h(vec{dv}): Hash of DepVerifies
+/**
+ * @param sender physical sender of this message
+ * @param seqNum agreement slot
+ * @param replicaId Replica ID of sender
+ * @param depVerifiesHash Hash of DepVerifies
+ */
+public record DepCommitMessage(
+    int sender,
+    SequenceNumber seqNum,
+    ReplicaId replicaId,
+    String depVerifiesHash)
+    implements ISOSMessage {
 
-  public DepCommitMessage(
-      ReplicaId senderId, SequenceNumber seqNum, ReplicaId replicaId, String depVerifiesHash) {
-    super();
-    this.msgType = ISOSMessageType.DEP_COMMIT;
-    this.sender = senderId.value();
-    this.seqNum = seqNum;
-    this.replicaId = replicaId;
-    this.depVerifiesHash = depVerifiesHash;
+  @Override
+  public ISOSMessageType msgType() {
+    return ISOSMessageType.DEP_COMMIT;
   }
 }

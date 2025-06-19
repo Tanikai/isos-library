@@ -7,27 +7,23 @@ import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import isos.viewchange.ViewChangeCertificate;
 
-public class NewViewMessage extends ISOSMessage {
-  // Message Fields:
-  // msgType in parent
-  // s_i: agreement slot, in parent
-  private ViewNumber viewNumber; // v_s_i: New view number
-  private ReplicaId replicaId; // r_i: Replica ID of sender
-  private ViewChangeCertificate
-      certificate; // certificate: Describes in what state the agreement slot was prior to view
+/**
+ * @param sender physical sender of this message
+ * @param seqNum agreement slot
+ * @param viewNumber New view number
+ * @param replicaId Replica ID of sender
+ * @param certificate Describes in what state the agreement slot was prior to view
+ */
+public record NewViewMessage(
+    int sender,
+    SequenceNumber seqNum,
+    ViewNumber viewNumber,
+    ReplicaId replicaId,
+    ViewChangeCertificate certificate)
+    implements ISOSMessage {
 
-  public NewViewMessage(
-      ReplicaId senderID,
-      SequenceNumber seqNum,
-      ViewNumber viewNumber,
-      ReplicaId replicaId,
-      ViewChangeCertificate certificate) {
-    super();
-    this.msgType = ISOSMessageType.VC_NEWVIEW;
-    this.sender = senderID.value();
-    this.seqNum = seqNum;
-    this.viewNumber = viewNumber;
-    this.replicaId = replicaId;
-    this.certificate = certificate;
+  @Override
+  public ISOSMessageType msgType() {
+    return ISOSMessageType.VC_NEWVIEW;
   }
 }
