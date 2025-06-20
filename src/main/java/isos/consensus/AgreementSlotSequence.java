@@ -1,14 +1,7 @@
 package isos.consensus;
 
-import isos.utils.NotImplementedException;
 import isos.utils.ReplicaId;
-import jdk.jshell.spi.ExecutionControl;
-
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -17,7 +10,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * by a sequence number. Allows for concurrent access on independent (!) keys.
  */
 public class AgreementSlotSequence {
-  public final int AGREEMENTSLOT_SEQUENCE_SIZE = 1000;
+  public static final int AGREEMENTSLOT_SEQUENCE_LENGTH = 1000;
 
   /**
    * Requirements:
@@ -31,30 +24,38 @@ public class AgreementSlotSequence {
    *   <li>Two-part key: ReplicaId, and sequence number
    *   <li>Return only used agreement slots
    * </ul>
-   *
-   * <p>Potential Implementations: - SortedMap?
    */
   private final ReplicaId replicaId;
 
   private AgreementSlot[] slots;
 
   private int size;
+  private final int length;
   private Lock addEntryLock;
 
   public AgreementSlotSequence(ReplicaId replicaId) {
+    this(replicaId, AGREEMENTSLOT_SEQUENCE_LENGTH);
+  }
+
+  public AgreementSlotSequence(ReplicaId replicaId, int length) {
     this.replicaId = replicaId; // required to return SequenceNumber
-    this.slots = new AgreementSlot[AGREEMENTSLOT_SEQUENCE_SIZE];
+    this.slots = new AgreementSlot[length];
     this.size = 0;
+    this.length = length;
     this.addEntryLock = new ReentrantLock();
   }
 
-  // TODO Kai: After we've computed the dependencies of an AgreementSlot once, can we
+  private void createDefaultEntry(SequenceNumber seqNum) {
+    this.slots[seqNum.sequenceCounter()] = new AgreementSlot(seqNum);
+  }
+
+  public int size() {
+    return this.size;
+  }
 
   /**
    * Requirement: To start the fast path, the coordinator [that received a request from the client]
    * selects its agreement slot with the lowest unused sequence number (see paper sec. B).
-   *
-   * <p>Can only get own lowest sequence number, not of other replicas
    *
    * @return Sequence number of newly created entry
    */
@@ -64,9 +65,30 @@ public class AgreementSlotSequence {
       // get sequence number for new slot
       SequenceNumber result = getLowestUnusedSequenceNumber();
       // initialize new slot with default AgreementSlot record
-      this.slots[result.sequenceCounter()] = new AgreementSlot(result);
+      createDefaultEntry(result);
+      size++;
 
       return result;
+    } finally {
+      this.addEntryLock.unlock();
+    }
+  }
+
+  /**
+   * Creates all
+   *
+   * @param seqNum Target sequence number (inclusive)
+   */
+  public void batchCreateSequenceNumberUntil(SequenceNumber seqNum) {
+    try {
+      this.addEntryLock.lock();
+      SequenceNumber start = getLowestUnusedSequenceNumber();
+
+      for (int i = start.sequenceCounter(); i < seqNum.sequenceCounter() + 1; i++) {
+        createDefaultEntry(new SequenceNumber(this.replicaId.value(), i));
+        size++;
+      }
+
     } finally {
       this.addEntryLock.unlock();
     }
@@ -82,17 +104,41 @@ public class AgreementSlotSequence {
    * @return
    */
   public List<AgreementSlot> getAgreementSlotsReadOnly() {
-    return Collections.unmodifiableList(Arrays.asList(this.slots).subList(0, size + 1));
+    if (this.size == 0) {
+      return Collections.unmodifiableList(new LinkedList<>());
+    }
+
+    return Collections.unmodifiableList(Arrays.asList(this.slots).subList(0, size));
   }
 
+  /**
+   * Address of the newValue is already contained in its sequenceNumber.
+   *
+   * @param newValue
+   */
   public void putAgreementSlotValue(AgreementSlot newValue) {
     // check whether AgreementSlot replicaId is correct
     var seqNum = newValue.seqNum();
     if (seqNum.replicaId() != this.replicaId.value()) {
-      throw new IllegalArgumentException(
+      throw new InvalidReplicaIdException(
           String.format(
               "ReplicaId %d of argument does not match with ReplicaId %d of sequence",
               seqNum.replicaId(), this.replicaId.value()));
     }
+
+    if (seqNum.sequenceCounter() > size) {
+      throw new IndexOutOfBoundsException(
+          String.format("SequenceNumber %d was not yet initialized", seqNum.sequenceCounter()));
+    }
+
+    this.slots[seqNum.sequenceCounter()] = newValue;
+  }
+
+  public AgreementSlot getAgreementSlotValue(SequenceNumber seqNum) {
+    if (seqNum.sequenceCounter() >= this.size) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    return this.slots[seqNum.sequenceCounter()];
   }
 }

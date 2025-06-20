@@ -1,5 +1,7 @@
 package isos.consensus;
 
+import isos.utils.ReplicaId;
+
 import java.io.Serializable;
 
 /**
@@ -11,6 +13,18 @@ import java.io.Serializable;
  */
 public record SequenceNumber(int replicaId, int sequenceCounter)
     implements Comparable<SequenceNumber>, Serializable {
+
+  public SequenceNumber(ReplicaId replicaId, int sequenceCounter) {
+    this(replicaId.value(), sequenceCounter);
+  }
+
+  /**
+   * Returns a replica ID record instead of int
+   * @return
+   */
+  public ReplicaId replicaIdRec() {
+    return new ReplicaId(this.replicaId);
+  }
 
   @Override
   public int compareTo(SequenceNumber o) {
