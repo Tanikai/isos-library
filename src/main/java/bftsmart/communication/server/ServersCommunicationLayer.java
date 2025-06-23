@@ -17,13 +17,7 @@ package bftsmart.communication.server;
 import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
-import javax.net.ssl.*;
+import isos.utils.ReplicaId;
 import java.io.*;
 import java.net.*;
 import java.security.KeyStore;
@@ -33,6 +27,13 @@ import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.net.ssl.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author alysson Tulio A. Ribeiro. Generate a KeyPair used by SSL/TLS connections. Note that
@@ -69,20 +70,20 @@ public class ServersCommunicationLayer extends Thread {
   /** Tulio A. Ribeiro SSL / TLS. */
   private static final String SECRET = "MySeCreT_2hMOygBwY";
 
-  private final SecretKey selfPwd;
-  private final SSLServerSocket serverSocketSSLTLS;
+  private SecretKey selfPwd;
+  private SSLServerSocket serverSocketSSLTLS;
 
   public ServersCommunicationLayer(
-      ConfigurationManager configManager, LinkedBlockingQueue<SystemMessage> inQueue)
-      throws Exception {
+      ConfigurationManager configManager, LinkedBlockingQueue<SystemMessage> inQueue) {
 
     super("SCommL");
 
     this.configManager = configManager;
     this.inQueue = inQueue;
     this.me = configManager.getStaticConf().getProcessId();
-    String ssltlsProtocolVersion = configManager.getStaticConf().getSSLTLSProtocolVersion();
+  }
 
+  public void initialize() throws Exception {
     String myAddress;
     String confAddress = "";
     try {
@@ -122,6 +123,7 @@ public class ServersCommunicationLayer extends Thread {
             .getStaticConf()
             .getServerToServerPort(configManager.getStaticConf().getProcessId());
 
+    String ssltlsProtocolVersion = configManager.getStaticConf().getSSLTLSProtocolVersion();
     KeyStore ks;
     try (FileInputStream fis =
         new FileInputStream(
@@ -222,6 +224,17 @@ public class ServersCommunicationLayer extends Thread {
     }
 
     logger.info("ServerCommunicationLayer stopped.");
+  }
+
+  public List<ReplicaId> getAllConnectedReplicas(boolean includeSelf) {
+    var replicaList =
+        this.connections.keySet().stream()
+            .map(ReplicaId::new)
+            .collect(Collectors.toCollection(ArrayList::new));
+    if (includeSelf) {
+      replicaList.add(new ReplicaId(me));
+    }
+    return replicaList;
   }
 
   public SecretKey getSecretKey(int id) {
@@ -336,10 +349,10 @@ public class ServersCommunicationLayer extends Thread {
         if (target == me) {
           sm.authenticated = true;
           inQueue.put(sm);
-//          logger.info("Queueing (delivering) my own message, me:{}", target);
-//          logger.info("inqueue length: {}", inQueue.size());
+          //          logger.info("Queueing (delivering) my own message, me:{}", target);
+          //          logger.info("inqueue length: {}", inQueue.size());
         } else {
-//          logger.info("Sending message: {} -> {}.", me, target);
+          //          logger.info("Sending message: {} -> {}.", me, target);
           getOrCreateConnection(target).send(data);
         }
       } catch (InterruptedException ex) {

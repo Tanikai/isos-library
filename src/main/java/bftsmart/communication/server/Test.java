@@ -36,6 +36,7 @@ public class Test {
     ConfigurationManager configManager = new ConfigurationManager(Integer.parseInt(args[0]), null, null);
     LinkedBlockingQueue<SystemMessage> inQueue = new LinkedBlockingQueue<SystemMessage>();
     ServersCommunicationLayer scl = new ServersCommunicationLayer(configManager, inQueue);
+    scl.initialize();
 
     int id = controller.getStaticConf().getProcessId();
     int n = controller.getCurrentViewN();

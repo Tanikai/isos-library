@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Requirement: DependencySet has to be sent to other replicas. */
@@ -19,6 +20,10 @@ public class DependencySet implements Externalizable {
 
   public DependencySet(Set<SequenceNumber> depSet) {
     this.depSet = new HashSet<>(depSet); // we want to have a hashset
+  }
+
+  public DependencySet(List<SequenceNumber> depSetList) {
+    this.depSet = new HashSet<>(depSetList);
   }
 
   @Override
