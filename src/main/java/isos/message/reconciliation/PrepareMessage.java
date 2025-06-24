@@ -1,11 +1,11 @@
 package isos.message.reconciliation;
 
-import java.io.Serializable;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import java.io.Serializable;
 
 /**
  * @param seqNum agreement slot
@@ -20,5 +20,10 @@ public record PrepareMessage(
   @Override
   public ISOSMessageType msgType() {
     return ISOSMessageType.REC_PREPARE;
+  }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.replicaId;
   }
 }

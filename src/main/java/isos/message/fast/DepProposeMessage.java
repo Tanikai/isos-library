@@ -27,4 +27,9 @@ public record DepProposeMessage(
   public ISOSMessageType msgType() {
     return ISOSMessageType.DEP_PROPOSE;
   }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.coordinatorId;
+  }
 }

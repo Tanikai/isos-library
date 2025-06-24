@@ -32,4 +32,9 @@ public record ViewChangeMessage(
   public ISOSMessageType msgType() {
     return ISOSMessageType.VC_VIEWCHANGE;
   }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.coordinatorId;
+  }
 }

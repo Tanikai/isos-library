@@ -25,4 +25,9 @@ public record NewViewMessage(
   public ISOSMessageType msgType() {
     return ISOSMessageType.VC_NEWVIEW;
   }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.replicaId;
+  }
 }

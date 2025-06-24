@@ -21,4 +21,9 @@ public record CommitMessage(
   public ISOSMessageType msgType() {
     return ISOSMessageType.REC_COMMIT;
   }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.replicaId;
+  }
 }

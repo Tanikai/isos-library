@@ -29,7 +29,7 @@ class DepProposeMessageWrapperSerializationTest {
 
     DepProposeMessage depPropose =
         new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
-    ISOSMessageWrapper wrapper = new ISOSMessageWrapper(depPropose);
+    ISOSMessageWrapper wrapper = new ISOSMessageWrapper(depPropose, coordinatorId.value());
 
     // Act
     byte[] data;

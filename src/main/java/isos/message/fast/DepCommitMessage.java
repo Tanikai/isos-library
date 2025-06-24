@@ -1,10 +1,10 @@
 package isos.message.fast;
 
-import java.io.Serializable;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
+import java.io.Serializable;
 
 /**
  * @param seqNum agreement slot
@@ -17,5 +17,10 @@ public record DepCommitMessage(SequenceNumber seqNum, ReplicaId replicaId, Strin
   @Override
   public ISOSMessageType msgType() {
     return ISOSMessageType.DEP_COMMIT;
+  }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.replicaId;
   }
 }

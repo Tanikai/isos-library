@@ -1,11 +1,11 @@
 package isos.message.fast;
 
-import java.io.Serializable;
 import isos.consensus.DependencySet;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
+import java.io.Serializable;
 
 /**
  * @param seqNum agreement slot
@@ -20,5 +20,10 @@ public record DepVerifyMessage(
   @Override
   public ISOSMessageType msgType() {
     return ISOSMessageType.DEP_VERIFY;
+  }
+
+  @Override
+  public ReplicaId logicalSender() {
+    return this.followerId;
   }
 }
