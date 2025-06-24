@@ -27,7 +27,7 @@ public class AgreementSlotSequence {
    */
   private final ReplicaId replicaId;
 
-  private AgreementSlot[] slots;
+  private final AgreementSlot[] slots;
 
   private int size;
   private final int length;
@@ -75,20 +75,26 @@ public class AgreementSlotSequence {
   }
 
   /**
-   * Creates all
+   * Initializes the agreement slots Used for sequences of *other* replicas. To create new sequence
+   * numbers of the *current* replica, see {@see createLowestUnusedSequenceNumberEntry}.
    *
    * @param seqNum Target sequence number (inclusive)
+   * @return List of newly created sequence Numbers
    */
-  public void batchCreateSequenceNumberUntil(SequenceNumber seqNum) {
+  public List<SequenceNumber> batchCreateSequenceNumberUntil(SequenceNumber seqNum) {
     try {
       this.addEntryLock.lock();
       SequenceNumber start = getLowestUnusedSequenceNumber();
+      var resultList = new LinkedList<SequenceNumber>();
 
       for (int i = start.sequenceCounter(); i < seqNum.sequenceCounter() + 1; i++) {
-        createDefaultEntry(new SequenceNumber(this.replicaId.value(), i));
+        var newSeqNum = new SequenceNumber(this.replicaId.value(), i);
+        createDefaultEntry(newSeqNum);
+        resultList.add(newSeqNum);
         size++;
       }
 
+      return resultList;
     } finally {
       this.addEntryLock.unlock();
     }

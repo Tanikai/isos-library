@@ -16,15 +16,15 @@ limitations under the License.
 package bftsmart.reconfiguration.util;
 
 import bftsmart.tom.util.KeyLoader;
+import isos.utils.ReplicaId;
+import java.util.Arrays;
 import java.util.StringTokenizer;
-
 import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TOMConfiguration extends Configuration {
-    
+
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     protected int n;
@@ -115,7 +115,7 @@ public class TOMConfiguration extends Configuration {
                     requestTimeout = 0;
                 }
             }
-            
+
             s = (String) configs.remove("system.totalordermulticast.batchtimeout");
             if (s == null) {
                 batchTimeout = -1;
@@ -155,7 +155,7 @@ public class TOMConfiguration extends Configuration {
                     timeoutHighMark = 1;
                 }
             }
-            
+
             s = (String) configs.remove("system.totalordermulticast.maxbatchsize");
             if (s == null) {
                 maxBatchSize = 100;
@@ -345,16 +345,16 @@ public class TOMConfiguration extends Configuration {
             } else {
                 numRepliers = Integer.parseInt(s);
             }
- 
+
             s = (String) configs.remove("system.numnettyworkers");
             if (s == null) {
                 numNettyWorkers = 0;
             } else {
                 numNettyWorkers = Integer.parseInt(s);
             }
-            
+
             s = (String) configs.remove("system.communication.bindaddress");
-            
+
             Pattern pattern = Pattern.compile("^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$");
 
             if (s == null || !pattern.matcher(s).matches()) {
@@ -362,49 +362,49 @@ public class TOMConfiguration extends Configuration {
             } else {
                 bindAddress = s;
             }
-            
+
             s = (String) configs.remove("system.samebatchsize");
             if (s != null) {
                     sameBatchSize = Boolean.parseBoolean(s);
             } else {
                     sameBatchSize = false;
             }
-            
+
             s = (String) configs.remove("system.totalordermulticast.fairbatch");
             if (s != null) {
                     fairbatch = Boolean.parseBoolean(s);
             } else {
                     fairbatch = false;
             }
-            
+
             /**
-             * Tulio Ribeiro 
-             * 
+             * Tulio Ribeiro
+             *
              * SSL/TLS configuration parameters.
-             * Default values: 
+             * Default values:
              *  #	keyStoreFile = "EC_KeyPair_256.pkcs12";
              *  #	enabledCiphers = new String[] {"TLS_RSA_WITH_NULL_SHA256", "TLS_ECDHE_ECDSA_WITH_NULL_SHA"};
              *  #	ssltlsProtocolVersion = "TLSv1.2";
              */
-           
-            
+
+
             s = (String) configs.remove("system.ssltls.key_store_file");
             if(s == null){
-                keyStoreFile = "EC_KeyPair_256.pkcs12";                        
+                keyStoreFile = "EC_KeyPair_256.pkcs12";
             }else{
             	keyStoreFile = s;
 			}
-            
+
             s = (String) configs.remove("system.ssltls.enabled_ciphers");
             if(s == null){
                 enabledCiphers = new String[] {"TLS_RSA_WITH_NULL_SHA256", "TLS_ECDHE_ECDSA_WITH_NULL_SHA"};
             }else{
             	enabledCiphers = s.split(",");
-			}        
-            
+			}
+
 			s = (String) configs.remove("system.ssltls.protocol_version");
 			if (s == null) {
-				ssltlsProtocolVersion = "TLSv1.2";				
+				ssltlsProtocolVersion = "TLSv1.2";
 			} else {
 				switch (s) {
 				case "SSLv3":
@@ -456,6 +456,10 @@ public class TOMConfiguration extends Configuration {
         return this.initialView;
     }
 
+    public ReplicaId[] getInitialViewAsReplicaId() {
+        return Arrays.stream(this.initialView).mapToObj(ReplicaId::new).toArray(ReplicaId[]::new);
+    }
+
     public int getTTPId() {
         return ttpId;
     }
@@ -467,7 +471,7 @@ public class TOMConfiguration extends Configuration {
     public int getBatchTimeout() {
         return batchTimeout;
     }
-    
+
     public int getReplyVerificationTime() {
         return replyVerificationTime;
     }
@@ -479,7 +483,7 @@ public class TOMConfiguration extends Configuration {
     public int getF() {
         return f;
     }
-    
+
     public int getPaxosHighMark() {
         return paxosHighMark;
     }
@@ -487,11 +491,11 @@ public class TOMConfiguration extends Configuration {
     public int getRevivalHighMark() {
         return revivalHighMark;
     }
-    
+
     public int getTimeoutHighMark() {
         return timeoutHighMark;
     }
-    
+
     public int getMaxBatchSize() {
         return maxBatchSize;
     }
@@ -553,7 +557,7 @@ public class TOMConfiguration extends Configuration {
 	public boolean isToWriteCkpsToDisk() {
 		return isToWriteCkpsToDisk;
 	}
-	
+
 	public boolean isToWriteSyncCkp() {
 		return syncCkp;
 	}
@@ -598,26 +602,26 @@ public class TOMConfiguration extends Configuration {
     }
 
     public boolean isBFT(){
-    	
+
     	return this.isBFT;
     }
 
     public int getNumRepliers() {
         return numRepliers;
     }
-    
+
     public int getNumNettyWorkers() {
         return numNettyWorkers;
     }
-    
+
     public boolean getSameBatchSize() {
         return sameBatchSize;
     }
-    
+
     public boolean getFairBatch() {
         return fairbatch;
     }
-    
+
     public String getBindAddress() {
         return bindAddress;
     }
@@ -632,11 +636,11 @@ public class TOMConfiguration extends Configuration {
     public String getSSLTLSProtocolVersion() {
 		return ssltlsProtocolVersion;
 	}
-	
+
 	public String getSSLTLSKeyStore() {
-		return keyStoreFile; 
+		return keyStoreFile;
 	}
-	
+
 	public String[] getEnabledCiphers() {
 		return enabledCiphers;
 	}

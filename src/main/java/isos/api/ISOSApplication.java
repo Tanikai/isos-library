@@ -28,7 +28,7 @@ public class ISOSApplication {
 
   // DECISION Kai: AgreementSlotSequence that contains slots of all replicas, or
   // AgreementSlotSequence per replica?
-  private AgreementSlotManager agrSlotManager;
+  private final AgreementSlotManager agrSlotManager;
 
   /**
    * Send and receive messages with scs.
@@ -40,7 +40,7 @@ public class ISOSApplication {
    */
   private ServerCommunicationSystem scs;
 
-  private ConfigurationManager configManager;
+  private final ConfigurationManager configManager;
 
   private final BiPredicate<ClientRequest, ClientRequest> defaultConflict;
   private BiPredicate<ClientRequest, ClientRequest> applicationConflict;
@@ -48,10 +48,31 @@ public class ISOSApplication {
   public ISOSApplication(ConfigurationManager configManager) {
     this.configManager = configManager;
     this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
-    this.agrSlotManager = new AgreementSlotManager();
 
-    // if
-    this.defaultConflict = (a, b) -> a.getSender() == b.getSender();
+    // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
+    this.agrSlotManager =
+        new AgreementSlotManager(
+            ownReplicaId, timeoutConf, configManager.getStaticConf().getInitialViewAsReplicaId());
+    try {
+      this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
+    } catch (Exception e) {
+      // FIXME Kai: Handle exception (or just remove exception from constructor)
+    }
+    this.agrSlotManager.initialize(scs);
+
+    // Request
+    this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
+  }
+
+  /** Starts the application by connecting to the repliacs first. */
+  public void start() {
+    this.scs.start();
+    logger.info("Wait until other replicas are connected");
+    this.scs.waitUntilViewConnected();
+  }
+
+  public ServerCommunicationSystem debug_getSCS() {
+    return this.scs;
   }
 
   /**
@@ -140,13 +161,12 @@ public class ISOSApplication {
    *
    * @param a
    * @param b
-   * @return
-   * @Deprecated (?) See BiPredicate applicationConflict.
+   * @return @Deprecated (?) See BiPredicate applicationConflict.
    */
   public boolean conflict(ClientRequest a, ClientRequest b) {
     // Requirement: Requests of the same client are automatically treated as conflicting with each
     // other, independent of their content
-    if (a.getSender() == b.getSender()) {
+    if (a.clientId() == b.clientId()) {
       return true;
     }
 
