@@ -16,7 +16,6 @@ package bftsmart.communication.client;
 
 import bftsmart.communication.client.netty.NettyClientServerCommunicationSystemClientSide;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.reconfiguration.ClientViewController;
 
 /**
  * @author Paulo
@@ -24,7 +23,7 @@ import bftsmart.reconfiguration.ClientViewController;
 public class CommunicationSystemClientSideFactory {
 
   public static CommunicationSystemClientSide getCommunicationSystemClientSide(
-          int clientId, ConfigurationManager configManager) {
+      int clientId, ConfigurationManager configManager) {
     return new NettyClientServerCommunicationSystemClientSide(clientId, configManager);
   }
 }

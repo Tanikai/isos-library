@@ -17,7 +17,6 @@ package bftsmart.communication.client.netty;
 import bftsmart.communication.client.CommunicationSystemServerSide;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.reconfiguration.ServerViewController;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.util.TOMUtil;
 import io.netty.bootstrap.ServerBootstrap;
@@ -26,9 +25,6 @@ import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -41,6 +37,8 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Paulo
@@ -144,10 +142,12 @@ public class NettyClientServerCommunicationSystemServerSide
 
       //      logger.info("N = " + controller.getCurrentViewN());
       //      logger.info("F = " + controller.getCurrentViewF());
-      logger.info("Port (client <-> server) = {}", configManager
-              .getStaticConf()
-              .getPort(configManager.getStaticConf().getProcessId()));
-      logger.info("Port (server <-> server) = {}", configManager
+      logger.info(
+          "Port (client <-> server) = {}",
+          configManager.getStaticConf().getPort(configManager.getStaticConf().getProcessId()));
+      logger.info(
+          "Port (server <-> server) = {}",
+          configManager
               .getStaticConf()
               .getServerToServerPort(configManager.getStaticConf().getProcessId()));
       logger.info("requestTimeout = {}", configManager.getStaticConf().getRequestTimeout());
@@ -156,7 +156,9 @@ public class NettyClientServerCommunicationSystemServerSide
       else if (configManager.getStaticConf().getUseSignatures() == 2)
         logger.info("Using benchmark signature verification");
       logger.info("Bound replica to IP address {}", myAddress);
-      logger.info("Optimizations:  Read-only Requests: {}", configManager.getStaticConf().useReadOnlyRequests() ? "enabled" : "disabled");
+      logger.info(
+          "Optimizations:  Read-only Requests: {}",
+          configManager.getStaticConf().useReadOnlyRequests() ? "enabled" : "disabled");
       // ******* EDUARDO END **************//
 
       /* Tulio Ribeiro */

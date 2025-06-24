@@ -186,12 +186,7 @@ public class ServerConnection {
           byte[] data = new byte[5 + messageData.length]; // without MAC
           int value = messageData.length;
 
-          System.arraycopy(
-              intToByteArray(value),
-              0,
-              data,
-              0,
-              4);
+          System.arraycopy(intToByteArray(value), 0, data, 0, 4);
           System.arraycopy(messageData, 0, data, 4, messageData.length);
           System.arraycopy(new byte[] {(byte) 0}, 0, data, 4 + messageData.length, 1);
 

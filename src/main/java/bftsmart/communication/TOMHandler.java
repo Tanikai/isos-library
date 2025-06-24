@@ -56,7 +56,6 @@ public class TOMHandler implements MessageHandler {
 
       ConsensusMessage consMsg = (ConsensusMessage) sm;
 
-
       if (consMsg.authenticated || consMsg.getSender() == myId) acceptor.deliver(consMsg);
       else {
         logger.warn("Discarding unauthenticated message from " + sm.getSender());
