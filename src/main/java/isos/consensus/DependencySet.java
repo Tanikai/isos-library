@@ -1,10 +1,10 @@
 package isos.consensus;
 
-
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -24,6 +24,15 @@ public class DependencySet implements Externalizable {
 
   public DependencySet(List<SequenceNumber> depSetList) {
     this.depSet = new HashSet<>(depSetList);
+  }
+
+  /**
+   * Returns the sequence numbers of the dependencies as an unmodifiable set.
+   *
+   * @return
+   */
+  public Set<SequenceNumber> dependencies() {
+    return Collections.unmodifiableSet(this.depSet);
   }
 
   @Override

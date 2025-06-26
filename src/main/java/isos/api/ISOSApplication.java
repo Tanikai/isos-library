@@ -3,18 +3,15 @@ package isos.api;
 import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.configuration.ConfigurationManager;
 import isos.consensus.*;
-import isos.message.ClientRequest;
-import isos.message.fast.DepProposeMessage;
-import isos.utils.NotImplementedException;
+import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * DECISION Kai: Maybe interface instead of class? This class is used as the central manager of the
@@ -42,8 +39,8 @@ public class ISOSApplication {
 
   private final ConfigurationManager configManager;
 
-  private final BiPredicate<ClientRequest, ClientRequest> defaultConflict;
-  private BiPredicate<ClientRequest, ClientRequest> applicationConflict;
+  private final BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
+  private BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
 
   public ISOSApplication(ConfigurationManager configManager) {
     this.configManager = configManager;
@@ -55,6 +52,8 @@ public class ISOSApplication {
             ownReplicaId, timeoutConf, configManager.getStaticConf().getInitialViewAsReplicaId());
     try {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
+      // TODO: Add Request Receiver
+//      this.scs.setRequestReceiver();
     } catch (Exception e) {
       // FIXME Kai: Handle exception (or just remove exception from constructor)
     }
@@ -76,40 +75,6 @@ public class ISOSApplication {
   }
 
   /**
-   * Requirement: To start the fast path, the coordinator selects its agreement slot
-   *
-   * <p>Pseudocode line 10-19
-   *
-   * @param r
-   */
-  private void handleIncomingClientRequest(ClientRequest r) {
-    // ClientRequest needs to be immutable after receiving
-
-    // TODO Kai line 11: assert r correctly signed (-> should be done in the Networking Layer)
-
-    SequenceNumber seqNum = this.agrSlotManager.createLowestUnusedSequenceNumberEntry(ownReplicaId);
-    Set<SequenceNumber> depSet = conflicts(r);
-    // TODO: Get Quroum of 2f followers with lowest latency
-    // For now, get random two followers
-    Set<ReplicaId> followerSet = null;
-    DepProposeMessage dp =
-        new DepProposeMessage(
-            seqNum,
-            ownReplicaId,
-            r.calculateHash(),
-            new DependencySet(depSet),
-            followerSet); // TODO: create constructor / factory method to create message
-
-    throw new NotImplementedException();
-    // TODO Line 17: set step of this agreement slot to proposed
-    // TODO Line 18: Broadcast message to all replicas
-
-    // TODO: Notify Listeners that a new Request was handled
-    // Listeners include: Other requests that are waiting until a certain condition is fulfilled
-    // (e.g., 2f messages received)
-  }
-
-  /**
    * Requirement: The coordinator [...] computes the dependency set [...] with request r. Method:
    * Iterate over all requests with r, check with predicate `conflict(a, b)`, add SequenceNumber to
    * dependency set if true
@@ -122,7 +87,7 @@ public class ISOSApplication {
    *
    * @return All agreement slots that have a DepPropose message (i.e. non-null)
    */
-  private Set<SequenceNumber> conflicts(ClientRequest r) {
+  private Set<SequenceNumber> conflicts(OrderedClientRequest r) {
     // Requirement: For the dependency set, the coordinator takes all known requests from both its
     // own and other replicas' agreement slots into account (see paper sec. B).
 
@@ -140,7 +105,7 @@ public class ISOSApplication {
             // turn the Stream<List<AgreementSlot>> into Stream<AgreementSlot>
             .flatMap(Collection::stream)
             // if they conflict, return the sequence number, else return null for "no conflict"
-            .map(slot -> conflict(r, slot.request()) ? slot.seqNum() : null)
+            .map(slot -> conflict(r, slot.getRequest()) ? slot.getSeqNum() : null)
             .filter(Objects::nonNull) // filter out the "no conflict"s
             .collect(Collectors.toSet());
 
@@ -163,7 +128,7 @@ public class ISOSApplication {
    * @param b
    * @return @Deprecated (?) See BiPredicate applicationConflict.
    */
-  public boolean conflict(ClientRequest a, ClientRequest b) {
+  public boolean conflict(OrderedClientRequest a, OrderedClientRequest b) {
     // Requirement: Requests of the same client are automatically treated as conflicting with each
     // other, independent of their content
     if (a.clientId() == b.clientId()) {

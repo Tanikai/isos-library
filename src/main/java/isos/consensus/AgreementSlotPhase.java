@@ -1,7 +1,7 @@
 package isos.consensus;
 
 /**
- * Current State of Agreement Slot, see ISOS pseudocode line 5
+ * Current Step of Agreement Slot, see ISOS pseudocode line 5
  */
 public enum AgreementSlotPhase {
   NULL,

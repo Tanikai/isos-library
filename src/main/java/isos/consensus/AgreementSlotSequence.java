@@ -1,5 +1,6 @@
 package isos.consensus;
 
+import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -49,23 +50,29 @@ public class AgreementSlotSequence {
     this.slots[seqNum.sequenceCounter()] = new AgreementSlot(seqNum);
   }
 
+  private void createDefaultEntryWithRequest(SequenceNumber seqNum, OrderedClientRequest r) {
+    this.slots[seqNum.sequenceCounter()] = new AgreementSlot(seqNum, r);
+  }
+
   public int size() {
     return this.size;
   }
 
   /**
+   * Used when a new ClientRequest arrives to the current replica.
+   *
    * Requirement: To start the fast path, the coordinator [that received a request from the client]
    * selects its agreement slot with the lowest unused sequence number (see paper sec. B).
    *
    * @return Sequence number of newly created entry
    */
-  public SequenceNumber createLowestUnusedSequenceNumberEntry() {
+  public SequenceNumber createLowestUnusedSequenceNumberEntry(OrderedClientRequest r) {
     try {
       this.addEntryLock.lock();
       // get sequence number for new slot
       SequenceNumber result = getLowestUnusedSequenceNumber();
       // initialize new slot with default AgreementSlot record
-      createDefaultEntry(result);
+      createDefaultEntryWithRequest(result, r);
       size++;
 
       return result;
@@ -75,8 +82,10 @@ public class AgreementSlotSequence {
   }
 
   /**
+   * Used when this replica receives DepPropose message from another replica.
+   *
    * Initializes the agreement slots Used for sequences of *other* replicas. To create new sequence
-   * numbers of the *current* replica, see {@see createLowestUnusedSequenceNumberEntry}.
+   * numbers of the *current* replica, see {@link #createLowestUnusedSequenceNumberEntry(OrderedClientRequest)}.
    *
    * @param seqNum Target sequence number (inclusive)
    * @return List of newly created sequence Numbers
@@ -124,7 +133,7 @@ public class AgreementSlotSequence {
    */
   public void putAgreementSlotValue(AgreementSlot newValue) {
     // check whether AgreementSlot replicaId is correct
-    var seqNum = newValue.seqNum();
+    var seqNum = newValue.getSeqNum();
     if (seqNum.replicaId() != this.replicaId.value()) {
       throw new InvalidReplicaIdException(
           String.format(
@@ -140,7 +149,7 @@ public class AgreementSlotSequence {
     this.slots[seqNum.sequenceCounter()] = newValue;
   }
 
-  public AgreementSlot getAgreementSlotValue(SequenceNumber seqNum) {
+  public AgreementSlot getAgreementSlotValue(SequenceNumber seqNum) throws IndexOutOfBoundsException {
     if (seqNum.sequenceCounter() >= this.size) {
       throw new IndexOutOfBoundsException();
     }
