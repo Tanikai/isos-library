@@ -14,7 +14,7 @@
  */
 package bftsmart.communication.client;
 
-import bftsmart.tom.core.messages.TOMMessage;
+import isos.message.ClientMessageWrapper;
 
 /**
  * Methods that should be implemented by the client side of the client-server communication system
@@ -22,11 +22,11 @@ import bftsmart.tom.core.messages.TOMMessage;
  * @author Paulo
  */
 public interface CommunicationSystemClientSide {
-  void send(boolean sign, int[] targets, TOMMessage sm, int quorumSize);
+  void send(boolean sign, int[] targets, ClientMessageWrapper sm, int quorumSize);
 
   void setReplyReceiver(ReplyReceiver trr);
 
-  void sign(TOMMessage sm);
+  void sign(ClientMessageWrapper sm);
 
   void close();
 

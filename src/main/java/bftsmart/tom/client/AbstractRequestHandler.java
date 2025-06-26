@@ -2,6 +2,7 @@ package bftsmart.tom.client;
 
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
+import isos.message.ClientMessageWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +70,9 @@ public abstract class AbstractRequestHandler {
 		return response;
 	}
 
-	public void processReply(TOMMessage reply) {
+	public void processReply(ClientMessageWrapper r) {
+		// FIXME: Migrate to ClientMessageWrapper
+		var reply = new TOMMessage();
 		if (response != null) {//no message being expected
 			logger.debug("throwing out request: sender = {} reqId = {}", reply.getSender(), reply.getSequence());
 			return;

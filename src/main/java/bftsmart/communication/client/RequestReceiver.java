@@ -14,17 +14,19 @@
  */
 package bftsmart.communication.client;
 
-import bftsmart.tom.core.messages.TOMMessage;
+import isos.message.ClientMessageWrapper;
 
-/** Interface that receives requests/commands from **Clients** */
+/** Interface that receives requests/commands from Clients. See {@link ReplyReceiver} for the counterpart. */
 public interface RequestReceiver {
 
   /**
-   * This is the method invoked by the CommunicationSystemServerSide, to deliver a client request.
-   * The code to handle requests should be put here.
+   * This method is invoked by the CommunicationSystemServerSide, to deliver a client request. It
+   * assumes that the communication system delivers the message in FIFO order. Code to handle
+   * requests should be put here.
    *
-   * @param msg The request delivered by the TOM layer
-   * @param fromClient If the request was received from a client
+   * @param msg The request being received from the client
+   * @param fromClient Whether the request was received from a client or was part of a forwarded
+   *     message. If it was forwarded, it should not be dropped.
    */
-  void requestReceived(TOMMessage msg, boolean fromClient);
+  void requestReceived(ClientMessageWrapper msg, boolean fromClient);
 }

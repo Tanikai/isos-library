@@ -22,6 +22,7 @@ import bftsmart.reconfiguration.ClientViewController;
 import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.KeyLoader;
+import isos.utils.NotImplementedException;
 
 import java.io.Closeable;
 import java.util.Random;
@@ -109,11 +110,12 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
    * @param sm
    */
   public void TOMulticast(TOMMessage sm) {
-    cs.send(
-        useSignatures,
-        this.viewController.getCurrentViewProcesses(),
-        sm,
-        this.viewController.getReplyQuorum());
+    throw new NotImplementedException();
+//    cs.send(
+//        useSignatures,
+//        this.viewController.getCurrentViewProcesses(),
+//        sm,
+//        this.viewController.getReplyQuorum());
   }
 
   /**
@@ -125,12 +127,13 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
    * @param reqType
    */
   public void TOMulticast(byte[] m, int reqId, int operationId, TOMMessageType reqType) {
-    cs.send(
-        useSignatures,
-        viewController.getCurrentViewProcesses(),
-        new TOMMessage(
-            me, session, reqId, operationId, m, viewController.getCurrentViewId(), reqType),
-        this.viewController.getReplyQuorum());
+    throw new NotImplementedException();
+//    cs.send(
+//        useSignatures,
+//        viewController.getCurrentViewProcesses(),
+//        new TOMMessage(
+//            me, session, reqId, operationId, m, viewController.getCurrentViewId(), reqType),
+//        this.viewController.getReplyQuorum());
   }
 
   public void sendMessageToTargets(
@@ -138,6 +141,7 @@ public abstract class TOMSender implements ReplyReceiver, Closeable, AutoCloseab
     if (this.getViewManager().getStaticConf().isTheTTP()) {
       type = TOMMessageType.ASK_STATUS;
     }
+    throw new NotImplementedException();
     //    cs.send(
     //        useSignatures,
     //        targets,

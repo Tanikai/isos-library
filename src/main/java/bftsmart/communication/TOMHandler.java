@@ -97,8 +97,9 @@ public class TOMHandler implements MessageHandler {
 
         } else if (sm instanceof ForwardedMessage) {
           TOMMessage request = ((ForwardedMessage) sm).getRequest();
-          tomLayer.requestReceived(
-              request, false); // false -> message was received from a replica -> do not drop it
+          // FIXME: Commented out during ClientMessageWrapper migration
+//          tomLayer.requestReceived(
+//              request, false); // false -> message was received from a replica -> do not drop it
 
           /** This is Joao's code, to handle state transfer */
         } else if (sm instanceof SMMessage) {

@@ -17,7 +17,6 @@ package bftsmart.communication.client.netty;
 import bftsmart.communication.client.CommunicationSystemServerSide;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.util.TOMUtil;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -25,6 +24,7 @@ import io.netty.channel.ChannelHandler.Sharable;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import isos.message.ClientMessageWrapper;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -45,7 +45,7 @@ import org.slf4j.LoggerFactory;
  */
 @Sharable
 public class NettyClientServerCommunicationSystemServerSide
-    extends SimpleChannelInboundHandler<TOMMessage> implements CommunicationSystemServerSide {
+    extends SimpleChannelInboundHandler<ClientMessageWrapper> implements CommunicationSystemServerSide {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -220,7 +220,7 @@ public class NettyClientServerCommunicationSystemServerSide
   }
 
   @Override
-  protected void channelRead0(ChannelHandlerContext ctx, TOMMessage sm) throws Exception {
+  protected void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
 
     if (this.closed) {
       closeChannelAndEventLoop(ctx.channel());
@@ -283,12 +283,12 @@ public class NettyClientServerCommunicationSystemServerSide
     this.requestReceiver = tl;
   }
 
-  private void retrySend(int[] targets, TOMMessage sm, boolean serializeClassHeaders) {
+  private void retrySend(int[] targets, ClientMessageWrapper sm, boolean serializeClassHeaders) {
     send(targets, sm, serializeClassHeaders);
   }
 
   @Override
-  public void send(int[] targets, TOMMessage sm, boolean serializeClassHeaders) {
+  public void send(int[] targets, ClientMessageWrapper sm, boolean serializeClassHeaders) {
 
     // serialize message
     DataOutputStream dos = null;
@@ -313,12 +313,7 @@ public class NettyClientServerCommunicationSystemServerSide
     }
 
     for (int target : targets) {
-      try {
-        sm = (TOMMessage) sm.clone();
-      } catch (CloneNotSupportedException ex) {
-        logger.error("Failed to clone TOMMessage", ex);
-        continue;
-      }
+      sm = sm.clone();
 
       rl.readLock().lock();
       if (sessionReplicaToClient.containsKey(target)) {
@@ -348,7 +343,7 @@ public class NettyClientServerCommunicationSystemServerSide
                       ((double) configManager.getStaticConf().getClientInvokeOrderedTimeout()
                           * Math.pow(2, -1 * sm.retry)));
           sm.retry = sm.retry - 1;
-          TOMMessage finalSm = sm;
+          ClientMessageWrapper finalSm = sm;
           TimerTask timertask =
               new TimerTask() {
                 @Override

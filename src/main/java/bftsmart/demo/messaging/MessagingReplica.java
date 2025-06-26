@@ -6,13 +6,11 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.message.TestMessage;
-import bftsmart.tom.core.messages.TOMMessage;
 import bftsmart.tom.util.KeyLoader;
-import org.slf4j.LoggerFactory;
-
-import org.slf4j.Logger;
-
+import isos.message.ClientMessageWrapper;
 import java.util.concurrent.locks.Lock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MessagingReplica extends Thread {
 
@@ -26,7 +24,7 @@ public class MessagingReplica extends Thread {
   private final ConfigurationManager configManager;
 
   // handles all communication with replicas and clients.
-  private ServerCommunicationSystem serverComms;
+  private ServerCommunicationSystem scs;
 
   private Lock readyLock;
 
@@ -36,8 +34,8 @@ public class MessagingReplica extends Thread {
 
     this.configManager = new ConfigurationManager(procId, configHome, loader);
     try {
-      this.serverComms = new ServerCommunicationSystem(configManager, new TestMessageHandler());
-      this.serverComms.setRequestReceiver(new ClientMessageHandler());
+      this.scs = new ServerCommunicationSystem(configManager, new TestMessageHandler());
+      this.scs.setRequestReceiver(new ClientMessageHandler(scs));
     } catch (Exception e) {
       logger.error("Failed to create ServerCommunicationSystem", e);
     }
@@ -48,9 +46,9 @@ public class MessagingReplica extends Thread {
     logger.debug("Messaging replica started");
 
     // start listening for messages
-    this.serverComms.start();
+    this.scs.start();
     logger.info("Wait until view is connected");
-    this.serverComms.waitUntilViewConnected();
+    this.scs.waitUntilViewConnected();
 
     // wait until everyone is connected
     // send message to all replicas
@@ -59,10 +57,10 @@ public class MessagingReplica extends Thread {
     for (int i = 0; i < 100; i++) {
       // send a message to all replicas
       var msg = new TestMessage(procId, "Hello " + i + " from " + procId);
-      this.serverComms.send(receivers, msg);
+      this.scs.send(receivers, msg);
       // wait a bit
       try {
-        Thread.sleep(500);
+        Thread.sleep(2000);
       } catch (InterruptedException e) {
         logger.error("Interrupted while waiting", e);
       }
@@ -70,7 +68,8 @@ public class MessagingReplica extends Thread {
   }
 
   /**
-   * Class that handles incoming messages from other replicas. Passed to the ServerCommunicationSystem.
+   * Class that handles incoming messages from other replicas. Passed to the
+   * ServerCommunicationSystem.
    */
   class TestMessageHandler implements MessageHandler {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -91,11 +90,28 @@ public class MessagingReplica extends Thread {
   class ClientMessageHandler implements RequestReceiver {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
+    private ServerCommunicationSystem scs;
+
+    public ClientMessageHandler(ServerCommunicationSystem scs) {
+      this.scs = scs;
+    }
+
     @Override
-    public void requestReceived(TOMMessage msg, boolean fromClient) {
-      logger.info("Received request from client {}, message: {}", msg.getSender(), new String(msg.serializedMessage));
+    public void requestReceived(ClientMessageWrapper sm, boolean fromClient) {
+      var payload = sm.getPayload();
+      var sender = sm.getSender();
+      var msg = new String(payload);
+      logger.info("Received request from client {}, message: {}", sender, msg);
+      logger.info("Sending reply");
 
       // TODO Kai: send reply
+      var responsePayload = ("This is the reply").getBytes();
+      var receivers = new int[1];
+      receivers[0] = sender;
+      this.scs.sendToClient(
+          receivers,
+          new ClientMessageWrapper(
+              sm.getSender(), sm.getClientSession(), sm.getClientSequence(), responsePayload));
     }
   }
 

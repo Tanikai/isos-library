@@ -14,9 +14,12 @@
  */
 package bftsmart.communication.client;
 
-import bftsmart.tom.core.messages.TOMMessage;
+import isos.message.ClientMessageWrapper;
 
-/** Interface meant for objects that receive replies from replicas */
+/**
+ * Interface for clients to receive messages/replies from replicas. See {@link RequestReceiver} for
+ * the counterpart.
+ */
 public interface ReplyReceiver {
 
   /**
@@ -25,5 +28,5 @@ public interface ReplyReceiver {
    *
    * @param reply The reply delivered by the client side communication system
    */
-  public void replyReceived(TOMMessage reply);
+  public void replyReceived(ClientMessageWrapper reply);
 }

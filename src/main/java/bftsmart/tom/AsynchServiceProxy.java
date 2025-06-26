@@ -7,10 +7,10 @@ import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.Extractor;
 import bftsmart.tom.util.KeyLoader;
 import bftsmart.tom.util.TOMUtil;
+import isos.message.ClientMessageWrapper;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -134,7 +134,9 @@ public class AsynchServiceProxy extends ServiceProxy {
      * @param reply The reply delivered by the client side communication system
      */
     @Override
-    public void replyReceived(TOMMessage reply) {
+    public void replyReceived(ClientMessageWrapper r) {
+        // FIXME
+        var reply = new TOMMessage();
         logger.debug("Asynchronously received reply from " + reply.getSender() + " with sequence number " + reply.getSequence() + " and operation ID " + reply.getOperationId());
 
         try {
@@ -143,7 +145,8 @@ public class AsynchServiceProxy extends ServiceProxy {
             RequestContext requestContext = requestsContext.get(reply.getOperationId());
 
             if (requestContext == null) { // it is not a asynchronous request
-                super.replyReceived(reply);
+                // FIXME
+//                super.replyReceived(reply);
                 return;
             }
 

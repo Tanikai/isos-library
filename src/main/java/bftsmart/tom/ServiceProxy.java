@@ -25,6 +25,7 @@ import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.Extractor;
 import bftsmart.tom.util.KeyLoader;
 import bftsmart.tom.util.TOMUtil;
+import isos.message.ClientMessageWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -228,7 +229,9 @@ public class ServiceProxy extends TOMSender {
         }
       }
 
-      TOMMessage response = requestHandler.getResponse();
+//      TOMMessage response = requestHandler.getResponse();
+      // FIXME: Migrate to ClientMessageWrapper
+      TOMMessage response = null;
       logger.debug("Response extracted: {}", response);
 
       if (response == null) {
@@ -351,11 +354,12 @@ public class ServiceProxy extends TOMSender {
    * @param reply The reply delivered by the client side communication system
    */
   @Override
-  public void replyReceived(TOMMessage reply) {
+  public void replyReceived(ClientMessageWrapper reply) {
     logger.debug(
         "Synchronously received reply from {} with sequence number {}",
-        reply.getSender(),
-        reply.getSequence());
+        reply.getSender()
+//        ,reply.getSequence()
+    );
     try {
       canReceiveLock.lock();
       requestHandler.processReply(reply);

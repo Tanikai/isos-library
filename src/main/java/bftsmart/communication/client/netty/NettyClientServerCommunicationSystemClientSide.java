@@ -14,6 +14,25 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.communication.client.CommunicationSystemClientSide;
+import bftsmart.communication.client.ReplyReceiver;
+import bftsmart.configuration.ConfigurationManager;
+import bftsmart.tom.util.TOMUtil;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandler.Sharable;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoop;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.util.concurrent.GenericFutureListener;
+import isos.message.ClientMessageWrapper;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -34,34 +53,11 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
-
-import bftsmart.configuration.ConfigurationManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import bftsmart.communication.client.CommunicationSystemClientSide;
-import bftsmart.communication.client.ReplyReceiver;
-import bftsmart.reconfiguration.ClientViewController;
-import bftsmart.tom.core.messages.TOMMessage;
-import bftsmart.tom.util.TOMUtil;
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandler.Sharable;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoop;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.util.concurrent.GenericFutureListener;
 
 /**
  * This class is an implementation of the ServerCommunicationSystemClientSide
@@ -70,7 +66,8 @@ import io.netty.util.concurrent.GenericFutureListener;
  */
 @Sharable
 public class NettyClientServerCommunicationSystemClientSide
-    extends SimpleChannelInboundHandler<TOMMessage> implements CommunicationSystemClientSide {
+    extends SimpleChannelInboundHandler<ClientMessageWrapper>
+    implements CommunicationSystemClientSide {
 
   private Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -96,7 +93,7 @@ public class NettyClientServerCommunicationSystemClientSide
 
   // Used for a re-transmission of the last (pending) request in case of a re-connect to some
   // replica
-  private TOMMessage pendingRequest;
+  private ClientMessageWrapper pendingRequest;
   private boolean pendingRequestSign;
 
   public NettyClientServerCommunicationSystemClientSide(
@@ -203,7 +200,7 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   @Override
-  public void channelRead0(ChannelHandlerContext ctx, TOMMessage sm) throws Exception {
+  public void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
     logger.debug("channelRead0(ChannelHandlerContext ctx, TOMMessage sm).");
 
     if (closed) {
@@ -242,7 +239,7 @@ public class NettyClientServerCommunicationSystemClientSide
               future.await();
               logger.info(
                   "Retransmitting message after a re-connect: "
-                      + this.pendingRequest.getSequence());
+                      + this.pendingRequest.getClientSequence());
               retransmitMessage(this.pendingRequest, replicaId, this.pendingRequestSign);
             } catch (InvalidKeyException | InvalidKeySpecException e) {
               // TODO Auto-generated catch block
@@ -282,7 +279,7 @@ public class NettyClientServerCommunicationSystemClientSide
    * @param sm Message to be sent.
    */
   @Override
-  public void send(boolean sign, int[] targets, TOMMessage sm, int quorumSize) {
+  public void send(boolean sign, int[] targets, ClientMessageWrapper sm, int quorumSize) {
     int quorum = quorumSize;
 
     Integer[] targetArray = Arrays.stream(targets).boxed().toArray(Integer[]::new);
@@ -293,7 +290,7 @@ public class NettyClientServerCommunicationSystemClientSide
     logger.debug(
         "Sending request from {} with sequence number {} to {}",
         sm.getSender(),
-        sm.getSequence(),
+        sm.getClientSequence(),
         Arrays.toString(targetArray));
 
     this.pendingRequest = sm;
@@ -317,18 +314,12 @@ public class NettyClientServerCommunicationSystemClientSide
       // This is done to avoid a race condition with the writeAndFlush method. Since the method
       // is asynchronous, each iteration of this loop could overwrite the destination of the
       // previous one
-      try {
-        sm = (TOMMessage) sm.clone();
-      } catch (CloneNotSupportedException e) {
-        logger.error("Failed to clone TOMMessage", e);
-        continue;
-      }
+      sm = sm.clone();
 
       sm.destination = target;
 
       rl.readLock().lock();
-      Channel channel =
-          ((NettyClientServerSession) sessionClientToReplica.get(target)).getChannel();
+      Channel channel = sessionClientToReplica.get(target).getChannel();
       rl.readLock().unlock();
       if (channel.isActive()) {
         sm.signed = sign;
@@ -353,11 +344,12 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   /**
-   * Serializes the message to the serializedMessage field of the passed TOMMessage object
+   * Serializes the message to the serializedMessage field of the passed ClientMessageWrapper
+   * object.
    *
    * @param sm TOMMessage to be serialized
    */
-  private void serializeMessage(TOMMessage sm) {
+  private void serializeMessage(ClientMessageWrapper sm) {
     // serialize message
     DataOutputStream dos = null;
     try {
@@ -371,7 +363,13 @@ public class NettyClientServerCommunicationSystemClientSide
     }
   }
 
-  public void sign(TOMMessage sm) {
+  /**
+   * Serializes the message, signs the serialized message, and then stores the signature in the
+   * field serializedMessageSignature.
+   *
+   * @param sm
+   */
+  public void sign(ClientMessageWrapper sm) {
     // serialize message
     DataOutputStream dos = null;
     byte[] data = null;
@@ -585,11 +583,11 @@ public class NettyClientServerCommunicationSystemClientSide
   /**
    * Re-transmits a pending request to a recovered replica after successful re-connection
    *
-   * @param sm pending TOM Message
+   * @param sm pending ClientMessageWrapper
    * @param replicaId recovered replica's id
    * @param sign if a signature should be added
    */
-  private void retransmitMessage(TOMMessage sm, int replicaId, boolean sign) {
+  private void retransmitMessage(ClientMessageWrapper sm, int replicaId, boolean sign) {
     // No pending request then abort;
     if (sm == null) {
       return;
@@ -597,19 +595,17 @@ public class NettyClientServerCommunicationSystemClientSide
     logger.info(
         "Re-transmitting request from {} with sequence number {} to {}",
         sm.getSender(),
-        sm.getSequence(),
+        sm.getClientSequence(),
         replicaId);
+
+    // if message was not yet serialized, serialize it and cache it in the
     if (sm.serializedMessage == null) {
       serializeMessage(sm);
     }
     if (sign && sm.serializedMessageSignature == null) {
       sm.serializedMessageSignature = signMessage(privKey, sm.serializedMessage);
     }
-    try {
-      sm = (TOMMessage) sm.clone();
-    } catch (CloneNotSupportedException e) {
-      logger.error("Failed to clone TOMMessage", e);
-    }
+    sm = sm.clone();
     sm.destination = replicaId;
     rl.readLock().lock();
     Channel channel = sessionClientToReplica.get(replicaId).getChannel();

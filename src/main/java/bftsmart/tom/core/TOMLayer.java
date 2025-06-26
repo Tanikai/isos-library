@@ -33,14 +33,10 @@ import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.leaderchange.RequestsTimer;
 import bftsmart.tom.server.Recoverable;
 import bftsmart.tom.server.RequestVerifier;
-import bftsmart.tom.server.defaultservices.DefaultRecoverable;
-import bftsmart.tom.server.defaultservices.DefaultSingleRecoverable;
 import bftsmart.tom.util.BatchBuilder;
 import bftsmart.tom.util.BatchReader;
 import bftsmart.tom.util.TOMUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import isos.message.ClientMessageWrapper;
 import java.io.Serializable;
 import java.security.*;
 import java.util.HashMap;
@@ -51,6 +47,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class implements the state machine replication protocol described in Joao Sousa's 'From
@@ -327,12 +325,16 @@ public final class TOMLayer extends Thread implements RequestReceiver {
    * This method is invoked by the communication system to deliver a request. It assumes that the
    * communication system delivers the message in FIFO order.
    *
-   * @param msg The request being received
+   * @param sm The request being received
    * @param fromClient Whether the request was received from a client or was part of a forwarded
    *     message
    */
   @Override
-  public void requestReceived(TOMMessage msg, boolean fromClient) {
+  public void requestReceived(ClientMessageWrapper sm, boolean fromClient) {
+
+    // FIXME: TOMLayer should use ClientMessageWrapper
+//    var msg = (TOMMessage) sm;
+    var msg = new TOMMessage();
 
     if (!doWork) return;
 
