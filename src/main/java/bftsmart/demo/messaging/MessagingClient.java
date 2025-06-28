@@ -8,7 +8,7 @@ import java.io.*;
 
 public class MessagingClient {
 
-  private final static Logger logger = LoggerFactory.getLogger("MessagingClient");
+  private static final Logger logger = LoggerFactory.getLogger("MessagingClient");
 
   public static void main(String[] args) throws IOException {
     logger.info("Start client");

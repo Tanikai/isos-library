@@ -16,6 +16,7 @@ package bftsmart.tom.core.messages;
 
 import bftsmart.communication.SystemMessage;
 import bftsmart.tom.util.DebugInfo;
+import isos.communication.ClientMessageWrapper;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
@@ -30,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 /** This class represents a total ordered message used in BFT-SMaRt, sent by the client to a replica.
  *
- * @see isos.message.ClientMessageWrapper */
+ * @see ClientMessageWrapper */
 public class TOMMessage extends SystemMessage implements Externalizable, Comparable, Cloneable {
 
   public transient long timestamp = 0; // timestamp to be used by the application

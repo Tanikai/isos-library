@@ -7,7 +7,7 @@ import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.Extractor;
 import bftsmart.tom.util.KeyLoader;
 import bftsmart.tom.util.TOMUtil;
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;

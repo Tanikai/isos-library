@@ -36,7 +36,7 @@ import bftsmart.tom.server.RequestVerifier;
 import bftsmart.tom.util.BatchBuilder;
 import bftsmart.tom.util.BatchReader;
 import bftsmart.tom.util.TOMUtil;
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 import java.io.Serializable;
 import java.security.*;
 import java.util.HashMap;

@@ -14,7 +14,10 @@
  */
 package bftsmart.communication.client;
 
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
+import isos.utils.ReplicaId;
+
+import java.util.List;
 
 /**
  * Methods that should be implemented by the client side of the client-server communication system
@@ -22,7 +25,7 @@ import isos.message.ClientMessageWrapper;
  * @author Paulo
  */
 public interface CommunicationSystemClientSide {
-  void send(boolean sign, int[] targets, ClientMessageWrapper sm, int quorumSize);
+  void send(boolean sign, List<ReplicaId> targets, ClientMessageWrapper sm, int quorumSize);
 
   void setReplyReceiver(ReplyReceiver trr);
 
@@ -33,5 +36,4 @@ public interface CommunicationSystemClientSide {
   // ******* EDUARDO BEGIN **************//
   void updateConnections();
   // ******* EDUARDO END **************//
-
 }

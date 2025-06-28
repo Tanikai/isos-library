@@ -53,7 +53,7 @@ public class ISOSApplication {
     try {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
       // TODO: Add Request Receiver
-//      this.scs.setRequestReceiver();
+      //      this.scs.setRequestReceiver();
     } catch (Exception e) {
       // FIXME Kai: Handle exception (or just remove exception from constructor)
     }

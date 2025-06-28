@@ -14,7 +14,7 @@
  */
 package bftsmart.communication.client;
 
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 
 /**
  * Interface for clients to receive messages/replies from replicas. See {@link RequestReceiver} for

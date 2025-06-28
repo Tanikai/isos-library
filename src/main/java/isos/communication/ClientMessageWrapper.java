@@ -1,12 +1,16 @@
-package isos.message;
+package isos.communication;
 
 import bftsmart.communication.SystemMessage;
 import java.io.*;
 
 /**
- * This wrapper class is used to store all metadata that is required to send this message. The
- * actual contents are contained in the {@link #payload} field. It is a general class, i.e. the
- * communication system has no information about the semantics of the payload.
+ * This wrapper class is used to store all metadata that is required to send this message. It is
+ * adapted from {@link bftsmart.tom.core.messages.TOMMessage}, but generalized, i.e., without the
+ * BFT-SMaRt-specific consensus aspects. It can be sent from Client->Replica or Replica->Client.
+ *
+ * <p>The actual contents are contained in the {@link #payload} field. It is a general class, i.e.
+ * the communication system has no information about the semantics of the payload or the used
+ * consensus algorithm. It is used both on the client and replica side.
  */
 public class ClientMessageWrapper extends SystemMessage
     implements Externalizable, Comparable<ClientMessageWrapper>, Cloneable {
@@ -25,6 +29,7 @@ public class ClientMessageWrapper extends SystemMessage
   public transient int retry = 4;
 
   // TODO: do I need replyServer?
+  // TODO: Information about whether the message originated from client or server
 
   public transient ClientMessageWrapper reply; // reply associated with this message
 
@@ -55,7 +60,8 @@ public class ClientMessageWrapper extends SystemMessage
 
   @Override
   public ClientMessageWrapper clone() {
-    ClientMessageWrapper clone = new ClientMessageWrapper(sender, clientSession, clientSequence, payload);
+    ClientMessageWrapper clone =
+        new ClientMessageWrapper(sender, clientSession, clientSequence, payload);
 
     clone.signed = this.signed;
     clone.serializedMessage = this.serializedMessage;
@@ -134,6 +140,7 @@ public class ClientMessageWrapper extends SystemMessage
     ClientMessageWrapper mc = (ClientMessageWrapper) o;
 
     return (mc.getSender() == this.sender) && (mc.payload == this.payload);
+    // FIXME Kai: when are two messages equal?
   }
 
   @Override

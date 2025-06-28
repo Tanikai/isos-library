@@ -9,5 +9,6 @@ import isos.utils.ReplicaId;
  */
 public interface MessageSender {
   void sendToReplicas(ReplicaId[] targets, SystemMessage sm);
+
   void broadcastToReplicas(boolean includeSelf, SystemMessage sm);
 }

@@ -14,7 +14,7 @@
  */
 package bftsmart.communication.client;
 
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 
 /** Interface that receives requests/commands from Clients. See {@link ReplyReceiver} for the counterpart. */
 public interface RequestReceiver {

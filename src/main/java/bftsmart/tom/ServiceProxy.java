@@ -25,7 +25,7 @@ import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.Extractor;
 import bftsmart.tom.util.KeyLoader;
 import bftsmart.tom.util.TOMUtil;
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +35,7 @@ import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * This class implements a TOMSender and represents a proxy to be used on the Clients. It sends a
+ * This class extends a TOMSender and represents a proxy to be used on the Clients. It sends a
  * request to the replicas, receives the reply, and delivers it to the application.
  */
 public class ServiceProxy extends TOMSender {

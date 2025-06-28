@@ -14,7 +14,7 @@
  */
 package bftsmart.communication.client;
 
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 
 /**
  * Methods that should be implemented by the server side of the client-server communication system

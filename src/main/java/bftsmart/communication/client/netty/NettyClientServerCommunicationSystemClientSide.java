@@ -32,7 +32,8 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.GenericFutureListener;
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
+import isos.utils.ReplicaId;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -43,10 +44,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.InvalidKeySpecException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -279,11 +277,11 @@ public class NettyClientServerCommunicationSystemClientSide
    * @param sm Message to be sent.
    */
   @Override
-  public void send(boolean sign, int[] targets, ClientMessageWrapper sm, int quorumSize) {
+  public void send(boolean sign, List<ReplicaId> targets, ClientMessageWrapper sm, int quorumSize) {
     int quorum = quorumSize;
 
-    Integer[] targetArray = Arrays.stream(targets).boxed().toArray(Integer[]::new);
-    Collections.shuffle(Arrays.asList(targetArray), new Random());
+    List<ReplicaId> shuffledTargets = new ArrayList<>(targets);
+    Collections.shuffle(shuffledTargets, new Random());
 
     listener.waitForChannels(quorum); // wait for the previous transmission to complete
 
@@ -291,7 +289,7 @@ public class NettyClientServerCommunicationSystemClientSide
         "Sending request from {} with sequence number {} to {}",
         sm.getSender(),
         sm.getClientSequence(),
-        Arrays.toString(targetArray));
+            shuffledTargets);
 
     this.pendingRequest = sm;
     this.pendingRequestSign = sign;
@@ -310,16 +308,16 @@ public class NettyClientServerCommunicationSystemClientSide
 
     int sent = 0;
 
-    for (int target : targetArray) {
+    for (ReplicaId target : shuffledTargets) {
       // This is done to avoid a race condition with the writeAndFlush method. Since the method
       // is asynchronous, each iteration of this loop could overwrite the destination of the
       // previous one
       sm = sm.clone();
 
-      sm.destination = target;
+      sm.destination = target.value();
 
       rl.readLock().lock();
-      Channel channel = sessionClientToReplica.get(target).getChannel();
+      Channel channel = sessionClientToReplica.get(target.value()).getChannel();
       rl.readLock().unlock();
       if (channel.isActive()) {
         sm.signed = sign;
@@ -340,7 +338,7 @@ public class NettyClientServerCommunicationSystemClientSide
     //      // if less than f+1 servers are connected send an exception to the client
     //      throw new RuntimeException("Impossible to connect to servers!");
     //    }
-    if (targets.length == 1 && sent == 0) throw new RuntimeException("Server not connected");
+    if (targets.size() == 1 && sent == 0) throw new RuntimeException("Server not connected");
   }
 
   /**

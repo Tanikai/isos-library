@@ -20,7 +20,7 @@ import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.ServersCommunicationLayer;
 import bftsmart.configuration.ConfigurationManager;
 import isos.communication.MessageSender;
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 import isos.utils.ReplicaId;
 import java.util.Arrays;
 import java.util.List;

@@ -7,7 +7,7 @@ import bftsmart.communication.client.RequestReceiver;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.message.TestMessage;
 import bftsmart.tom.util.KeyLoader;
-import isos.message.ClientMessageWrapper;
+import isos.communication.ClientMessageWrapper;
 import java.util.concurrent.locks.Lock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

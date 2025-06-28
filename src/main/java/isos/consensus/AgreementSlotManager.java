@@ -3,6 +3,7 @@ package isos.consensus;
 import bftsmart.communication.MessageHandler;
 import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
+import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
 import isos.graph.DependencyWaitFunction;
 import isos.graph.RequestConflictChecker;
