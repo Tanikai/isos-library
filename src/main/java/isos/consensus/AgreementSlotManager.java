@@ -10,10 +10,8 @@ import isos.graph.RequestConflictChecker;
 import isos.message.*;
 import isos.utils.ReplicaId;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -239,58 +237,21 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   public void requestReceived(ClientMessageWrapper msg, boolean fromClient) {
     // TODO Kai line 11: assert r correctly signed (-> should be done in networking layer)
 
-    // For testing with MessagingExampleClient
-    var payload = msg.getPayload();
-    try (ByteArrayInputStream bis = new ByteArrayInputStream(payload);
+    try (ByteArrayInputStream bis = new ByteArrayInputStream(msg.getPayload());
         ObjectInputStream ois = new ObjectInputStream(bis)) {
       OrderedClientRequest r = (OrderedClientRequest) ois.readObject();
+      // when we receive a new request, we create a new entry in our own sequence
+      SequenceNumber newSlot =
+          this.replicaAgreementSlots.get(ownReplicaId).createLowestUnusedSequenceNumberEntry(r);
+      // then initialize the agreement slot with the thread
+      this.initializeEmptyAgreementSlot(newSlot);
 
-      logger.info("Received OrderedClientRequest from client: {}", r);
-    } catch (IOException | ClassNotFoundException e) {
-      logger.warn("Failed to deserialize OrderedClientRequest from client payload", e);
-    }
-
-    var responseMessage = "Hello back from replica!";
-    var responseObj = new OrderedClientReply(responseMessage.getBytes());
-    byte[] responseBytes = null;
-    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bos)) {
-      oos.writeObject(responseObj);
-      oos.flush();
-      responseBytes = bos.toByteArray();
     } catch (IOException e) {
-      logger.warn("Failed to serialize OrderedClientReply for client response", e);
-      return;
+      // FIXME
+      logger.warn("");
+    } catch (ClassNotFoundException e) {
+      // FIXME
+      logger.warn("");
     }
-
-    ClientMessageWrapper response =
-        new ClientMessageWrapper(
-            this.ownReplicaId.value(),
-            msg.getClientSession(),
-            msg.getClientSequence(),
-            responseBytes);
-
-    int[] receivers = new int[1];
-    receivers[0] = msg.getSender();
-    this.msgSender.sendToClients(receivers, response);
-    // end testing
-
-    //    try (ByteArrayInputStream bis = new ByteArrayInputStream(payload);
-    //        ObjectInputStream ois = new ObjectInputStream(bis)) {
-    //      OrderedClientRequest r = (OrderedClientRequest) ois.readObject();
-    //      // when we receive a new request, we create a new entry in our own sequence
-    //      SequenceNumber newSlot =
-    //
-    // this.replicaAgreementSlots.get(ownReplicaId).createLowestUnusedSequenceNumberEntry(r);
-    //      // then initialize the agreement slot with the thread
-    //      this.initializeEmptyAgreementSlot(newSlot);
-    //
-    //    } catch (IOException e) {
-    //      // FIXME
-    //      logger.warn("");
-    //    } catch (ClassNotFoundException e) {
-    //      // FIXME
-    //      logger.warn("");
-    //    }
   }
 }
