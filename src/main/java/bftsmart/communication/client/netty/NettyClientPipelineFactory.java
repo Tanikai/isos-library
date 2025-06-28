@@ -22,8 +22,6 @@ import io.netty.handler.codec.MessageToByteEncoder;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import bftsmart.reconfiguration.ClientViewController;
-
 public class NettyClientPipelineFactory {
 
   NettyClientServerCommunicationSystemClientSide ncs;
@@ -43,11 +41,11 @@ public class NettyClientPipelineFactory {
   }
 
   public ByteToMessageDecoder getDecoder() {
-    return new NettyTOMMessageDecoder(true, sessionTable, configManager, rl);
+    return new NettyClientMessageDecoder(true, sessionTable, configManager, rl);
   }
 
   public MessageToByteEncoder getEncoder() {
-    return new NettyTOMMessageEncoder(true, sessionTable, rl);
+    return new NettyClientMessageEncoder(true, sessionTable, rl);
   }
 
   public SimpleChannelInboundHandler getHandler() {

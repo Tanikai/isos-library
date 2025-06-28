@@ -14,28 +14,25 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.configuration.ConfigurationManager;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.ByteToMessageDecoder;
+import isos.communication.ClientMessageWrapper;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import bftsmart.configuration.ConfigurationManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import bftsmart.reconfiguration.ViewController;
-import bftsmart.tom.core.messages.TOMMessage;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.ByteToMessageDecoder;
 
 /**
  * @author Paulo Sousa
  */
-public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
+public class NettyClientMessageDecoder extends ByteToMessageDecoder {
 
-  private Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   /** number of measures used to calculate statistics */
   // private final int BENCHMARK_PERIOD = 10000;
@@ -47,7 +44,7 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
   private ReentrantReadWriteLock rl;
   private int bytesToSkip;
 
-  public NettyTOMMessageDecoder(
+  public NettyClientMessageDecoder(
       boolean isClient,
       ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable,
       ConfigurationManager configManager,
@@ -58,7 +55,6 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
     this.configManager = configManager;
     this.rl = rl;
     this.bytesToSkip = 0;
-    logger.debug("new NettyTOMMessageDecoder!!, isClient=" + isClient);
     logger.trace(
         "\n\t isClient: {};"
             + "\n\t sessionTable: {};"
@@ -93,7 +89,6 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
       }
 
       dataLength = buffer.getInt(buffer.readerIndex());
-
       // Logger.println("Receiving message with "+dataLength+" bytes.");
 
       // Skip the request if it is too large
@@ -134,14 +129,11 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
       buffer.readBytes(signature);
     }
 
-    DataInputStream dis = null;
-    TOMMessage sm = null;
-
-    try {
-      ByteArrayInputStream bais = new ByteArrayInputStream(data);
-      dis = new DataInputStream(bais);
-      sm = new TOMMessage();
+    try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+        DataInputStream dis = new DataInputStream(bais); ) {
+      var sm = new ClientMessageWrapper();
       sm.rExternal(dis);
+
       sm.serializedMessage = data;
 
       if (signature != null) {
@@ -167,12 +159,13 @@ public class NettyTOMMessageDecoder extends ByteToMessageDecoder {
         }
       }
       logger.debug(
-          "Decoded reply from " + sm.getSender() + " with sequence number " + sm.getSequence());
+          "Decoded reply from "
+              + sm.getSender()
+              + " with sequence number "
+              + sm.getClientSequence());
       list.add(sm);
     } catch (Exception ex) {
-
-      logger.error("Failed to decode TOMMessage", ex);
+      logger.error("Failed to decode ClientMessageWrapper", ex);
     }
-    return;
   }
 }

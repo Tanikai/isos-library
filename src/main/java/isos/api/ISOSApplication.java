@@ -52,8 +52,7 @@ public class ISOSApplication {
             ownReplicaId, timeoutConf, configManager.getStaticConf().getInitialViewAsReplicaId());
     try {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
-      // TODO: Add Request Receiver
-      //      this.scs.setRequestReceiver();
+      this.scs.setRequestReceiver(this.agrSlotManager);
     } catch (Exception e) {
       // FIXME Kai: Handle exception (or just remove exception from constructor)
     }

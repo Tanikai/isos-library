@@ -14,24 +14,23 @@
  */
 package bftsmart.communication.client.netty;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import bftsmart.tom.core.messages.TOMMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
+import isos.communication.ClientMessageWrapper;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class NettyTOMMessageEncoder extends MessageToByteEncoder<TOMMessage> {
+public class NettyClientMessageEncoder extends MessageToByteEncoder<ClientMessageWrapper> {
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private boolean isClient;
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
   private ReentrantReadWriteLock rl;
 
-  public NettyTOMMessageEncoder(
+  public NettyClientMessageEncoder(
       boolean isClient,
       ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable,
       ReentrantReadWriteLock rl) {
@@ -41,7 +40,7 @@ public class NettyTOMMessageEncoder extends MessageToByteEncoder<TOMMessage> {
   }
 
   @Override
-  protected void encode(ChannelHandlerContext context, TOMMessage sm, ByteBuf buffer)
+  protected void encode(ChannelHandlerContext context, ClientMessageWrapper sm, ByteBuf buffer)
       throws Exception {
     byte[] msgData;
     byte[] signatureData = null;
@@ -53,9 +52,9 @@ public class NettyTOMMessageEncoder extends MessageToByteEncoder<TOMMessage> {
     }
 
     int dataLength =
-        Integer.BYTES
-            + msgData.length
-            + Integer.BYTES
+        Integer.BYTES // integer of message length
+            + msgData.length // actual message
+            + Integer.BYTES // integer of signature length
             + (signatureData != null ? signatureData.length : 0);
 
     /* msg size */

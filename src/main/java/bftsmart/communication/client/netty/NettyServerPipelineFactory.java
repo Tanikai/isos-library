@@ -18,20 +18,15 @@ import bftsmart.configuration.ConfigurationManager;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
-
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import bftsmart.reconfiguration.ServerViewController;
-
 public class NettyServerPipelineFactory {
 
-  // TODO Kai: can be set to private?
-  ConfigurationManager configManager;
-  NettyClientServerCommunicationSystemServerSide ncs;
-  ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
-  ReentrantReadWriteLock rl;
+  private final ConfigurationManager configManager;
+  private final NettyClientServerCommunicationSystemServerSide ncs;
+  private final ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
+  private final ReentrantReadWriteLock rl;
 
   public NettyServerPipelineFactory(
       NettyClientServerCommunicationSystemServerSide ncs,
@@ -45,11 +40,11 @@ public class NettyServerPipelineFactory {
   }
 
   public ByteToMessageDecoder getDecoder() {
-    return new NettyTOMMessageDecoder(false, sessionTable, configManager, rl);
+    return new NettyClientMessageDecoder(false, sessionTable, configManager, rl);
   }
 
   public MessageToByteEncoder getEncoder() {
-    return new NettyTOMMessageEncoder(false, sessionTable, rl);
+    return new NettyClientMessageEncoder(false, sessionTable, rl);
   }
 
   public SimpleChannelInboundHandler getHandler() {

@@ -48,6 +48,11 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
 
   private List<ReplicaId> currentOverallView;
 
+
+  public ISOSClient(int processId) {
+    this(processId, null, null);
+  }
+
   public ISOSClient(int processId, String configHome, KeyLoader loader) {
     if (configHome == null) {
       this.configManager = new ConfigurationManager(processId, loader);
@@ -177,6 +182,10 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
       this.currentRequestContext.processReply(reply);
     } catch (QuorumNotReachedException e) {
       // quorum is impossible to reach. Clean up context and return error
+      logger.error(e.getMessage());
+    } catch (Exception e) {
+      logger.error(e.getMessage());
+
     }
   }
 }

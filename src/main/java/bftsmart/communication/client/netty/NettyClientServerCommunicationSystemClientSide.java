@@ -33,6 +33,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.GenericFutureListener;
 import isos.communication.ClientMessageWrapper;
+import isos.utils.NotImplementedException;
 import isos.utils.ReplicaId;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -148,7 +149,7 @@ public class NettyClientServerCommunicationSystemClientSide
   // TODO Kai: is this even needed for the communication channel? Can't this be solved somehow else?
   @Override
   public void updateConnections() {
-    return;
+    throw new NotImplementedException();
     //    int[] currV = controller.getCurrentViewProcesses();
     //    try {
     //      // open connections with new servers
@@ -199,8 +200,6 @@ public class NettyClientServerCommunicationSystemClientSide
 
   @Override
   public void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
-    logger.debug("channelRead0(ChannelHandlerContext ctx, TOMMessage sm).");
-
     if (closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
@@ -289,7 +288,7 @@ public class NettyClientServerCommunicationSystemClientSide
         "Sending request from {} with sequence number {} to {}",
         sm.getSender(),
         sm.getClientSequence(),
-            shuffledTargets);
+        shuffledTargets);
 
     this.pendingRequest = sm;
     this.pendingRequestSign = sign;
@@ -322,6 +321,7 @@ public class NettyClientServerCommunicationSystemClientSide
       if (channel.isActive()) {
         sm.signed = sign;
         ChannelFuture f = channel.writeAndFlush(sm);
+        logger.info("write message to client->server channel");
 
         f.addListener(listener);
 
@@ -345,7 +345,7 @@ public class NettyClientServerCommunicationSystemClientSide
    * Serializes the message to the serializedMessage field of the passed ClientMessageWrapper
    * object.
    *
-   * @param sm TOMMessage to be serialized
+   * @param sm ClientMessageWrapper to be serialized
    */
   private void serializeMessage(ClientMessageWrapper sm) {
     // serialize message
@@ -380,7 +380,7 @@ public class NettyClientServerCommunicationSystemClientSide
       sm.serializedMessage = data;
     } catch (IOException ex) {
 
-      logger.error("Failed to sign TOMMessage", ex);
+      logger.error("Failed to sign ClientMessageWrapper", ex);
     }
 
     // produce signature

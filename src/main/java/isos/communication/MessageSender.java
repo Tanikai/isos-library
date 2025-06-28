@@ -8,6 +8,8 @@ import isos.utils.ReplicaId;
  * message. The functions have to be thread-safe.
  */
 public interface MessageSender {
+  void sendToClients(int[] targets, ClientMessageWrapper sm);
+
   void sendToReplicas(ReplicaId[] targets, SystemMessage sm);
 
   void broadcastToReplicas(boolean includeSelf, SystemMessage sm);

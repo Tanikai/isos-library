@@ -108,7 +108,7 @@ public class MessagingReplica extends Thread {
       var responsePayload = ("This is the reply").getBytes();
       var receivers = new int[1];
       receivers[0] = sender;
-      this.scs.sendToClient(
+      this.scs.sendToClients(
           receivers,
           new ClientMessageWrapper(
               sm.getSender(), sm.getClientSession(), sm.getClientSequence(), responsePayload));

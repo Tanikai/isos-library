@@ -19,8 +19,8 @@ import bftsmart.communication.client.CommunicationSystemServerSideFactory;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.ServersCommunicationLayer;
 import bftsmart.configuration.ConfigurationManager;
-import isos.communication.MessageSender;
 import isos.communication.ClientMessageWrapper;
+import isos.communication.MessageSender;
 import isos.utils.ReplicaId;
 import java.util.Arrays;
 import java.util.List;
@@ -190,7 +190,7 @@ public class ServerCommunicationSystem extends Thread implements MessageSender {
    * @param targets
    * @param sm
    */
-  public void sendToClient(int[] targets, ClientMessageWrapper sm) {
+  public void sendToClients(int[] targets, ClientMessageWrapper sm) {
     this.sendExecutor.submit(
         () -> {
           clientsConn.send(targets, sm, false);

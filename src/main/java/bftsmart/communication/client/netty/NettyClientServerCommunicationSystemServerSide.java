@@ -221,13 +221,12 @@ public class NettyClientServerCommunicationSystemServerSide
 
   @Override
   protected void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
-
     if (this.closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
     }
 
-    // delivers message to TOMLayer
+    // delivers message to RequestReceiver
     if (requestReceiver == null) logger.warn("Request receiver is still null!");
     else requestReceiver.requestReceived(sm, true);
   }
