@@ -321,7 +321,6 @@ public class NettyClientServerCommunicationSystemClientSide
       if (channel.isActive()) {
         sm.signed = sign;
         ChannelFuture f = channel.writeAndFlush(sm);
-        logger.info("write message to client->server channel");
 
         f.addListener(listener);
 

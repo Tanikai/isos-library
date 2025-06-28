@@ -16,7 +16,7 @@ public class MessagingExampleClient {
   public static void main(String[] args) throws IOException {
     int processId = 1;
     try (ISOSClient client = new ISOSClient(processId)) {
-      client.setCurrentQuorumSize(1); // test with reply from just 1 replica
+      client.setCurrentQuorumSize(3); // We want 3 responses before we return the result
       logger.info("Try sending message");
 
       byte[] msg = ("Hello from client!").getBytes();
