@@ -3,6 +3,7 @@ package isos.message.viewchange;
 import static org.junit.jupiter.api.Assertions.*;
 
 import isos.consensus.SequenceNumber;
+import isos.message.OrderedClientRequest;
 import isos.message.fast.DepProposeMessage;
 import isos.message.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
@@ -20,30 +21,29 @@ class ViewChangeMessageSerializationTest {
     SequenceNumber seqNum = new SequenceNumber(2, 42);
     ViewNumber viewNumber = new ViewNumber(5);
     ReplicaId coordinatorId = new ReplicaId(2);
-    DepProposeMessage depPropose = new DepProposeMessage(
-        seqNum,
-        coordinatorId,
-        "hashViewChange",
-        new isos.consensus.DependencySet(),
-        new HashSet<>()
-    );
+    OrderedClientRequest clientRequest =
+        new OrderedClientRequest(88, new byte[] {4, 5, 6}, 654321L);
+    DepProposeMessage depPropose =
+        new DepProposeMessage(
+            seqNum,
+            coordinatorId,
+            "hashViewChange",
+            new isos.consensus.DependencySet(),
+            new HashSet<>(),
+            clientRequest);
     List<DepVerifyMessage> depVerifies = new ArrayList<>();
-    depVerifies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new isos.consensus.DependencySet()));
+    depVerifies.add(
+        new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new isos.consensus.DependencySet()));
     Set<NewViewMessage> viewChanges = new HashSet<>();
     viewChanges.add(new NewViewMessage(seqNum, viewNumber, new ReplicaId(4), null));
 
-    ViewChangeMessage original = new ViewChangeMessage(
-        seqNum,
-        viewNumber,
-        coordinatorId,
-        depPropose,
-        depVerifies,
-        viewChanges
-    );
+    ViewChangeMessage original =
+        new ViewChangeMessage(
+            seqNum, viewNumber, coordinatorId, depPropose, depVerifies, viewChanges);
 
     byte[] bytes;
     try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-         ObjectOutputStream out = new ObjectOutputStream(bos)) {
+        ObjectOutputStream out = new ObjectOutputStream(bos)) {
       out.writeObject(original);
       out.flush();
       bytes = bos.toByteArray();
@@ -51,16 +51,22 @@ class ViewChangeMessageSerializationTest {
 
     ViewChangeMessage deserialized;
     try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
-         ObjectInputStream in = new ObjectInputStream(bis)) {
+        ObjectInputStream in = new ObjectInputStream(bis)) {
       deserialized = (ViewChangeMessage) in.readObject();
     }
 
+    assertEquals(original, deserialized);
     assertEquals(original.seqNum(), deserialized.seqNum());
     assertEquals(original.viewNumber(), deserialized.viewNumber());
     assertEquals(original.coordinatorId(), deserialized.coordinatorId());
-    assertEquals(original.depPropose(), deserialized.depPropose());
-    assertEquals(original.depVerifies(), deserialized.depVerifies());
-    assertEquals(original.viewChanges(), deserialized.viewChanges());
-    assertEquals(original.msgType(), deserialized.msgType());
+    assertNotNull(deserialized.depPropose());
+    assertNotNull(deserialized.depPropose().request());
+    assertEquals(clientRequest.clientId(), deserialized.depPropose().request().clientId());
+    assertArrayEquals(clientRequest.command(), deserialized.depPropose().request().command());
+    assertEquals(
+        clientRequest.clientLocalTimestamp(),
+        deserialized.depPropose().request().clientLocalTimestamp());
+    assertEquals(
+        clientRequest.calculateHash(), deserialized.depPropose().request().calculateHash());
   }
 }

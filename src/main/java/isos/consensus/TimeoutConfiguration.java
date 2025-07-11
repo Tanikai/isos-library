@@ -1,7 +1,7 @@
 package isos.consensus;
 
 public class TimeoutConfiguration {
-  long delta;
+  long deltaMillis;
   long proposeTimeout;
   long commitTimeout;
   long viewChangeTimeout;
@@ -9,27 +9,27 @@ public class TimeoutConfiguration {
   long queryExecTimeout;
 
   public TimeoutConfiguration(long delta) {
-    this.setDelta(delta);
+    this.setDeltaMillis(delta);
   }
 
   /**
    * Requirement: Delta (∆) is the maximum one-way delay between replica (Section E, Progress
    * Guarantee)
    *
-   * @param delta
+   * @param deltaMillis Delay in milliseconds
    */
-  public void setDelta(long delta) {
-    this.delta = delta;
+  public void setDeltaMillis(long deltaMillis) {
+    this.deltaMillis = deltaMillis;
     // See pseudocode line 9
-    this.proposeTimeout = 2 * delta;
-    this.commitTimeout = 9 * delta;
-    this.viewChangeTimeout = 3 * delta;
-    this.viewChangeCommitTimeout = 3 * delta;
-    this.queryExecTimeout = 4 * delta;
+    this.proposeTimeout = 2 * this.deltaMillis;
+    this.commitTimeout = 9 * this.deltaMillis;
+    this.viewChangeTimeout = 3 * this.deltaMillis;
+    this.viewChangeCommitTimeout = 3 * this.deltaMillis;
+    this.queryExecTimeout = 4 * this.deltaMillis;
   }
 
-  public long getDelta() {
-    return delta;
+  public long getDeltaMillis() {
+    return deltaMillis;
   }
 
   public long getProposeTimeout() {

@@ -6,11 +6,9 @@ import bftsmart.communication.SystemMessage;
 import isos.consensus.DependencySet;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessageWrapper;
+import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -26,9 +24,12 @@ class DepProposeMessageWrapperSerializationTest {
     Set<ReplicaId> followerQuorum = new HashSet<>();
     followerQuorum.add(new ReplicaId(3));
     followerQuorum.add(new ReplicaId(4));
+    OrderedClientRequest clientRequest =
+        new OrderedClientRequest(99, new byte[] {1, 2, 3}, 123456L);
 
     DepProposeMessage depPropose =
-        new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
+        new DepProposeMessage(
+            seqNum, coordinatorId, requestHash, depSet, followerQuorum, clientRequest);
     ISOSMessageWrapper wrapper = new ISOSMessageWrapper(depPropose, coordinatorId.value());
 
     // Act
@@ -46,9 +47,9 @@ class DepProposeMessageWrapperSerializationTest {
       sm = (SystemMessage) in.readObject();
     }
 
-    assertTrue(sm instanceof ISOSMessageWrapper);
+    assertInstanceOf(ISOSMessageWrapper.class, sm);
     ISOSMessageWrapper deserializedWrapper = (ISOSMessageWrapper) sm;
-    assertTrue(deserializedWrapper.getPayload() instanceof DepProposeMessage);
+    assertInstanceOf(DepProposeMessage.class, deserializedWrapper.getPayload());
     DepProposeMessage deserialized = (DepProposeMessage) deserializedWrapper.getPayload();
 
     // Assert
@@ -59,5 +60,11 @@ class DepProposeMessageWrapperSerializationTest {
     assertEquals(depPropose.depSet(), deserialized.depSet());
     assertEquals(depPropose.followerQuorum(), deserialized.followerQuorum());
     assertEquals(depPropose.msgType(), deserialized.msgType());
+    assertNotNull(deserialized.request());
+    assertEquals(clientRequest.clientId(), deserialized.request().clientId());
+    assertArrayEquals(clientRequest.command(), deserialized.request().command());
+    assertEquals(
+        clientRequest.clientLocalTimestamp(), deserialized.request().clientLocalTimestamp());
+    assertEquals(clientRequest.calculateHash(), deserialized.request().calculateHash());
   }
 }

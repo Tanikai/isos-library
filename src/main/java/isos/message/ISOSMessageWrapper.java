@@ -27,7 +27,7 @@ public class ISOSMessageWrapper extends SystemMessage {
 
   public ISOSMessageWrapper(ISOSMessage payload, int sender) {
     this.payload = payload;
-    this.sender = sender; // sender needs to match with
+    this.sender = sender; // sender field needs to match with actual sender
   }
 
   public ISOSMessage getPayload() {

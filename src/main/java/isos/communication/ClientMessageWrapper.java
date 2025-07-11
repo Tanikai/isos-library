@@ -1,6 +1,7 @@
 package isos.communication;
 
 import bftsmart.communication.SystemMessage;
+import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +46,13 @@ public class ClientMessageWrapper extends SystemMessage
     this.sender = sender;
     this.clientSession = clientSession;
     this.clientSequence = clientSequence;
+    this.payload = payload;
+  }
+
+  public ClientMessageWrapper(ReplicaId replicaSender, ClientMessageWrapper clientRequest, byte[] payload) {
+    this.sender = replicaSender.value();
+    this.clientSession = clientRequest.getClientSession();
+    this.clientSequence = clientRequest.getClientSequence();
     this.payload = payload;
   }
 
