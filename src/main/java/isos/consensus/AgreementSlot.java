@@ -40,7 +40,7 @@ public class AgreementSlot {
   }
 
   public AgreementSlot(SequenceNumber seqNum, OrderedClientRequest r) {
-    this(seqNum, r, null, new HashMap<>(), AgreementSlotPhase.NULL, new HashMap<>(), new ViewNumber(), new HashMap<>());
+    this(seqNum, r, null, new HashMap<>(), AgreementSlotPhase.INIT, new HashMap<>(), new ViewNumber(), new HashMap<>());
   }
 
   public AgreementSlot(SequenceNumber seqNum, OrderedClientRequest request, DepProposeMessage depPropose,
