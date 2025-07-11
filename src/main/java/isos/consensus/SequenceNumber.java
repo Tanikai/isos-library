@@ -48,4 +48,16 @@ public record SequenceNumber(int replicaId, int sequenceCounter)
   public String toString() {
     return String.format("%d.%d", this.replicaId, this.sequenceCounter);
   }
+
+  public static SequenceNumber nextSequenceNumber(SequenceNumber current) {
+    return new SequenceNumber(current.replicaId(), current.sequenceCounter() + 1);
+  }
+
+  public static SequenceNumber prevSequenceNumber(SequenceNumber current) throws IllegalArgumentException {
+    if (current.sequenceCounter() == 0) {
+      throw new IllegalArgumentException("SequenceNumber below 0 is not possible");
+    }
+
+    return new SequenceNumber(current.replicaId(), current.sequenceCounter() - 1);
+  }
 }

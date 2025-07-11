@@ -6,7 +6,6 @@ import bftsmart.communication.SystemMessage;
 import isos.consensus.DependencySet;
 import isos.consensus.SequenceNumber;
 import isos.message.ISOSMessageWrapper;
-import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.io.*;
 import java.util.HashSet;
@@ -24,12 +23,9 @@ class DepProposeMessageWrapperSerializationTest {
     Set<ReplicaId> followerQuorum = new HashSet<>();
     followerQuorum.add(new ReplicaId(3));
     followerQuorum.add(new ReplicaId(4));
-    OrderedClientRequest clientRequest =
-        new OrderedClientRequest(99, new byte[] {1, 2, 3}, 123456L);
 
     DepProposeMessage depPropose =
-        new DepProposeMessage(
-            seqNum, coordinatorId, requestHash, depSet, followerQuorum, clientRequest);
+        new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
     ISOSMessageWrapper wrapper = new ISOSMessageWrapper(depPropose, coordinatorId.value());
 
     // Act
@@ -60,11 +56,5 @@ class DepProposeMessageWrapperSerializationTest {
     assertEquals(depPropose.depSet(), deserialized.depSet());
     assertEquals(depPropose.followerQuorum(), deserialized.followerQuorum());
     assertEquals(depPropose.msgType(), deserialized.msgType());
-    assertNotNull(deserialized.request());
-    assertEquals(clientRequest.clientId(), deserialized.request().clientId());
-    assertArrayEquals(clientRequest.command(), deserialized.request().command());
-    assertEquals(
-        clientRequest.clientLocalTimestamp(), deserialized.request().clientLocalTimestamp());
-    assertEquals(clientRequest.calculateHash(), deserialized.request().calculateHash());
   }
 }

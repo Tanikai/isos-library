@@ -8,4 +8,8 @@ public record ViewNumber(int value) implements Serializable {
   public ViewNumber() {
     this(-1);
   }
+
+  public static ViewNumber increaseViewNumber(ViewNumber current) {
+    return new ViewNumber(current.value() + 1);
+  }
 }

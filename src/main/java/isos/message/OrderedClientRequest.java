@@ -35,7 +35,7 @@ public record OrderedClientRequest(int clientId, byte[] command, long clientLoca
   @Override
   public String calculateHash() {
     try {
-      java.security.MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
       digest.update(ByteBuffer.allocate(4).putInt(clientId).array());
       digest.update(command);
       digest.update(ByteBuffer.allocate(8).putLong(clientLocalTimestamp).array());

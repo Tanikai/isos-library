@@ -63,7 +63,7 @@ public class MessagingExample extends Thread {
     var seqNum = new SequenceNumber(replicaId, 0);
     var payload =
         new DepProposeMessage(
-            seqNum, new ReplicaId(replicaId), "abc", new DependencySet(), new HashSet<>(), null);
+            seqNum, new ReplicaId(replicaId), "abc", new DependencySet(), new HashSet<>());
     var msg = new ISOSMessageWrapper(payload, replicaId);
     if (replicaId == 0) {
       logger.info("Broadcast message to other replicas");

@@ -6,6 +6,7 @@ public enum ISOSMessageType {
   C_RESPONSE,
   // Fast Path
   DEP_PROPOSE,
+  DEP_PROPOSE_WITH_REQ,
   DEP_VERIFY,
   DEP_COMMIT,
   // Reconciliation Path
