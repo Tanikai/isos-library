@@ -33,9 +33,10 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   private final ConcurrentMap<ReplicaId, AgreementSlotSequence> replicaAgreementSlots;
 
   /** Message handling threads / supporting data structures */
-  private Map<SequenceNumber, BlockingQueue<ISOSMessage>> queueProcessorInputQueue;
+  private final Map<SequenceNumber, BlockingQueue<ISOSMessage>> queueProcessorInputQueue;
 
-  private Map<SequenceNumber, Thread> queueProcessorThreads;
+  private final Map<SequenceNumber, Thread> queueProcessorThreads;
+  private final Map<SequenceNumber, AgmtSlotQueueProcessor> queueProcessors;
   // Starting and reacting to timeouts happens inside the QueueProcessor
   private TimeoutConfiguration timeoutConfig;
 
@@ -54,6 +55,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
     this.queueProcessorInputQueue = new HashMap<>();
     this.queueProcessorThreads = new HashMap<>();
+    this.queueProcessors = new HashMap<>();
     for (var rId : replicaIds) {
       this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId));
     }
@@ -105,21 +107,21 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
 
     // Create processor for consensus algorithm
     // The QueueProcessor directly updates the fields in the AgreementSlot object.
-    Thread newQueueProcessor =
-        Thread.ofVirtual()
-            .name("AgmtSlot" + newSlot.toString())
-            .unstarted(
-                new AgmtSlotQueueProcessor(
-                    ownReplicaId,
-                    newSlot,
-                    inputQueue,
-                    timeoutConfig,
-                    msgSender,
-                    slot,
-                    conflictFunc,
-                    waitFunc));
-    this.queueProcessorThreads.put(newSlot, newQueueProcessor);
-    newQueueProcessor.start();
+    var queueProcessor =
+        new AgmtSlotQueueProcessor(
+            ownReplicaId,
+            newSlot,
+            inputQueue,
+            timeoutConfig,
+            msgSender,
+            slot,
+            conflictFunc,
+            waitFunc);
+    Thread newQueueProcessorThread =
+        Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
+    this.queueProcessorThreads.put(newSlot, newQueueProcessorThread);
+    this.queueProcessors.put(newSlot, queueProcessor);
+    newQueueProcessorThread.start();
   }
 
   /**
@@ -161,7 +163,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   }
 
   /**
-   * Waits for all dependencies in the Dependency Set.
+   * Waits for all dependencies in the Dependency Set. Called by QueueProcessors that have to wait
+   * for progress of their dependencies in order to proceed.
    *
    * <p>Requirement: "Followers strictly process the DepProposes of a coordinator in increasing
    * order of their sequence numbers, thereby ensuring that a coordinator cannot skip any sequence
@@ -177,19 +180,22 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   private void waitForDeps(Set<SequenceNumber> depSet) throws InterruptedException {
     CountDownLatch allDepLatch = new CountDownLatch(depSet.size());
 
-    // for every dependency in depSet, wait until either:
-    for (var dep : depSet) {
-      var replicaId = dep.replicaIdRec();
-      var slot = this.replicaAgreementSlots.get(replicaId).getAgreementSlotValue(dep);
-
-      // When waiting on conditions, we have to wait in a while loop due to spurious wakeups
-      while (slot.getDepPropose() == null // received valid DepPropose
-          && slot.getDepVerifies().size() < quorum // received f+1 correctly signed DepVerifys
-          && slot.getViewChanges().size() < quorum // received f+1 correctly signt ViewChanges
-      ) {
-        // TODO Kai: wait for condition
-        // While waiting, an InterruptedException can be thrown
-
+    // TODO Kai: maybe use structured concurrency for this use case?
+    try (var taskExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
+      // for every dependency in depSet, wait until either:
+      for (var dep : depSet) {
+        taskExecutor.submit(
+            () -> {
+              var replicaId = dep.replicaIdRec();
+              var processorSlot = this.queueProcessors.get(replicaId);
+              try {
+                processorSlot.awaitWaitConditionCompleted(quorum);
+                // After this, the condition of the agreement slot is
+                allDepLatch.countDown();
+              } catch (InterruptedException e) {
+                // what to do here? Rethrow interrupted exception?
+              }
+            });
       }
     }
 

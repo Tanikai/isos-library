@@ -33,7 +33,7 @@ public class AgreementSlot {
 
   // DECISION Kai: should SequenceNumber be stored in the AgreementSlot object as well, or only in
   // the AgreementSlotSequence? -> only stored in the sequence, so that coordination does not have to be
-  // DECISION kai: Should AgreementSlot be record, or normal object? - >
+  // DECISION kai: Should AgreementSlot be record, or normal object? -> normal object, due to frequent changes to the fields
 
   public AgreementSlot(SequenceNumber seqNum) {
     this(seqNum, null);
