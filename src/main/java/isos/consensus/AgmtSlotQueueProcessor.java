@@ -17,10 +17,7 @@ import isos.message.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -93,6 +90,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.seqNum = seqNum;
     this.incomingQueue = incomingQueue;
     this.timeoutConfig = timeoutConfig;
+    this.timeoutExecutor = new ScheduledThreadPoolExecutor(2); // TODO Kai: how to determine the corePoolSize?
     this.currentTimeouts = new HashMap<>();
     this.msgSender = msgSender;
     this.slot = slot;
@@ -111,6 +109,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @throws InterruptedException
    */
   public void awaitWaitConditionCompleted(int quorum) throws InterruptedException {
+    if (quorum < 2) {
+      logger.warn("Quorum is smaller than 2 (f+1 -> f is 0), is it correct?");
+    }
+
     this.slotLock.lock();
     try {
       while (slot.getDepPropose() == null // received valid DepPropose
@@ -146,6 +148,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // This case only happens if we receive a depPropose from another replica. For requests where
       // the current replica acts as the coordinator, see handleReceivedClientRequest().
       this.handleReceivedDepProposeWithRequest(depPropose);
+    } else if (msg instanceof DepProposeMessage depPropose) {
+      logger.error("Received DepPropose message without request, throwing away");
     } else if (msg instanceof DepVerifyMessage depVerify) {
       this.handleReceivedDepVerify(depVerify);
     } else if (msg instanceof DepCommitMessage depCommit) {
@@ -192,6 +196,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       this.slot.setRequest(r);
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // we have changed the messages in the slot, so signal all waiting threads
+
       this.messageCountCondition.signalAll();
     } finally {
       this.slotLock.unlock();
@@ -286,9 +291,13 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // Line 24: Wait for dependencies, and previous slot from coordinator co
-    var prevSlot = SequenceNumber.prevSequenceNumber(depPropose.seqNum());
     var waitDeps = new HashSet<>(depPropose.depSet().dependencies());
-    waitDeps.add(prevSlot); // wait for D ∪ s_{j−1}
+
+    // If we are the first sequence number, we do not have to wait for the previous one
+    if (depPropose.seqNum().sequenceCounter() > 0) {
+      var prevSlot = SequenceNumber.prevSequenceNumber(depPropose.seqNum());
+      waitDeps.add(prevSlot); // wait for D ∪ s_{j−1}
+    }
 
     // TODO: we have to wait in a loop with condition check
     try {

@@ -43,13 +43,13 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   /** Callbacks for threads to communicate with services */
   private MessageSender msgSender; // Handler for outgoing messages from the QueueProcessors
 
-  private int quorum; // TODO Kai: get f+1 quorum
+  private int quorum; // TODO Kai: Where to get f+1 quorum?
 
   /**
    * @param timeoutConfig
    */
   public AgreementSlotManager(
-      ReplicaId ownReplicaId, TimeoutConfiguration timeoutConfig, ReplicaId[] replicaIds) {
+      ReplicaId ownReplicaId, TimeoutConfiguration timeoutConfig, ReplicaId[] replicaIds, int quorumSize) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
@@ -61,6 +61,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     for (var rId : replicaIds) {
       this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId));
     }
+    this.quorum = quorumSize;
   }
 
   public void initialize(MessageSender msgSender) {
@@ -82,7 +83,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   }
 
   /**
-   * Initializes the queueProcessor thread and inputQueue for the given sequence number. To
+   * Initializes the queueProcessor, its Thread and inputQueue for the given sequence number. To
    * initialize the agreementSlot in the sequence, call the AgreementSlotSequence object.
    *
    * @param newSlot
@@ -132,13 +133,19 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    */
   public void createSequenceNumberEntry(SequenceNumber newSeqNum) {
     // Fast check: if newSeqNum is already initialized, return early
-    if (this.replicaAgreementSlots.containsKey(newSeqNum)) {
-      return;
-    }
+//    if (this.replicaAgreementSlots.containsKey(newSeqNum)) {
+//      return;
+//    }
+    // TODO Kai: this is wrong
 
     // Else: We have to initialize the sequence numbers from the lowest uninitialized agreementSlot
     ReplicaId replicaId = newSeqNum.replicaIdRec();
     AgreementSlotSequence sequence = this.replicaAgreementSlots.get(replicaId);
+
+    if (sequence == null) {
+      throw new RuntimeException(String.format("Sequence for ReplicaId %s was not yet initialized. ", replicaId));
+    }
+
     var createdNums =
         sequence.batchCreateSequenceNumberUntil(
             newSeqNum); // batch operation is more efficient due to locking
@@ -179,7 +186,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    *
    * @param depSet
    */
-  private void waitForDeps(Set<SequenceNumber> depSet) throws InterruptedException {
+  public void waitForDeps(Set<SequenceNumber> depSet) throws InterruptedException {
     CountDownLatch allDepLatch = new CountDownLatch(depSet.size());
 
     // TODO Kai: maybe use structured concurrency for this use case?
@@ -188,14 +195,16 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       for (var dep : depSet) {
         taskExecutor.submit(
             () -> {
-              var replicaId = dep.replicaIdRec();
-              var processorSlot = this.queueProcessors.get(replicaId);
+              var processorSlot = this.queueProcessors.get(dep);
               try {
                 processorSlot.awaitWaitConditionCompleted(quorum);
                 // After this, the condition of the agreement slot is
                 allDepLatch.countDown();
               } catch (InterruptedException e) {
                 // what to do here? Rethrow interrupted exception?
+                logger.error("Interrupted while waiting for slot {}", dep);
+              } catch (Exception e) {
+                logger.error("Exception in waitForDeps for slot {}: {}", dep, e.getMessage());
               }
             });
       }
