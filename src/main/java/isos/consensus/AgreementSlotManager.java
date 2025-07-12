@@ -56,6 +56,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     this.queueProcessorInputQueue = new HashMap<>();
     this.queueProcessorThreads = new HashMap<>();
     this.queueProcessors = new HashMap<>();
+    // Create agreement slot sequences for own replica and other replicas
+    this.replicaAgreementSlots.put(ownReplicaId, new AgreementSlotSequence(ownReplicaId));
     for (var rId : replicaIds) {
       this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId));
     }
