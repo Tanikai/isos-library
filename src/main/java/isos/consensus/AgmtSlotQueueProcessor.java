@@ -64,6 +64,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private final AgreementSlot slot;
 
   private final Lock slotLock;
+
+  /**
+   * When the DepPropose, DepVerify, or ViewChange messages change, this condition has to be
+   * notified
+   */
   private final Condition messageCountCondition;
 
   /**
@@ -90,7 +95,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.seqNum = seqNum;
     this.incomingQueue = incomingQueue;
     this.timeoutConfig = timeoutConfig;
-    this.timeoutExecutor = new ScheduledThreadPoolExecutor(2); // TODO Kai: how to determine the corePoolSize?
+    this.timeoutExecutor =
+        new ScheduledThreadPoolExecutor(2); // TODO Kai: how to determine the corePoolSize?
     this.currentTimeouts = new HashMap<>();
     this.msgSender = msgSender;
     this.slot = slot;
@@ -285,7 +291,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
     if (depPropose.seqNum().replicaId() != depPropose.coordinatorId().value()) {
-      logger.warn(
+      logger.error(
           "ReplicaId mismatch between sequence number and coordinatorId in depPropose message");
       return;
     }
@@ -303,9 +309,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
     try {
       this.dependencyWait.waitUntilConsensusStarted(waitDeps);
     } catch (InterruptedException e) {
-      // TODO: what should we do if interrupted? Just wait again? Should we check for certain
-      // conditions?
-      // e.g. if we are still running or not?
+      logger.error(
+          "Interrupted while waiting for dependencies {}. Stop processing depPropose.", waitDeps);
+      Thread.currentThread().interrupt();
+      return;
     }
 
     // Line 25
@@ -358,8 +365,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
   /** Processes incoming messages from the queue in a loop. */
   @Override
   public void run() {
-    this.running = true;
-
     // We have to differentiate whether the Queue Processor was created due to a received
     // ClientRequest, or just a Replica Message
 
@@ -369,15 +374,17 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // we can then set the agreement slot to step
     }
 
-    while (running) {
+    while (!Thread.currentThread().isInterrupted()) {
       try {
         ISOSMessage msg = this.incomingQueue.take();
         this.handleMessage(msg);
-
       } catch (InterruptedException e) {
         // interrupted while waiting to take new message from incomingQueue
-
+        logger.info("Interrupted while waiting for message in incomingQueue. Exiting.");
+        Thread.currentThread().interrupt(); // Re-interrupt to keep interrupted status
+        break;
       }
     }
+    logger.info("QueueProcessor has been stopped.");
   }
 }
