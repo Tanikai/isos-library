@@ -4,10 +4,8 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.nio.ByteBuffer;
+import java.util.*;
 
 /** Requirement: DependencySet has to be sent to other replicas. */
 public class DependencySet implements Externalizable {
@@ -65,5 +63,22 @@ public class DependencySet implements Externalizable {
     if (obj == null || getClass() != obj.getClass()) return false;
     DependencySet other = (DependencySet) obj;
     return depSet.equals(other.depSet);
+  }
+
+  /**
+   * Returns the DependencySet as a byte array in a consistent order.
+   *
+   * @return
+   */
+  public byte[] asBytes() {
+    List<SequenceNumber> depList = new ArrayList<>(this.depSet);
+    depList.sort(Comparator.naturalOrder());
+    // 4 bytes for replicaId, 4 bytes for sequenceCounter
+    var builder = ByteBuffer.allocate(8 * depList.size());
+    for (var d : depList) {
+      builder.putInt(d.replicaId());
+      builder.putInt(d.sequenceCounter());
+    }
+    return builder.array();
   }
 }
