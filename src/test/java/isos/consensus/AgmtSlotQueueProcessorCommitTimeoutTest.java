@@ -52,7 +52,8 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
             msgSender,
             slot,
             conflictChecker,
-            dependencyWait);
+            dependencyWait,
+            1);
 
     // Act
     Thread processorThread = new Thread(processor);

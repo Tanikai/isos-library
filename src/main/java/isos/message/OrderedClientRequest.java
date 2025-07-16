@@ -21,9 +21,7 @@ public record OrderedClientRequest(int clientId, byte[] command, long clientLoca
 
   public OrderedClientRequest {
     // Compact constructor
-    Objects.requireNonNull(clientId);
     Objects.requireNonNull(command);
-    Objects.requireNonNull(clientLocalTimestamp);
   }
 
   /**

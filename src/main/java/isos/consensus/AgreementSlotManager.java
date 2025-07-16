@@ -5,8 +5,6 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
 import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
-import isos.graph.DependencyWaitFunction;
-import isos.graph.RequestConflictChecker;
 import isos.message.*;
 import isos.utils.ReplicaId;
 import java.io.ByteArrayInputStream;
@@ -38,7 +36,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   private final Map<SequenceNumber, Thread> queueProcessorThreads;
   private final Map<SequenceNumber, AgmtSlotQueueProcessor> queueProcessors;
   // Starting and reacting to timeouts happens inside the QueueProcessor
-  private TimeoutConfiguration timeoutConfig;
+  private final TimeoutConfiguration timeoutConfig;
 
   /** Callbacks for threads to communicate with services */
   private MessageSender msgSender; // Handler for outgoing messages from the QueueProcessors
@@ -46,10 +44,16 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   private int quorum; // TODO Kai: Where to get f+1 quorum?
 
   /**
+   * @param ownReplicaId
    * @param timeoutConfig
+   * @param replicaIds
+   * @param quorumSize
    */
   public AgreementSlotManager(
-      ReplicaId ownReplicaId, TimeoutConfiguration timeoutConfig, ReplicaId[] replicaIds, int quorumSize) {
+      ReplicaId ownReplicaId,
+      TimeoutConfiguration timeoutConfig,
+      ReplicaId[] replicaIds,
+      int quorumSize) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
@@ -104,10 +108,6 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     var replicaId = newSlot.replicaIdRec();
     AgreementSlot slot = this.replicaAgreementSlots.get(replicaId).getAgreementSlotValue(newSlot);
 
-    RequestConflictChecker conflictFunc = (r) -> this.conflictsForRequest(r);
-
-    DependencyWaitFunction waitFunc = this::waitForDeps;
-
     // Create processor for consensus algorithm
     // The QueueProcessor directly updates the fields in the AgreementSlot object.
     var queueProcessor =
@@ -118,8 +118,9 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             timeoutConfig,
             msgSender,
             slot,
-            conflictFunc,
-            waitFunc);
+            this::conflictsForRequest,
+            this::waitForDeps,
+            this.quorum);
     Thread newQueueProcessorThread =
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
     this.queueProcessorThreads.put(newSlot, newQueueProcessorThread);
@@ -133,9 +134,9 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    */
   public void createSequenceNumberEntry(SequenceNumber newSeqNum) {
     // Fast check: if newSeqNum is already initialized, return early
-//    if (this.replicaAgreementSlots.containsKey(newSeqNum)) {
-//      return;
-//    }
+    //    if (this.replicaAgreementSlots.containsKey(newSeqNum)) {
+    //      return;
+    //    }
     // TODO Kai: this is wrong
 
     // Else: We have to initialize the sequence numbers from the lowest uninitialized agreementSlot
@@ -143,7 +144,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     AgreementSlotSequence sequence = this.replicaAgreementSlots.get(replicaId);
 
     if (sequence == null) {
-      throw new RuntimeException(String.format("Sequence for ReplicaId %s was not yet initialized. ", replicaId));
+      throw new RuntimeException(
+          String.format("Sequence for ReplicaId %s was not yet initialized. ", replicaId));
     }
 
     var createdNums =
@@ -158,7 +160,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
 
   public Map<ReplicaId, List<AgreementSlot>> getUsedAgreementSlots() {
     return replicaAgreementSlots.entrySet().stream()
-        .collect(Collectors.toMap(e -> e.getKey(), e -> e.getValue().getAgreementSlotsReadOnly()));
+        .collect(
+            Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getAgreementSlotsReadOnly()));
   }
 
   /**
@@ -168,6 +171,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    * @return
    */
   private DependencySet conflictsForRequest(ClientRequest r) {
+    // TODO Kai: Determine Dependency Set
     return new DependencySet();
   }
 
@@ -210,6 +214,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       }
     }
 
+    // FIXME Kai: await should be in a while loop?
     allDepLatch.await();
   }
 
@@ -232,7 +237,11 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       createSequenceNumberEntry(seqNum);
 
       var queue = this.queueProcessorInputQueue.get(seqNum);
-      queue.offer(payload);
+      try {
+        queue.add(payload);
+      } catch (IllegalStateException e) {
+        logger.error("Maximum capacity reached for queue {}. Throwing message away", seqNum);
+      }
     } else {
       logger.error("invalid message passed to processData (not a ISOSWrapperMessage)");
     }

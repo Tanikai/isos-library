@@ -21,6 +21,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,20 +36,19 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private final ReplicaId ownReplicaId; // Id of the *running* replica, not of the agreement slot
   private final SequenceNumber
       seqNum; // Sequence number that this queue processor is responsible for
-  private boolean running;
 
   // Messaging
 
   // Queue of incoming messages
   private final BlockingQueue<ISOSMessage> incomingQueue;
 
-  // Messages that have been deferred because we ware not in the correct step yet. After the
+  // Messages that have been deferred because we were not in the correct step yet. After the
   // preconditions are met, they can be processed.
   private Queue<ISOSMessage> deferredQueue;
 
   //
   private final TimeoutConfiguration timeoutConfig;
-  private ScheduledExecutorService timeoutExecutor;
+  private final ScheduledExecutorService timeoutExecutor;
   private final Map<ISOSTimeoutType, ScheduledFuture> currentTimeouts;
 
   // Store processed messages until a Quorum size is reached.
@@ -82,6 +82,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
   /** Passed from the outside due to access to other agreement slots. */
   private final DependencyWaitFunction dependencyWait;
 
+  private final int quorumF;
+
   public AgmtSlotQueueProcessor(
       ReplicaId ownReplicaId,
       SequenceNumber seqNum,
@@ -90,7 +92,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       MessageSender msgSender,
       AgreementSlot slot,
       RequestConflictChecker conflictChecker,
-      DependencyWaitFunction dependencyWait) {
+      DependencyWaitFunction dependencyWait,
+      int quorumF) {
     this.ownReplicaId = ownReplicaId;
     this.seqNum = seqNum;
     this.incomingQueue = incomingQueue;
@@ -104,6 +107,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.messageCountCondition = this.slotLock.newCondition();
     this.conflictChecker = conflictChecker;
     this.dependencyWait = dependencyWait;
+
+    this.quorumF = quorumF;
 
     this.logger = LoggerFactory.getLogger(String.format("QueueProcessor %s", seqNum.toString()));
   }
@@ -350,7 +355,106 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
   }
 
-  private void handleReceivedDepVerify(DepVerifyMessage depVerify) {}
+  private void handleReceivedDepVerify(DepVerifyMessage depVerify) {
+    if (slot.getStep() != AgreementSlotPhase.PROPOSED) {
+      logger.warn("Step mismatch");
+      try {
+        this.deferredQueue.add(depVerify);
+      } catch (IllegalStateException e) {
+        logger.error(
+            "DeferredQueue for Sequence Number {} is full, throwing message away", this.seqNum);
+      }
+      return;
+    }
+
+    if (!slot.getDepPropose().calculateHash().equals(depVerify.depProposeHash())) {
+      logger.error(
+          "Hash mismatch with previous DepPropose and DepProposeHash of DepVerify message, throwing message away");
+      return;
+    }
+
+    // Line 38: First verify from follower
+    if (this.slot.getDepVerifies().containsKey(depVerify.followerId())) {
+      logger.warn(
+          "Already received DepVerify from follower {}. Throwing message away",
+          depVerify.followerId());
+      return;
+    }
+
+    // Line 39: Follower is in fast-path quorum
+    if (!this.slot.getDepPropose().followerQuorum().contains(depVerify.followerId())) {
+      logger.warn(
+          "Received DepVerify, but sender is not in Follower quorum, throwing message away");
+      return;
+    }
+
+    try {
+      // TODO Kai: While we are waiting, we cannot process any other messages. Is this fine?
+      this.dependencyWait.waitUntilConsensusStarted(depVerify.depSet().dependencies());
+    } catch (InterruptedException e) {
+      logger.error("Interrupted while waiting for dependencies of received DepVerify message.");
+      return;
+    }
+
+    // add to the map
+    var depVerifyMap = this.slot.getDepVerifies();
+    depVerifyMap.put(depVerify.followerId(), depVerify);
+
+    // Get all DepVerify messages that are in the follower quorum of the depPropose and filter the
+    // map entries
+    var followerQuorum = this.slot.getDepPropose().followerQuorum();
+
+    var depVerifiesFromFollowerQuorum =
+        depVerifyMap.values().stream()
+            .filter(m -> followerQuorum.contains(m.followerId()))
+            .toList();
+
+    if (depVerifiesFromFollowerQuorum.size() < (this.quorumF * 2)) {
+      return;
+    }
+
+    // TODO Kai: we might need a lock / atomic variable for canceling the timeout
+    var proposeTimeout = this.currentTimeouts.get(ISOSTimeoutType.PROPOSE);
+    if (proposeTimeout != null) {
+      proposeTimeout.cancel(false);
+    }
+
+    // Add all dependencies to a single dependency set
+    var allDeps =
+        depVerifiesFromFollowerQuorum.stream()
+            .flatMap(m -> m.depSet().dependencies().stream())
+            .collect(Collectors.toSet());
+
+    // Line 46: Every dependency is reported by at least f+1 followers
+    var depsOk =
+        allDeps.parallelStream()
+            .allMatch(
+                (seqNum) -> {
+                  var depCount =
+                      depVerifyMap.values().stream()
+                          .filter(msg -> msg.depSet().dependencies().contains(seqNum))
+                          .count();
+                  return depCount > (this.quorumF + 1);
+                });
+
+    if (!depsOk) {
+      // At least 1 dependency is not reported by at least f+1 followers
+
+      // TODO Kai: How to enter reconciliation path, stop participating in fast path?
+      return;
+    }
+
+    this.slot.setStep(AgreementSlotPhase.FP_VERIFIED);
+
+    var depCommitMsg =
+        new DepCommitMessage(
+            this.seqNum,
+            this.ownReplicaId,
+            ConsensusUtils.calculateDepVerifyHash(depVerifiesFromFollowerQuorum));
+
+    var wrapper = new ISOSMessageWrapper(depCommitMsg, this.ownReplicaId.value());
+    this.msgSender.broadcastToReplicas(false, wrapper);
+  }
 
   private void handleReceivedDepCommit(DepCommitMessage depCommit) {}
 
