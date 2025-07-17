@@ -1,11 +1,11 @@
-package isos.graph;
+package isos.consensus;
 
-import isos.consensus.SequenceNumber;
 import java.util.Set;
 
 /**
  * Pseudocode line 60-65
  */
+@FunctionalInterface
 public interface DependencyWaitFunction {
   /**
    *

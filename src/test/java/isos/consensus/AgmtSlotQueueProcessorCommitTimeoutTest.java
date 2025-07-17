@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import isos.communication.MessageSender;
-import isos.graph.DependencyWaitFunction;
+import isos.graph.ExecutableRequestReceiver;
 import isos.graph.RequestConflictChecker;
 import isos.message.ISOSMessage;
 import isos.message.OrderedClientRequest;
@@ -43,6 +43,9 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
     DependencyWaitFunction dependencyWait = mock(DependencyWaitFunction.class);
     doNothing().when(dependencyWait).waitUntilConsensusStarted(any());
 
+    ExecutableRequestReceiver executeReceiver = mock(ExecutableRequestReceiver.class);
+    doNothing().when(executeReceiver).forwardRequestToExecution(any());
+
     AgmtSlotQueueProcessor processor =
         new AgmtSlotQueueProcessor(
             coordinatorId,
@@ -53,6 +56,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
             slot,
             conflictChecker,
             dependencyWait,
+            executeReceiver,
             1);
 
     // Act

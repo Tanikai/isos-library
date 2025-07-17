@@ -6,6 +6,8 @@ import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
 import java.io.Serializable;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @param seqNum agreement slot
@@ -25,5 +27,13 @@ public record DepVerifyMessage(
   @Override
   public ReplicaId logicalSender() {
     return this.followerId;
+  }
+
+  public static DependencySet unionOfDependencies(List<DepVerifyMessage> depVerifies) {
+    var allDeps =
+        depVerifies.stream()
+            .flatMap(m -> m.depSet().dependencies().stream())
+            .collect(Collectors.toSet());
+    return new DependencySet(allDeps);
   }
 }

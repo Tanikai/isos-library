@@ -12,6 +12,8 @@ public enum AgreementSlotPhase {
   FP_COMMITTED,
   // Reconciliation Path
   RP_VERIFIED,
+  RP_PREPARED,
   RP_COMMITTED,
+  // View Change
   VIEW_CHANGE,
 }

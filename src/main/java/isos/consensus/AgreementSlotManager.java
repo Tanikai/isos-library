@@ -120,6 +120,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             slot,
             this::conflictsForRequest,
             this::waitForDeps,
+            this::receiveRequestForExecution,
             this.quorum);
     Thread newQueueProcessorThread =
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
@@ -214,8 +215,12 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       }
     }
 
-    // FIXME Kai: await should be in a while loop?
+    // For CountDownLatch, we do not have to wait in a while loop
     allDepLatch.await();
+  }
+
+  public void receiveRequestForExecution(ExecuteMessage request) {
+    // TODO Kai:
   }
 
   /**

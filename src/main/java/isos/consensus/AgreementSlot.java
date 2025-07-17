@@ -6,7 +6,6 @@ import isos.message.fast.DepVerifyMessage;
 import isos.message.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,7 +20,9 @@ public class AgreementSlot {
   private OrderedClientRequest request;
   // p: DepPropose for slot s_j includes fast path quorum F
   private DepProposeMessage depPropose;
-  // v[f_i]: DepVerify  for slot s_j from follower f_i
+  /** v[f_i]: DepVerify  for slot s_j from follower f_i
+   * This map only contains DepVerify messages received from followers that are defined in the follower quorum F of the depPropose message.
+   * */
   private Map<ReplicaId, DepVerifyMessage> depVerifies;
   // current phase
   private AgreementSlotPhase step;

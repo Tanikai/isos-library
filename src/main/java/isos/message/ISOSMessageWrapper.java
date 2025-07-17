@@ -1,6 +1,8 @@
 package isos.message;
 
 import bftsmart.communication.SystemMessage;
+import isos.utils.ReplicaId;
+
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
@@ -28,6 +30,10 @@ public class ISOSMessageWrapper extends SystemMessage {
   public ISOSMessageWrapper(ISOSMessage payload, int sender) {
     this.payload = payload;
     this.sender = sender; // sender field needs to match with actual sender
+  }
+
+  public ISOSMessageWrapper(ISOSMessage payload, ReplicaId sender) {
+    this(payload, sender.value());
   }
 
   public ISOSMessage getPayload() {

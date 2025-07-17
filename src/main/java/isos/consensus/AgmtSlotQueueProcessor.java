@@ -1,10 +1,10 @@
 package isos.consensus;
 
 import isos.communication.MessageSender;
-import isos.graph.DependencyWaitFunction;
+import isos.graph.ExecutableRequestReceiver;
 import isos.graph.RequestConflictChecker;
+import isos.message.ExecuteMessage;
 import isos.message.ISOSMessage;
-import isos.message.ISOSMessageType;
 import isos.message.ISOSMessageWrapper;
 import isos.message.fast.DepCommitMessage;
 import isos.message.fast.DepProposeMessage;
@@ -21,7 +21,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,29 +32,35 @@ import org.slf4j.LoggerFactory;
 public class AgmtSlotQueueProcessor implements Runnable {
   private final Logger logger;
 
-  private final ReplicaId ownReplicaId; // Id of the *running* replica, not of the agreement slot
-  private final SequenceNumber
-      seqNum; // Sequence number that this queue processor is responsible for
+  // --- Attributes ---
+  /** Id of the *running* replica, not of the agreement slot */
+  private final ReplicaId ownReplicaId;
 
-  // Messaging
+  /** Sequence number that this queue processor is responsible for */
+  private final SequenceNumber seqNum;
 
-  // Queue of incoming messages
+  // --- Messaging ---
+  /** Queue of incoming messages */
   private final BlockingQueue<ISOSMessage> incomingQueue;
 
-  // Messages that have been deferred because we were not in the correct step yet. After the
-  // preconditions are met, they can be processed.
+  /**
+   * Messages that have been deferred because we were not in the correct step yet. After the
+   * preconditions are met, they can be processed.
+   */
   private Queue<ISOSMessage> deferredQueue;
 
-  //
+  /** Stores processed messages until a Quorum size is reached. */
+  private final Map<ReplicaId, DepCommitMessage> depCommitQuorum;
+
+  private final Map<ReplicaId, PrepareMessage> prepareQuorum;
+  private final Map<ReplicaId, CommitMessage> commitQuorum;
+
+  // --- Timeouts ---
   private final TimeoutConfiguration timeoutConfig;
   private final ScheduledExecutorService timeoutExecutor;
-  private final Map<ISOSTimeoutType, ScheduledFuture> currentTimeouts;
+  private final Map<ISOSTimeoutType, ScheduledFuture<?>> currentTimeouts;
 
-  // Store processed messages until a Quorum size is reached.
-  private Map<ISOSMessageType, Map<ReplicaId, ISOSMessage>> waitingForQuorum;
-
-  private final MessageSender msgSender;
-
+  // --- AgreementSlot State ---
   /**
    * AgreementSlot passed from the AgreementSlotManager. If the request != null upon thread start,
    * we assume that we are the coordinator. This processor is only reading from / writing to this
@@ -71,6 +76,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private final Condition messageCountCondition;
 
+  // --- Outside Dependencies ---
+  /** Callback function to broadcast messages to replicas */
+  private final MessageSender msgSender;
+
   /**
    * The conflictChecker returns the conflicts of a ClientRequest to all other ClientRequests that
    * we have already received.
@@ -81,6 +90,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   /** Passed from the outside due to access to other agreement slots. */
   private final DependencyWaitFunction dependencyWait;
+
+  /**
+   * Passed from the outside because request execution is not the responsibility of the
+   * AgreementQueueProcessor
+   */
+  private final ExecutableRequestReceiver requestExecutor;
 
   private final int quorumF;
 
@@ -93,20 +108,35 @@ public class AgmtSlotQueueProcessor implements Runnable {
       AgreementSlot slot,
       RequestConflictChecker conflictChecker,
       DependencyWaitFunction dependencyWait,
+      ExecutableRequestReceiver requestExecutor,
       int quorumF) {
+    // Attributes
     this.ownReplicaId = ownReplicaId;
     this.seqNum = seqNum;
+
+    // Messaging
     this.incomingQueue = incomingQueue;
+    this.deferredQueue = new LinkedBlockingQueue<>();
+    this.depCommitQuorum = new HashMap<>();
+    this.prepareQuorum = new HashMap<>();
+    this.commitQuorum = new HashMap<>();
+
+    // Timeouts
     this.timeoutConfig = timeoutConfig;
     this.timeoutExecutor =
         new ScheduledThreadPoolExecutor(2); // TODO Kai: how to determine the corePoolSize?
     this.currentTimeouts = new HashMap<>();
-    this.msgSender = msgSender;
+
+    // AgreementSlot State
     this.slot = slot;
     this.slotLock = new ReentrantLock();
     this.messageCountCondition = this.slotLock.newCondition();
+
+    // Outside Dependencies
+    this.msgSender = msgSender;
     this.conflictChecker = conflictChecker;
     this.dependencyWait = dependencyWait;
+    this.requestExecutor = requestExecutor;
 
     this.quorumF = quorumF;
 
@@ -221,6 +251,25 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.startCommitTimeout();
   }
 
+  //region Timeouts
+  /**
+   * Cancels the timeout of the given timeoutType. If cancelTimeout is called before the scheduled
+   * timeout has started, the timeout never runs. If it has already started, it cannot be canceled.
+   *
+   * @param timeoutType
+   * @return True if timeout was canceled successfully, false if the timeout was already started /
+   *     finished executing.
+   */
+  private boolean cancelTimeout(ISOSTimeoutType timeoutType) {
+    var timeout = this.currentTimeouts.get(timeoutType);
+    if (timeout == null) {
+      logger.warn("Tried to cancel timeout of type {}, but doesn't exist", timeoutType);
+      return true; // if the timeout doesn't exist, we assume that it is canceled
+    }
+    timeout.cancel(false);
+    return timeout.isCancelled();
+  }
+
   /** Pseudocode Line 70, 71 */
   private void startCommitTimeout() {
     if (this.currentTimeouts.containsKey(ISOSTimeoutType.COMMIT)) {
@@ -243,7 +292,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
               // TODO Kai: we need to notify here somehow (pseudocode line 86 "upon move to new view
               // do...")
-              this.currentTimeouts.remove(ISOSTimeoutType.COMMIT); // remove self from timeouts
             },
             timeoutConfig.commitTimeout,
             TimeUnit.MILLISECONDS);
@@ -260,9 +308,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var proposeTimeout =
         this.timeoutExecutor.schedule(
             () -> {
-              var msg =
-                  new ISOSMessageWrapper(this.slot.getDepPropose(), this.ownReplicaId.value());
-              // TODO Kai: but send without request or what?
+              // TODO Kai: Why are we sending this without the request? (defined in the pseudocode)
+              var depPropose = new DepProposeWithRequest(this.slot.getDepPropose(), null);
+              var msg = new ISOSMessageWrapper(depPropose, this.ownReplicaId.value());
 
               this.msgSender.broadcastToReplicas(false, msg);
             },
@@ -270,7 +318,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
             TimeUnit.MILLISECONDS);
     this.currentTimeouts.put(ISOSTimeoutType.PROPOSE, proposeTimeout);
   }
+  //endregion
 
+  //region Fast Path
   /**
    * Pseudocode Line 20-35
    *
@@ -355,7 +405,16 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
   }
 
+  private static List<DepVerifyMessage> getDepVerifyFromFollowerQuorum(
+      Map<ReplicaId, DepVerifyMessage> depVerifyMap, Set<ReplicaId> F) {
+    return depVerifyMap.values().stream().filter(msg -> F.contains(msg.followerId())).toList();
+  }
+
   private void handleReceivedDepVerify(DepVerifyMessage depVerify) {
+    // FIXME Kai: Add pseudocode line 53 / 54
+    // FIXME: if we receive DepVerify from f+1 replicas, we have to start commit timeout
+    // (disregarding fast path quorum, hash, and dependencies)
+
     if (slot.getStep() != AgreementSlotPhase.PROPOSED) {
       logger.warn("Step mismatch");
       try {
@@ -376,7 +435,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Line 38: First verify from follower
     if (this.slot.getDepVerifies().containsKey(depVerify.followerId())) {
       logger.warn(
-          "Already received DepVerify from follower {}. Throwing message away",
+          "Already received DepVerify from follower {}, throwing message away",
           depVerify.followerId());
       return;
     }
@@ -404,30 +463,26 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // map entries
     var followerQuorum = this.slot.getDepPropose().followerQuorum();
 
-    var depVerifiesFromFollowerQuorum =
-        depVerifyMap.values().stream()
-            .filter(m -> followerQuorum.contains(m.followerId()))
-            .toList();
+    var depVerifiesFollowerQuorum =
+        AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(depVerifyMap, followerQuorum);
 
-    if (depVerifiesFromFollowerQuorum.size() < (this.quorumF * 2)) {
+    if (depVerifiesFollowerQuorum.size() < (this.quorumF * 2)) {
       return;
     }
 
-    // TODO Kai: we might need a lock / atomic variable for canceling the timeout
-    var proposeTimeout = this.currentTimeouts.get(ISOSTimeoutType.PROPOSE);
-    if (proposeTimeout != null) {
-      proposeTimeout.cancel(false);
+    if (!this.cancelTimeout(ISOSTimeoutType.PROPOSE)) {
+      logger.error(
+          "Propose timeout expired before it could be canceled. Stop processing DepVerify");
+      return;
     }
 
     // Add all dependencies to a single dependency set
-    var allDeps =
-        depVerifiesFromFollowerQuorum.stream()
-            .flatMap(m -> m.depSet().dependencies().stream())
-            .collect(Collectors.toSet());
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum);
+    var depVerifyHash = ConsensusUtils.calculateDepVerifyHash(depVerifiesFollowerQuorum);
 
     // Line 46: Every dependency is reported by at least f+1 followers
     var depsOk =
-        allDeps.parallelStream()
+        unionDepsFollowerQuorum.dependencies().parallelStream()
             .allMatch(
                 (seqNum) -> {
                   var depCount =
@@ -439,32 +494,191 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     if (!depsOk) {
       // At least 1 dependency is not reported by at least f+1 followers
-
-      // TODO Kai: How to enter reconciliation path, stop participating in fast path?
+      // Enter reconciliation path, stop participating in fast path
+      enterReconciliationPath(depVerifyHash);
       return;
     }
 
     this.slot.setStep(AgreementSlotPhase.FP_VERIFIED);
 
-    var depCommitMsg =
-        new DepCommitMessage(
-            this.seqNum,
-            this.ownReplicaId,
-            ConsensusUtils.calculateDepVerifyHash(depVerifiesFromFollowerQuorum));
+    // Here, h(dv) refers to the set of DepVerifys received from the followers in F.
+    var depCommitMsg = new DepCommitMessage(this.seqNum, this.ownReplicaId, depVerifyHash);
 
     var wrapper = new ISOSMessageWrapper(depCommitMsg, this.ownReplicaId.value());
     this.msgSender.broadcastToReplicas(false, wrapper);
   }
 
-  private void handleReceivedDepCommit(DepCommitMessage depCommit) {}
+  private void handleReceivedDepCommit(DepCommitMessage depCommit) {
+    this.depCommitQuorum.put(depCommit.replicaId(), depCommit);
 
-  private void handleReceivedPrepareMessage(PrepareMessage prepare) {}
+    if (depCommitQuorum.size() < ((2 * this.quorumF) + 1)) {
+      return;
+    }
 
-  private void handleReceivedCommitMessage(CommitMessage commit) {}
+    // Preconditions
+    // Precondition 1
+    if (this.slot.getStep() != AgreementSlotPhase.FP_VERIFIED) {
+      logger.error("Step mismatch for DepCommit, returning early");
+      return;
+    }
 
+    // Precondition 2: The hash of *our* vector containing the DepVerify messages from the F quorum
+    // has to match with the hash from the received DepCommit messages as well
+    var depVerifiesFollowerQuorum =
+        AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(
+            this.slot.getDepVerifies(), this.slot.getDepPropose().followerQuorum());
+    String depVerifyHash = ConsensusUtils.calculateDepVerifyHash(depVerifiesFollowerQuorum);
+    // TODO Kai: Can this be cached?
+
+    // We have received at least 2f+1 messages
+    // Now we need to check whether our depVerifyHash matches with the hashes
+
+    // Count occurrences of each hash
+    depCommitQuorum.values().stream()
+        .filter(msg -> depVerifyHash.equals(msg.depVerifiesHash()))
+        .toList();
+    var quorumSize = (2 * this.quorumF) + 1;
+
+    if (depCommitQuorum.size() < quorumSize) {
+      logger.info("Commit Quorum with same DepVerifyHash not reached yet");
+      return;
+    }
+
+    // Our DepVerify hash matches with a quorum of DepVerifyHashes of received commit messages
+    if (!this.cancelTimeout(ISOSTimeoutType.PROPOSE)) {
+      logger.warn(
+          "Propose timeout expired before it could be canceled. Stop processing handleDepCommit");
+      return;
+    }
+    if (!this.cancelTimeout(ISOSTimeoutType.COMMIT)) {
+      logger.warn(
+          "Commit timeout expired before it could be canceled. Stop processing handleDepCommit");
+      return;
+    }
+
+    // Forward the slot to execution
+    // Dependency set used in execution is union set of all dependencies of the follower quorum
+    // defined initially by the DepPropose
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum);
+    var executeMsg =
+        new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+    this.requestExecutor.forwardRequestToExecution(executeMsg);
+  }
+  //endregion
+
+  //region Reconciliation Path
+  /** Pseudocode line 72-75 */
+  private void enterReconciliationPath(String depVerifiesFollowerQuorumHash) {
+    this.slot.setStep(AgreementSlotPhase.RP_VERIFIED);
+    var prepareMsg =
+        new PrepareMessage(
+            this.seqNum,
+            this.slot.getViewNumber(),
+            this.ownReplicaId,
+            depVerifiesFollowerQuorumHash);
+    var wrapper = new ISOSMessageWrapper(prepareMsg, this.ownReplicaId);
+    this.msgSender.broadcastToReplicas(false, wrapper);
+  }
+
+  /**
+   * The reconciliation path only works if 2f+1 replicas have received the same DepVerify messages.
+   * However, the dependencies from the received DepVerify messages diverge in such a way that the
+   * condition that only a single proposal can complete for a slot cannot be guaranteed. Thus, the
+   * replicas have to agree to a single dependency set with a 2-phase-commit-like communication
+   * pattern.
+   *
+   * @param prepare
+   */
+  private void handleReceivedPrepareMessage(PrepareMessage prepare) {
+    // a correct replica that has reached fp-verified does not contribute to the reconciliation
+    // path.
+
+    // We have to check our DepVerify hash as well
+    // Set of previously received DepVerifies
+    String depVerifyHash =
+        ConsensusUtils.calculateDepVerifyHash(
+            this.slot.getDepVerifies().values().stream().toList());
+    // TODO Kai: somehow cache the depVerifyHash?
+
+    if (!depVerifyHash.equals(prepare.depVerifiesHash())) {
+      logger.warn("Hash mismatch with received prepare message, throwing message away");
+      return;
+    }
+
+    // save to quorum
+    this.prepareQuorum.put(prepare.replicaId(), prepare);
+
+    // Before we can continue processing, we need to fulfill the preconditions
+    if (this.slot.getStep() != AgreementSlotPhase.RP_VERIFIED) {
+      logger.info("Step mismatch");
+      return;
+    }
+
+    if (this.slot.getViewNumber() != prepare.viewNumber()) {
+      logger.info(
+          "View number mismatch in prepare, own view number: {}, received: {}",
+          this.slot.getViewNumber(),
+          prepare.viewNumber());
+    }
+
+    // If we have a 2f+1 quorum, we can continue
+    if (this.prepareQuorum.size() < ((2*this.quorumF) +1)) {
+      logger.info("Received prepare message, but quorum not reached yet.");
+      return;
+    }
+
+    this.slot.setStep(AgreementSlotPhase.RP_PREPARED);
+    var commitMsg =
+        new CommitMessage(this.seqNum, this.slot.getViewNumber(), this.ownReplicaId, depVerifyHash);
+    var wrapper = new ISOSMessageWrapper(commitMsg, this.ownReplicaId);
+    this.msgSender.broadcastToReplicas(false, wrapper);
+  }
+
+  /**
+   * Preconditions are similar to the
+   *
+   * @param commit
+   */
+  private void handleReceivedCommitMessage(CommitMessage commit) {
+    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
+    String depVerifyHash = ConsensusUtils.calculateDepVerifyHash(depVerifies);
+    // TODO Kai: somehow cache the depVerifyHash?
+
+    if (!depVerifyHash.equals(commit.depVerifiesHash())) {
+      logger.warn("Hash mismatch with received prepare message, throwing message away");
+      return;
+    }
+
+    // save to quorum
+    this.commitQuorum.put(commit.replicaId(), commit);
+
+    // Before we can continue processing, we need to fulfill the preconditions
+    if (this.slot.getStep() != AgreementSlotPhase.RP_PREPARED) {
+      logger.info("Step mismatch");
+      return;
+    }
+
+    if (this.slot.getViewNumber() != commit.viewNumber()) {
+      logger.info(
+          "View number mismatch in commit, own view number: {}, received: {}",
+          this.slot.getViewNumber(),
+          commit.viewNumber());
+    }
+
+    this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
+    this.cancelTimeout(ISOSTimeoutType.COMMIT);
+
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies);
+    var executeMsg = new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+    this.requestExecutor.forwardRequestToExecution(executeMsg);
+  }
+  //endregion
+
+  //region View Change
   private void handleReceivedNewViewMessage(NewViewMessage newView) {}
 
   private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {}
+  //endregion
 
   /** Processes incoming messages from the queue in a loop. */
   @Override
