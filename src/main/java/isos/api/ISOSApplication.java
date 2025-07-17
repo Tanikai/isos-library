@@ -3,6 +3,8 @@ package isos.api;
 import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.configuration.ConfigurationManager;
 import isos.consensus.*;
+import isos.consensus.model.SequenceNumber;
+import isos.consensus.model.TimeoutConfiguration;
 import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.util.Collection;

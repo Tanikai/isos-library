@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 /**
  * Timeout type, see ISOS pseudocode line 9

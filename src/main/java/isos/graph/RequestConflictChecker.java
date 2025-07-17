@@ -1,6 +1,6 @@
 package isos.graph;
 
-import isos.consensus.DependencySet;
+import isos.consensus.model.DependencySet;
 import isos.message.OrderedClientRequest;
 
 /**

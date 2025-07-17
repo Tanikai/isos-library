@@ -2,6 +2,9 @@ package isos.consensus;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
+import isos.consensus.model.TimeoutConfiguration;
 import isos.message.ISOSMessageWrapper;
 import isos.message.fast.DepProposeMessage;
 import isos.message.fast.DepProposeWithRequest;

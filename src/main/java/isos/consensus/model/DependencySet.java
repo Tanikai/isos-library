@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 import java.io.Externalizable;
 import java.io.IOException;

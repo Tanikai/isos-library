@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 import isos.message.OrderedClientRequest;
 import isos.message.fast.DepProposeMessage;

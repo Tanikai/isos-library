@@ -2,8 +2,8 @@ package isos.message.viewchange;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import isos.consensus.DependencySet;
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
 import isos.message.fast.DepProposeMessage;
 import isos.message.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
@@ -30,7 +30,7 @@ class ViewChangeMessageSerializationTest {
             new HashSet<>());
     List<DepVerifyMessage> depVerifies = new ArrayList<>();
     depVerifies.add(
-        new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new isos.consensus.DependencySet()));
+        new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
     Set<NewViewMessage> viewChanges = new HashSet<>();
     viewChanges.add(new NewViewMessage(seqNum, viewNumber, new ReplicaId(4), null));
 

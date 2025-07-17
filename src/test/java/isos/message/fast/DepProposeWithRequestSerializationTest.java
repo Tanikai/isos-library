@@ -2,8 +2,8 @@ package isos.message.fast;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import isos.consensus.DependencySet;
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
 import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.io.*;

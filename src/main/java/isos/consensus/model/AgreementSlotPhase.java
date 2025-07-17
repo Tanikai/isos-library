@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 /**
  * Current Step of Agreement Slot, see ISOS pseudocode line 5

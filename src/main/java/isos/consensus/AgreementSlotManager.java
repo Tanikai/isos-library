@@ -5,6 +5,7 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
 import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
+import isos.consensus.model.*;
 import isos.message.*;
 import isos.utils.ReplicaId;
 import java.io.ByteArrayInputStream;

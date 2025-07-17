@@ -1,6 +1,7 @@
 package isos.consensus;
 
 import isos.communication.MessageSender;
+import isos.consensus.model.*;
 import isos.graph.ExecutableRequestReceiver;
 import isos.graph.RequestConflictChecker;
 import isos.message.ExecuteMessage;
@@ -293,7 +294,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
               // TODO Kai: we need to notify here somehow (pseudocode line 86 "upon move to new view
               // do...")
             },
-            timeoutConfig.commitTimeout,
+            timeoutConfig.getCommitTimeout(),
             TimeUnit.MILLISECONDS);
     this.currentTimeouts.put(ISOSTimeoutType.COMMIT, commitTimeout);
   }
@@ -314,7 +315,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
               this.msgSender.broadcastToReplicas(false, msg);
             },
-            timeoutConfig.proposeTimeout,
+            timeoutConfig.getProposeTimeout(),
             TimeUnit.MILLISECONDS);
     this.currentTimeouts.put(ISOSTimeoutType.PROPOSE, proposeTimeout);
   }
@@ -478,7 +479,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Add all dependencies to a single dependency set
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum);
-    var depVerifyHash = ConsensusUtils.calculateDepVerifyHash(depVerifiesFollowerQuorum);
+    var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
 
     // Line 46: Every dependency is reported by at least f+1 followers
     var depsOk =
@@ -527,7 +528,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var depVerifiesFollowerQuorum =
         AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(
             this.slot.getDepVerifies(), this.slot.getDepPropose().followerQuorum());
-    String depVerifyHash = ConsensusUtils.calculateDepVerifyHash(depVerifiesFollowerQuorum);
+    String depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
     // TODO Kai: Can this be cached?
 
     // We have received at least 2f+1 messages
@@ -596,7 +597,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // We have to check our DepVerify hash as well
     // Set of previously received DepVerifies
     String depVerifyHash =
-        ConsensusUtils.calculateDepVerifyHash(
+        DepVerifyMessage.calculateDepVerifyHash(
             this.slot.getDepVerifies().values().stream().toList());
     // TODO Kai: somehow cache the depVerifyHash?
 
@@ -641,11 +642,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void handleReceivedCommitMessage(CommitMessage commit) {
     var depVerifies = this.slot.getDepVerifies().values().stream().toList();
-    String depVerifyHash = ConsensusUtils.calculateDepVerifyHash(depVerifies);
+    String depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
     // TODO Kai: somehow cache the depVerifyHash?
 
     if (!depVerifyHash.equals(commit.depVerifiesHash())) {
-      logger.warn("Hash mismatch with received prepare message, throwing message away");
+      logger.warn("Hash mismatch with received commit message, throwing message away");
       return;
     }
 
@@ -654,7 +655,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Before we can continue processing, we need to fulfill the preconditions
     if (this.slot.getStep() != AgreementSlotPhase.RP_PREPARED) {
-      logger.info("Step mismatch");
+      logger.info("Step mismatch while handling commit message.");
       return;
     }
 

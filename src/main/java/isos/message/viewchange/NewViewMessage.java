@@ -1,6 +1,6 @@
 package isos.message.viewchange;
 
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;

@@ -1,7 +1,8 @@
-package isos.consensus;
+package isos.consensus.model;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import isos.consensus.InvalidReplicaIdException;
 import isos.utils.ReplicaId;
 import java.util.List;
 import org.junit.jupiter.api.Test;

@@ -3,8 +3,8 @@ package isos.message.fast;
 import static org.junit.jupiter.api.Assertions.*;
 
 import bftsmart.communication.SystemMessage;
-import isos.consensus.DependencySet;
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
 import isos.message.ISOSMessageWrapper;
 import isos.utils.ReplicaId;
 import java.io.*;

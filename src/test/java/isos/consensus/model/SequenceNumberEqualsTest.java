@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 import static org.junit.jupiter.api.Assertions.*;
 

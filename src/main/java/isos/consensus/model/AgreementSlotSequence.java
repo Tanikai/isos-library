@@ -1,5 +1,6 @@
-package isos.consensus;
+package isos.consensus.model;
 
+import isos.consensus.InvalidReplicaIdException;
 import isos.message.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.util.*;

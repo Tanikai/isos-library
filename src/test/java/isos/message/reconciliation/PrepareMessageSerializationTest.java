@@ -2,7 +2,7 @@ package isos.message.reconciliation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.SequenceNumber;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.io.*;

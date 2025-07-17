@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 import java.util.Set;
 

@@ -1,6 +1,6 @@
 package isos.message;
 
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.SequenceNumber;
 import isos.utils.ReplicaId;
 
 /**

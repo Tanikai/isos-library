@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import isos.communication.MessageSender;
+import isos.consensus.model.*;
 import isos.graph.ExecutableRequestReceiver;
 import isos.graph.RequestConflictChecker;
 import isos.message.ISOSMessage;
@@ -67,7 +68,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
     // Assert
     assertEquals(new ViewNumber(-1), slot.getViewNumber());
     Thread.sleep(
-        timeoutConfig.commitTimeout + 500); // wait until commit timeout expires + 500 millis
+        timeoutConfig.getCommitTimeout() + 500); // wait until commit timeout expires + 500 millis
     // after the commit timeout expires, the view number should be increased by 1
     assertEquals(new ViewNumber(0), slot.getViewNumber());
     processorThread.interrupt();

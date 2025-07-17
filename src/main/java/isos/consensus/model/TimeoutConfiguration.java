@@ -1,4 +1,4 @@
-package isos.consensus;
+package isos.consensus.model;
 
 public class TimeoutConfiguration {
   long deltaMillis;

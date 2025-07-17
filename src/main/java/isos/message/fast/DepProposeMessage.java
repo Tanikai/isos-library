@@ -1,7 +1,7 @@
 package isos.message.fast;
 
-import isos.consensus.DependencySet;
-import isos.consensus.SequenceNumber;
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
 import isos.message.ISOSMessage;
 import isos.message.ISOSMessageType;
 import isos.utils.ReplicaId;
