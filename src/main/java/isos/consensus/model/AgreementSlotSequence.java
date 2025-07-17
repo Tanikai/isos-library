@@ -1,7 +1,7 @@
 package isos.consensus.model;
 
 import isos.consensus.InvalidReplicaIdException;
-import isos.message.OrderedClientRequest;
+import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.util.*;
 import java.util.concurrent.locks.Lock;

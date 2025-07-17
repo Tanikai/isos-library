@@ -2,8 +2,8 @@ package isos.examples;
 
 import isos.api.ISOSClient;
 import isos.communication.client.QuorumNotReachedException;
-import isos.message.OrderedClientReply;
-import isos.message.OrderedClientRequest;
+import isos.message.client.OrderedClientReply;
+import isos.message.client.OrderedClientRequest;
 import java.io.*;
 import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;

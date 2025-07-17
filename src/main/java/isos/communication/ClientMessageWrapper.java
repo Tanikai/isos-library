@@ -1,6 +1,8 @@
 package isos.communication;
 
 import bftsmart.communication.SystemMessage;
+import isos.message.client.OrderedClientReply;
+import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +17,8 @@ import java.io.*;
  * <p>The actual contents are contained in the {@link #payload} field. It is a general class, i.e.
  * the communication system has no information about the semantics of the payload or the used
  * consensus algorithm. It is used both on the client and replica side. In ISOS, the payload is
- * {@link isos.message.OrderedClientRequest} for C->R messages and {@link
- * isos.message.OrderedClientReply} for R->C messages.
+ * {@link OrderedClientRequest} for C->R messages and {@link
+ * OrderedClientReply} for R->C messages.
  */
 public class ClientMessageWrapper extends SystemMessage
     implements Externalizable, Comparable<ClientMessageWrapper>, Cloneable {

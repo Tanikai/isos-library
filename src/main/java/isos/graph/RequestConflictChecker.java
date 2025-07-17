@@ -1,7 +1,7 @@
 package isos.graph;
 
 import isos.consensus.model.DependencySet;
-import isos.message.OrderedClientRequest;
+import isos.message.client.OrderedClientRequest;
 
 /**
  * Pseudocode line 66

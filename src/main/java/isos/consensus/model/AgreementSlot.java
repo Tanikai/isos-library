@@ -1,9 +1,9 @@
 package isos.consensus.model;
 
-import isos.message.OrderedClientRequest;
-import isos.message.fast.DepProposeMessage;
-import isos.message.fast.DepVerifyMessage;
-import isos.message.viewchange.ViewChangeMessage;
+import isos.message.client.OrderedClientRequest;
+import isos.message.replica.fast.DepProposeMessage;
+import isos.message.replica.fast.DepVerifyMessage;
+import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.util.HashMap;
