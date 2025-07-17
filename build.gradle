@@ -173,6 +173,9 @@ tasks.withType(Javadoc).configureEach {
     options.addStringOption('charSet', 'UTF-8')
 }
 
+configurations {
+    mockitoAgent
+}
 dependencies {
     implementation fileTree('lib') { include '*.jar' }
     // https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk15on
@@ -200,10 +203,14 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.11.0'
     testImplementation 'org.mockito:mockito-core:5.18.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.18.0'
+    mockitoAgent  'org.mockito:mockito-core:5.18.0', {
+        transitive = false
+    }
 }
 
 test {
     useJUnitPlatform()
+    jvmArgs += "-javaagent:${configurations.mockitoAgent.asPath}"
     testLogging {
         events "passed", "skipped", "failed"
     }
