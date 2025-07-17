@@ -21,14 +21,14 @@ class AgreementSlotManagerWaitForDepsTest {
 
   @Test
   void testWaitForDepsUnblocksWhenAllDepsCompleted() throws Exception {
-    int numDeps = 3;
+    int numDeps = 4;
     var ownReplicaId = new ReplicaId(2);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(0), new ReplicaId(1)};
+    var otherReplicaIds = new ReplicaId[] {new ReplicaId(0), new ReplicaId(1), new ReplicaId(3)};
 
     AgreementSlotManager manager =
-        new AgreementSlotManager(ownReplicaId, timeoutConfig, otherReplicaIds, 2);
+        new AgreementSlotManager(ownReplicaId, timeoutConfig, otherReplicaIds, 1);
 
-    // We are waiting for the first agreement slot of each of the 3 replicas
+    // We are waiting for the first agreement slot of each of the 4 replicas
     Set<SequenceNumber> waitDepSet = new HashSet<>();
     for (int i = 0; i < numDeps; i++) {
       SequenceNumber seq = new SequenceNumber(i, 0);
