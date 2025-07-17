@@ -46,19 +46,19 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   /** Callbacks for threads to communicate with services */
   private MessageSender msgSender; // Handler for outgoing messages from the QueueProcessors
 
-  private int quorum; // TODO Kai: Where to get f+1 quorum?
+  private final int maxFaults;
 
   /**
-   * @param ownReplicaId
+   * @param ownReplicaId The id of the current replica.
    * @param timeoutConfig
-   * @param replicaIds
-   * @param quorumSize
+   * @param replicaIds Ids of other replicas that participate in the consensus.
+   * @param maxFaults
    */
   public AgreementSlotManager(
       ReplicaId ownReplicaId,
       TimeoutConfiguration timeoutConfig,
       ReplicaId[] replicaIds,
-      int quorumSize) {
+      int maxFaults) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
@@ -70,7 +70,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     for (var rId : replicaIds) {
       this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId));
     }
-    this.quorum = quorumSize;
+    this.maxFaults = maxFaults;
   }
 
   public void initialize(MessageSender msgSender) {
@@ -126,7 +126,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             this::conflictsForRequest,
             this::waitForDeps,
             this::receiveRequestForExecution,
-            this.quorum);
+            this.maxFaults);
     Thread newQueueProcessorThread =
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
     this.queueProcessorThreads.put(newSlot, newQueueProcessorThread);
@@ -207,7 +207,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             () -> {
               var processorSlot = this.queueProcessors.get(dep);
               try {
-                processorSlot.awaitWaitConditionCompleted(quorum);
+                processorSlot.awaitWaitConditionCompleted(this.maxFaults);
                 // After this, the condition of the agreement slot is
                 allDepLatch.countDown();
               } catch (InterruptedException e) {

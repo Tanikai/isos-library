@@ -49,10 +49,13 @@ public class ISOSApplication {
     this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
 
     // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
-    var quorumSize = 3; // FIXME Kai: Where to get quorumSize?
+    var maxFaults = configManager.getStaticConf().getF();
     this.agrSlotManager =
         new AgreementSlotManager(
-            ownReplicaId, timeoutConf, configManager.getStaticConf().getInitialViewAsReplicaId(), quorumSize);
+            ownReplicaId,
+            timeoutConf,
+            configManager.getStaticConf().getInitialViewAsReplicaId(),
+            maxFaults);
     try {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
       this.scs.setRequestReceiver(this.agrSlotManager);

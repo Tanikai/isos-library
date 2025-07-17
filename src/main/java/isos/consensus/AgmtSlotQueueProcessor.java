@@ -98,7 +98,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private final ExecutableRequestReceiver requestExecutor;
 
-  private final int quorumF;
+  private final int maxFaults;
 
   public AgmtSlotQueueProcessor(
       ReplicaId ownReplicaId,
@@ -110,7 +110,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       RequestConflictChecker conflictChecker,
       DependencyWaitFunction dependencyWait,
       ExecutableRequestReceiver requestExecutor,
-      int quorumF) {
+      int maxFaults) {
     // Attributes
     this.ownReplicaId = ownReplicaId;
     this.seqNum = seqNum;
@@ -139,7 +139,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.dependencyWait = dependencyWait;
     this.requestExecutor = requestExecutor;
 
-    this.quorumF = quorumF;
+    this.maxFaults = maxFaults;
 
     this.logger = LoggerFactory.getLogger(String.format("QueueProcessor %s", seqNum.toString()));
   }
@@ -147,19 +147,22 @@ public class AgmtSlotQueueProcessor implements Runnable {
   /**
    * Pseudocode line 60
    *
-   * @param quorum
+   * @param maxFaults
    * @throws InterruptedException
    */
-  public void awaitWaitConditionCompleted(int quorum) throws InterruptedException {
-    if (quorum < 2) {
-      logger.warn("Quorum is smaller than 2 (f+1 -> f is 0), is it correct?");
+  public void awaitWaitConditionCompleted(int maxFaults) throws InterruptedException {
+    if (maxFaults < 0) {
+      throw new IllegalArgumentException("Maximum faults is smaller than 0");
+    } else if (maxFaults == 0) {
+      logger.warn("Maximum faults is 0. Is ISOS configured correctly?");
     }
+    int quorumSize = maxFaults + 1;
 
     this.slotLock.lock();
     try {
       while (slot.getDepPropose() == null // received valid DepPropose
-          && slot.getDepVerifies().size() < quorum // received f+1 correctly signed DepVerifys
-          && slot.getViewChanges().size() < quorum // received f+1 correctly signed ViewChanges
+          && slot.getDepVerifies().size() < quorumSize // received f+1 correctly signed DepVerifys
+          && slot.getViewChanges().size() < quorumSize // received f+1 correctly signed ViewChanges
       ) {
         // if depPropose, depVerify, or viewChanges get changed, the condition should be
         // notified
@@ -467,7 +470,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var depVerifiesFollowerQuorum =
         AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(depVerifyMap, followerQuorum);
 
-    if (depVerifiesFollowerQuorum.size() < (this.quorumF * 2)) {
+    if (depVerifiesFollowerQuorum.size() < (this.maxFaults * 2)) {
       return;
     }
 
@@ -490,7 +493,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
                       depVerifyMap.values().stream()
                           .filter(msg -> msg.depSet().dependencies().contains(seqNum))
                           .count();
-                  return depCount > (this.quorumF + 1);
+                  return depCount > (this.maxFaults + 1);
                 });
 
     if (!depsOk) {
@@ -512,7 +515,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private void handleReceivedDepCommit(DepCommitMessage depCommit) {
     this.depCommitQuorum.put(depCommit.replicaId(), depCommit);
 
-    if (depCommitQuorum.size() < ((2 * this.quorumF) + 1)) {
+    if (depCommitQuorum.size() < ((2 * this.maxFaults) + 1)) {
       return;
     }
 
@@ -538,7 +541,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     depCommitQuorum.values().stream()
         .filter(msg -> depVerifyHash.equals(msg.depVerifiesHash()))
         .toList();
-    var quorumSize = (2 * this.quorumF) + 1;
+    var quorumSize = (2 * this.maxFaults) + 1;
 
     if (depCommitQuorum.size() < quorumSize) {
       logger.info("Commit Quorum with same DepVerifyHash not reached yet");
@@ -623,7 +626,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // If we have a 2f+1 quorum, we can continue
-    if (this.prepareQuorum.size() < ((2*this.quorumF) +1)) {
+    if (this.prepareQuorum.size() < ((2*this.maxFaults) +1)) {
       logger.info("Received prepare message, but quorum not reached yet.");
       return;
     }
