@@ -17,23 +17,26 @@ package bftsmart.communication.server;
 import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
-import javax.net.ssl.*;
+import isos.utils.ReplicaId;
 import java.io.*;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.net.ssl.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class represents a connection with other server and manages sending and receiving messages.
@@ -49,13 +52,21 @@ public class ServerConnection {
   private SSLSocket socket;
   private DataOutputStream socketOutStream = null;
   private DataInputStream socketInStream = null;
+  private final ReplicaId ownReplicaId;
   private final int remoteId;
+
+  // Determining Round Trip Time (RTT)
+  // We are using Exponentially Weighted Moving Average (EWMA), used in TCP
+  private static final double ALPHA = 0.125;
+  private final AtomicLong ewmaNanos = new AtomicLong(-1);
+  private byte[] lastPingNonce;
+  private long lastPingNanos;
+  private final Thread pingThread;
 
   // Sender
   private SenderThread msgSender;
 
   // Receiver
-
   private final boolean useSenderThread;
   protected final LinkedBlockingQueue<byte[]> outQueue;
   private final LinkedBlockingQueue<SystemMessage> inQueue;
@@ -86,6 +97,7 @@ public class ServerConnection {
     this.configManager = configManager;
     this.socket = socket;
     this.remoteId = remoteId;
+    this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
     this.inQueue = inQueue;
     this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
 
@@ -123,6 +135,62 @@ public class ServerConnection {
       this.msgReceiver.start();
     }
     // ******* EDUARDO END **************//
+
+    this.pingThread =
+        Thread.ofVirtual()
+            .start(
+                () -> {
+                  try {
+                    long initialDelayMs = ThreadLocalRandom.current().nextInt(5000);
+                    Thread.sleep(initialDelayMs);
+                  } catch (InterruptedException e) {
+                    logger.error(
+                        "Interrupted while waiting initial delay ms for ping message, exiting");
+                    return;
+                  }
+                  byte[] msgBytes;
+                  while (doWork && !Thread.currentThread().isInterrupted()) {
+                    // We want to generate a secure nonce to
+                    lastPingNonce = generateSecureNonce(16);
+                    lastPingNanos = System.nanoTime();
+                    var msg = new PingMessage(this.ownReplicaId.value(), lastPingNonce, false);
+
+                    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+                      oos.writeObject(msg);
+                      msgBytes = bos.toByteArray();
+                    } catch (IOException e) {
+                      logger.error("IOException while serializing ping message.");
+                      return;
+                    }
+
+                    try {
+                      this.send(msgBytes);
+                    } catch (InterruptedException e) {
+                      logger.error("Interrupted while waiting to send bytes to remote, exiting");
+                      return;
+                    }
+
+                    try {
+                      // we can sleep
+                      // TODO Kai: make ping delay configurable
+                      Thread.sleep(3000);
+                    } catch (InterruptedException e) {
+                      logger.error(
+                          "Interrupted while waiting timeout to send next ping message, exiting");
+                      return;
+                    }
+                  }
+
+                  logger.info("Stopped pingThread");
+                });
+  }
+
+  public static byte[] generateSecureNonce(int lengthBytes) {
+    SecureRandom secureRandom = new SecureRandom();
+    byte[] nonceBytes = new byte[lengthBytes];
+    secureRandom.nextBytes(nonceBytes);
+    return nonceBytes;
   }
 
   /**
@@ -138,7 +206,7 @@ public class ServerConnection {
 
   /** Stop message sending and reception. */
   public void shutdown() {
-    logger.debug("SHUTDOWN for {}", remoteId);
+    logger.debug("Shutdown ServerConnection {}->{}", ownReplicaId, remoteId);
 
     doWork = false;
     closeSocket();
@@ -338,7 +406,6 @@ public class ServerConnection {
 
   /** Thread used to receive packets from the remote server. */
   protected class ReceiverThread extends Thread {
-
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public ReceiverThread() {
@@ -348,7 +415,6 @@ public class ServerConnection {
 
     @Override
     public void run() {
-
       while (doWork) {
         // if socket of connection is null
         if (socket == null) {
@@ -385,15 +451,52 @@ public class ServerConnection {
           SystemMessage sm =
               (SystemMessage) (new ObjectInputStream(new ByteArrayInputStream(data)).readObject());
 
+          // If we receive a ping message, do not forward it to other processes
+          if (sm instanceof PingMessage pm) {
+            // Is it a response to a previous ping message from us, or a ping message from remote?
+
+            if (pm.isResponse()) {
+              // nonce has to match with our nonce
+              if (!Arrays.equals(lastPingNonce, pm.getNonce())) {
+                logger.error(
+                    "Nonce mismatch with sent ping and received pong message, stop processing pong message");
+              }
+
+              // Nonce matches -> we now calculate the ping
+              long roundTripNanos = System.nanoTime() - lastPingNanos;
+
+              long currentEwma = ewmaNanos.get();
+              if (currentEwma == -1) {
+                ewmaNanos.set(roundTripNanos);
+              } else {
+                long newEwma = (long) ((ALPHA * roundTripNanos) + ((1.0 - ALPHA) * currentEwma));
+                ewmaNanos.set(newEwma);
+
+                var currentMillis =
+                    TimeUnit.MILLISECONDS.convert(currentEwma, TimeUnit.NANOSECONDS);
+                var newMillis = TimeUnit.MILLISECONDS.convert(newEwma, TimeUnit.NANOSECONDS);
+
+                logger.info("Updated ewma fron {} ms to {} ms", currentMillis, newMillis);
+              }
+
+            } else {
+              // We received a ping and have to send a response
+              var response = new PingMessage(ownReplicaId.value(), pm.getNonce(), true);
+              var responseBytes = PingMessage.toByteArray(response);
+              send(responseBytes);
+            }
+
+            // do not process PingMessage further
+            continue;
+          }
+
           // The verification it is done for the SSL/TLS protocol.
           sm.authenticated = true;
 
           if (sm.getSender() == remoteId) {
             if (!inQueue.offer(sm)) {
               logger.warn("Inqueue full (message from " + remoteId + " discarded).");
-            } /* else {
-              	logger.trace("Message: {} queued, remoteId: {}", sm.toString(), sm.getSender());
-              }*/
+            }
           } else {
             logger.info(
                 "ReceiverThread: Mismatch of Senders: {} (Message) - {} (Connection) (Actual message: {})",
