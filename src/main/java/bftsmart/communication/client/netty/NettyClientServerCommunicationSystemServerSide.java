@@ -231,9 +231,12 @@ public class NettyClientServerCommunicationSystemServerSide
     else requestReceiver.requestReceived(sm, true);
   }
 
+  /**
+   * Is called one when the network channel is active.
+   * @param ctx
+   */
   @Override
   public void channelActive(ChannelHandlerContext ctx) {
-
     if (this.closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;

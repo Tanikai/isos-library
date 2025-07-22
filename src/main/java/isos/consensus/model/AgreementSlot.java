@@ -20,10 +20,13 @@ public class AgreementSlot {
   private OrderedClientRequest request;
   // p: DepPropose for slot s_j includes fast path quorum F
   private DepProposeMessage depPropose;
-  /** v[f_i]: DepVerify  for slot s_j from follower f_i
-   * This map only contains DepVerify messages received from followers that are defined in the follower quorum F of the depPropose message.
-   * */
+
+  /**
+   * v[f_i]: DepVerify for slot s_j from follower f_i This map only contains DepVerify messages
+   * received from followers that are defined in the follower quorum F of the depPropose message.
+   */
   private Map<ReplicaId, DepVerifyMessage> depVerifies;
+
   // current phase
   private AgreementSlotPhase step;
   private Map<ReplicaId, ViewChangeMessage> viewChanges;
@@ -33,21 +36,36 @@ public class AgreementSlot {
   private Map<ReplicaId, ViewNumber> peerViewNumbers;
 
   // DECISION Kai: should SequenceNumber be stored in the AgreementSlot object as well, or only in
-  // the AgreementSlotSequence? -> only stored in the sequence, so that coordination does not have to be
-  // DECISION kai: Should AgreementSlot be record, or normal object? -> normal object, due to frequent changes to the fields
+  // the AgreementSlotSequence? -> only stored in the sequence, so that coordination does not have
+  // to be
+  // DECISION kai: Should AgreementSlot be record, or normal object? -> normal object, due to
+  // frequent changes to the fields
 
   public AgreementSlot(SequenceNumber seqNum) {
     this(seqNum, null);
   }
 
   public AgreementSlot(SequenceNumber seqNum, OrderedClientRequest r) {
-    this(seqNum, r, null, new HashMap<>(), AgreementSlotPhase.INIT, new HashMap<>(), new ViewNumber(), new HashMap<>());
+    this(
+        seqNum,
+        r,
+        null,
+        new HashMap<>(),
+        AgreementSlotPhase.INIT,
+        new HashMap<>(),
+        new ViewNumber(),
+        new HashMap<>());
   }
 
-  public AgreementSlot(SequenceNumber seqNum, OrderedClientRequest request, DepProposeMessage depPropose,
-                       Map<ReplicaId, DepVerifyMessage> depVerifies, AgreementSlotPhase step,
-                       Map<ReplicaId, ViewChangeMessage> viewChanges, ViewNumber viewNumber,
-                       Map<ReplicaId, ViewNumber> peerViewNumbers) {
+  public AgreementSlot(
+      SequenceNumber seqNum,
+      OrderedClientRequest request,
+      DepProposeMessage depPropose,
+      Map<ReplicaId, DepVerifyMessage> depVerifies,
+      AgreementSlotPhase step,
+      Map<ReplicaId, ViewChangeMessage> viewChanges,
+      ViewNumber viewNumber,
+      Map<ReplicaId, ViewNumber> peerViewNumbers) {
     this.seqNum = seqNum;
     this.request = request;
     this.depPropose = depPropose;

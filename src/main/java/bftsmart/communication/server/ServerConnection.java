@@ -57,8 +57,9 @@ public class ServerConnection {
 
   // Determining Round Trip Time (RTT)
   // We are using Exponentially Weighted Moving Average (EWMA), used in TCP
+  // TODO Kai: maybe larger alpha due to low count of ping messages?
   private static final double ALPHA = 0.125;
-  private final AtomicLong ewmaNanos = new AtomicLong(-1);
+  private final AtomicLong ewmaMillis = new AtomicLong(-1);
   private byte[] lastPingNonce;
   private long lastPingNanos;
   private final Thread pingThread;
@@ -204,11 +205,16 @@ public class ServerConnection {
     return secretKey;
   }
 
+  public long getCurrentPingMillis() {
+    return this.ewmaMillis.get();
+  }
+
   /** Stop message sending and reception. */
   public void shutdown() {
     logger.debug("Shutdown ServerConnection {}->{}", ownReplicaId, remoteId);
 
     doWork = false;
+    this.pingThread.interrupt();
     closeSocket();
   }
 
@@ -464,19 +470,17 @@ public class ServerConnection {
 
               // Nonce matches -> we now calculate the ping
               long roundTripNanos = System.nanoTime() - lastPingNanos;
+              long roundTripMillis =
+                  TimeUnit.MILLISECONDS.convert(roundTripNanos, TimeUnit.NANOSECONDS);
 
-              long currentEwma = ewmaNanos.get();
+              long currentEwma = ewmaMillis.get();
               if (currentEwma == -1) {
-                ewmaNanos.set(roundTripNanos);
+                ewmaMillis.set(roundTripMillis);
               } else {
-                long newEwma = (long) ((ALPHA * roundTripNanos) + ((1.0 - ALPHA) * currentEwma));
-                ewmaNanos.set(newEwma);
+                long newEwma = (long) ((ALPHA * roundTripMillis) + ((1.0 - ALPHA) * currentEwma));
+                ewmaMillis.set(newEwma);
 
-                var currentMillis =
-                    TimeUnit.MILLISECONDS.convert(currentEwma, TimeUnit.NANOSECONDS);
-                var newMillis = TimeUnit.MILLISECONDS.convert(newEwma, TimeUnit.NANOSECONDS);
-
-                logger.info("Updated ewma fron {} ms to {} ms", currentMillis, newMillis);
+                logger.info("Updated ewma fron {} ms to {} ms", currentEwma, newEwma);
               }
 
             } else {

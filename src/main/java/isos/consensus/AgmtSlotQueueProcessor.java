@@ -226,9 +226,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var r = slot.getRequest();
 
     DependencySet depSet = this.conflictChecker.conflicts(r);
-    // TODO: Get Quroum of 2f followers with lowest latency
-    // For now, get random two followers
-    Set<ReplicaId> followerSet = null;
+    Set<ReplicaId> followerSet = msgSender.getLowestPingReplicas(2 * this.maxFaults);
     DepProposeMessage propose =
         new DepProposeMessage(seqNum, ownReplicaId, r.calculateHash(), depSet, followerSet);
 
@@ -255,7 +253,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.startCommitTimeout();
   }
 
-  //region Timeouts
+  // region Timeouts
   /**
    * Cancels the timeout of the given timeoutType. If cancelTimeout is called before the scheduled
    * timeout has started, the timeout never runs. If it has already started, it cannot be canceled.
@@ -322,9 +320,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
             TimeUnit.MILLISECONDS);
     this.currentTimeouts.put(ISOSTimeoutType.PROPOSE, proposeTimeout);
   }
-  //endregion
 
-  //region Fast Path
+  // endregion
+
+  // region Fast Path
   /**
    * Pseudocode Line 20-35
    *
@@ -568,9 +567,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
-  //endregion
 
-  //region Reconciliation Path
+  // endregion
+
+  // region Reconciliation Path
   /** Pseudocode line 72-75 */
   private void enterReconciliationPath(String depVerifiesFollowerQuorumHash) {
     this.slot.setStep(AgreementSlotPhase.RP_VERIFIED);
@@ -626,7 +626,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // If we have a 2f+1 quorum, we can continue
-    if (this.prepareQuorum.size() < ((2*this.maxFaults) +1)) {
+    if (this.prepareQuorum.size() < ((2 * this.maxFaults) + 1)) {
       logger.info("Received prepare message, but quorum not reached yet.");
       return;
     }
@@ -673,16 +673,19 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
 
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies);
-    var executeMsg = new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+    var executeMsg =
+        new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
-  //endregion
 
-  //region View Change
+  // endregion
+
+  // region View Change
   private void handleReceivedNewViewMessage(NewViewMessage newView) {}
 
   private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {}
-  //endregion
+
+  // endregion
 
   /** Processes incoming messages from the queue in a loop. */
   @Override

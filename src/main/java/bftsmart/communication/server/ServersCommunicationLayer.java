@@ -237,6 +237,29 @@ public class ServersCommunicationLayer extends Thread {
     return replicaList;
   }
 
+  /**
+   * @param count Numbers of replicas to return.
+   * @return Set of ReplicaIds with the lowest ping.
+   * @throws IllegalStateException When less connections exist than the passed count.
+   */
+  public Set<ReplicaId> getLowestPingReplicas(int count) throws IllegalStateException {
+    return ServersCommunicationLayer.getLowestPingReplicas(this.connections, count);
+  }
+
+  public static Set<ReplicaId> getLowestPingReplicas(
+      Map<Integer, ServerConnection> connections, int count) throws IllegalStateException {
+    if (connections.size() < count) {
+      throw new IllegalStateException("Not enough replicas exist.");
+    }
+
+    return connections.entrySet().stream()
+        // Sort ascending by ping
+        .sorted(Comparator.comparing(entry -> entry.getValue().getCurrentPingMillis()))
+        .limit(count)
+        .map(entry -> new ReplicaId(entry.getKey()))
+        .collect(Collectors.toSet());
+  }
+
   public SecretKey getSecretKey(int id) {
     if (id == configManager.getStaticConf().getProcessId()) return selfPwd;
     else return connections.get(id).getSecretKey();
