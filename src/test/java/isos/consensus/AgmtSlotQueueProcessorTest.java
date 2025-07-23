@@ -16,7 +16,10 @@ import isos.message.replica.fast.DepCommitMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.message.replica.fast.DepVerifyMessage;
+import isos.message.replica.reconciliation.CommitMessage;
+import isos.message.replica.reconciliation.PrepareMessage;
 import isos.utils.ReplicaId;
+import isos.utils.ViewNumber;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -154,8 +157,144 @@ class AgmtSlotQueueProcessorTest {
     // After a request has been forwarded to execution, we are done!
   }
 
+  /**
+   * This tests the reconciliation path after the dependency set from the DepVerifies cannot be
+   * confirmed.
+   */
   @Test
-  void testCoordinatorReconciliationPath() {}
+  void testCoordinatorReconciliationPath() {
+    var ownReplicaId = new ReplicaId(2);
+    var otherReplicaIds = new ReplicaId[] {new ReplicaId(1), new ReplicaId(0), new ReplicaId(3)};
+    var seqNum = new SequenceNumber(ownReplicaId, 1);
+
+    var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
+    var clientRequestHash = clientRequest.calculateHash();
+
+    RequestConflictChecker conflictChecker =
+        (r) -> new DependencySet(List.of(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)));
+
+    // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
+    // coordinator
+    var slot = new AgreementSlot(seqNum, clientRequest);
+
+    when(msgSenderMock.getLowestPingReplicas(anyInt()))
+        .thenReturn(new HashSet<>(List.of(new ReplicaId(0), new ReplicaId(3))));
+
+    var queueProcessor =
+        new AgmtSlotQueueProcessor(
+            ownReplicaId,
+            seqNum,
+            incomingQueue,
+            timeoutConfig,
+            msgSenderMock,
+            slot,
+            conflictChecker,
+            dependencyWaitMock,
+            requestExecutorMock,
+            maxFaults);
+    var queueProcessorThread = new Thread(queueProcessor);
+    queueProcessorThread.start();
+
+    var argumentCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
+
+    // Because the queueProcessor is in another thread, we use timeout to wait until the function is
+    // called
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), argumentCaptor.capture());
+
+    // When the queueProcessor handles the clientRequest, it should broadcast the DepPropose and
+    // client request
+    var wrapper = argumentCaptor.getValue();
+    var depProposeWithRequest = (DepProposeWithRequest) wrapper.getPayload();
+    var depPropose = depProposeWithRequest.depPropose();
+    assertEquals(seqNum, depProposeWithRequest.seqNum());
+    assertEquals(ownReplicaId.value(), wrapper.getSender());
+    assertEquals(seqNum, depPropose.seqNum());
+    assertEquals(ownReplicaId, depPropose.coordinatorId());
+    assertEquals(clientRequestHash, depPropose.requestHash());
+    assertEquals(
+        new DependencySet(
+            List.of(
+                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0))),
+        depPropose.depSet());
+    assertEquals(Set.of(new ReplicaId(3), new ReplicaId(0)), depPropose.followerQuorum());
+
+    List<DepVerifyMessage> replies = new LinkedList<>();
+    var depProposeHash = depPropose.calculateHash();
+
+    DependencySet depSet1 =
+        new DependencySet(
+            List.of(
+                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[1], 0)));
+    DependencySet depSet2 =
+        new DependencySet(
+            List.of(
+                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[2], 0)));
+
+    replies.add(new DepVerifyMessage(seqNum, new ReplicaId(0), depProposeHash, depSet1));
+    replies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), depProposeHash, depSet2));
+    incomingQueue.addAll(replies);
+
+    var depVerifiesHash = DepVerifyMessage.calculateDepVerifyHash(replies);
+
+    // As some dependencies do not have a f+1 quorum,
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), argumentCaptor.capture());
+
+    wrapper = argumentCaptor.getValue();
+    var prepare = (PrepareMessage) wrapper.getPayload();
+    incomingQueue.add(prepare);
+    assertEquals(seqNum, prepare.seqNum());
+    // view number only increases if a timeout triggers
+    assertEquals(new ViewNumber(-1), prepare.viewNumber());
+    assertEquals(ownReplicaId, prepare.replicaId());
+    assertEquals(depVerifiesHash, prepare.depVerifiesHash());
+
+    // Page 5 ISOS: After a replica has obtained 2f+1 prepares matching the set of known DepVerifys,
+    // the replica
+    // has rp-prepared the agreement slot and continues with broadcasting a Commit message.
+
+    // Create
+    List<PrepareMessage> prepares = new LinkedList<>();
+    prepares.add(
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
+    prepares.add(
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+    incomingQueue.addAll(prepares);
+
+    verify(msgSenderMock, timeout(500).times(2))
+        .broadcastToReplicas(eq(true), argumentCaptor.capture());
+
+    wrapper = argumentCaptor.getValue();
+    var commit = (CommitMessage) wrapper.getPayload();
+    incomingQueue.add(commit);
+    assertEquals(seqNum, commit.seqNum());
+    assertEquals(new ViewNumber(-1), commit.viewNumber());
+    assertEquals(ownReplicaId, commit.replicaId());
+    assertEquals(depVerifiesHash, commit.depVerifiesHash());
+
+    List<CommitMessage> commits = new LinkedList<>();
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+    incomingQueue.addAll(commits);
+
+    // After the coordinator receives 2f+1 commit messages (including its own), it can forward the
+    // request to the execution
+
+    // The final dependency set is the union of all dependency sets
+    var depSetUnion =
+        new DependencySet(
+            List.of(
+                new SequenceNumber(ownReplicaId, 0),
+                new SequenceNumber(otherReplicaIds[0], 0),
+                new SequenceNumber(otherReplicaIds[1], 0),
+                new SequenceNumber(otherReplicaIds[2], 0)));
+
+    var execArgCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execArgCaptor.capture());
+    var execMessage = execArgCaptor.getValue();
+    assertEquals(seqNum, execMessage.seqNum());
+    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(depSetUnion, execMessage.depSet());
+  }
 
   @Test
   void testFollowerHappyPath() {

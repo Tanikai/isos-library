@@ -35,11 +35,20 @@ public record DepVerifyMessage(
     return this.followerId;
   }
 
-  public static DependencySet unionOfDependencies(List<DepVerifyMessage> depVerifies) {
+  /**
+   * @param depVerifies
+   * @param depPropose
+   * @return
+   */
+  public static DependencySet unionOfDependencies(
+      List<DepVerifyMessage> depVerifies, DepProposeMessage depPropose) {
     var allDeps =
         depVerifies.stream()
             .flatMap(m -> m.depSet().dependencies().stream())
             .collect(Collectors.toSet());
+    if (depPropose != null) {
+      allDeps.addAll(depPropose.depSet().dependencies());
+    }
     return new DependencySet(allDeps);
   }
 

@@ -486,7 +486,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Add all dependencies to a single dependency set
     // TODO Kai: do we have to check our own dependencySet as well?
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum);
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
     var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
 
     // Line 46: Every dependency is reported by at least f+1 followers
@@ -575,7 +575,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Forward the slot to execution
     // Dependency set used in execution is union set of all dependencies of the follower quorum
     // defined initially by the DepPropose
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum);
+    // TODO Kai: do we have to include depPropose dependencies here?
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
@@ -594,7 +595,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
             this.ownReplicaId,
             depVerifiesFollowerQuorumHash);
     var wrapper = new ISOSMessageWrapper(prepareMsg, this.ownReplicaId);
-    this.msgSender.broadcastToReplicas(false, wrapper);
+    // We have to process our own prepare message as well, so includeSelf is true
+    this.msgSender.broadcastToReplicas(true, wrapper);
   }
 
   /**
@@ -615,7 +617,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     String depVerifyHash =
         DepVerifyMessage.calculateDepVerifyHash(
             this.slot.getDepVerifies().values().stream().toList());
-    // TODO Kai: somehow cache the depVerifyHash?
+    // TODO Kai: somehow cache our own depVerifyHash?
 
     if (!depVerifyHash.equals(prepare.depVerifiesHash())) {
       logger.warn("Hash mismatch with received prepare message, throwing message away");
@@ -631,11 +633,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    if (this.slot.getViewNumber() != prepare.viewNumber()) {
+    if (!this.slot.getViewNumber().equals(prepare.viewNumber())) {
       logger.info(
           "View number mismatch in prepare, own view number: {}, received: {}",
           this.slot.getViewNumber(),
           prepare.viewNumber());
+      return;
     }
 
     // If we have a 2f+1 quorum, we can continue
@@ -648,7 +651,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var commitMsg =
         new CommitMessage(this.seqNum, this.slot.getViewNumber(), this.ownReplicaId, depVerifyHash);
     var wrapper = new ISOSMessageWrapper(commitMsg, this.ownReplicaId);
-    this.msgSender.broadcastToReplicas(false, wrapper);
+    this.msgSender.broadcastToReplicas(true, wrapper);
   }
 
   /**
@@ -671,23 +674,29 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Before we can continue processing, we need to fulfill the preconditions
     if (this.slot.getStep() != AgreementSlotPhase.RP_PREPARED) {
-      logger.info("Step mismatch while handling commit message.");
+      logger.info("Step mismatch while handling commit message. Current step is {}", this.slot.getStep());
       return;
     }
 
-    if (this.slot.getViewNumber() != commit.viewNumber()) {
+    if (!this.slot.getViewNumber().equals(commit.viewNumber())) {
       logger.info(
           "View number mismatch in commit, own view number: {}, received: {}",
           this.slot.getViewNumber(),
           commit.viewNumber());
     }
 
-    logger.info("We have reached 2f+1 quorum!");
+    if (this.commitQuorum.size() < ((2 * this.maxFaults) + 1)) {
+      logger.info("Received commit message, but quorum not reached yet.");
+      return;
+    }
+
+    logger.info("We have reached 2f+1 RpCommit messages!");
 
     this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
 
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies);
+    // ISOS Paper: ...together with the union of the dependency sets of all DepVerifys and the associated DepPropose.
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, this.slot.getDepPropose());
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
