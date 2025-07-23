@@ -44,7 +44,8 @@ public record DepVerifyMessage(
   }
 
   /**
-   * Sorts the depVerify messages by their sequence number and then calculates the SHA-256 hash.
+   * Sorts the depVerify messages by their followerId (sequence numbers have to be the same) and
+   * then calculates the SHA-256 hash.
    *
    * @param depVerifies List of DepVerify messages from the follower quorum defined in the initial
    *     DepPropose message.
@@ -54,7 +55,7 @@ public record DepVerifyMessage(
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       List<DepVerifyMessage> sorted = new ArrayList<>(depVerifies);
-      sorted.sort(Comparator.comparing(DepVerifyMessage::seqNum));
+      sorted.sort(Comparator.comparing(DepVerifyMessage::followerId));
 
       for (DepVerifyMessage msg : sorted) {
         SequenceNumber seqNum = msg.seqNum();

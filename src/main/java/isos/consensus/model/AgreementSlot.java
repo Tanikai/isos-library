@@ -45,6 +45,12 @@ public class AgreementSlot {
     this(seqNum, null);
   }
 
+  /**
+   * @param seqNum The sequence number of this agreement slot.
+   * @param r When the ClientRequest is not null, the {@link isos.consensus.AgmtSlotQueueProcessor}
+   *     acts as the coordinator for this agreement slot when this AgreementSlot object is passed to
+   *     it. When it is null, it acts as the follower.
+   */
   public AgreementSlot(SequenceNumber seqNum, OrderedClientRequest r) {
     this(
         seqNum,

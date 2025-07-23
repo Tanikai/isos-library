@@ -325,6 +325,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // region Fast Path
   /**
+   * Handles a depPropose message, which means that we are the follower for this agreement slot.
    * Pseudocode Line 20-35
    *
    * @param depProposeWithR
@@ -385,6 +386,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
         this.slotLock.unlock();
       }
     }
+
     // Line 29
     if (request != null) {
       // TODO Kai: assert r correctly signed
@@ -402,8 +404,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
         var depVerify =
             new DepVerifyMessage(
                 this.slot.getSeqNum(), this.ownReplicaId, depPropose.calculateHash(), dependencies);
+
         var wrapper = new ISOSMessageWrapper(depVerify, this.ownReplicaId.value());
-        this.msgSender.broadcastToReplicas(false, wrapper);
+        this.msgSender.broadcastToReplicas(true, wrapper);
       }
     }
   }
@@ -452,6 +455,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     try {
       // TODO Kai: While we are waiting, we cannot process any other messages. Is this fine?
+      // Maybe start waiting after we have reached the quorum of depVerifies?
       this.dependencyWait.waitUntilConsensusStarted(depVerify.depSet().dependencies());
     } catch (InterruptedException e) {
       logger.error("Interrupted while waiting for dependencies of received DepVerify message.");
@@ -470,6 +474,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
         AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(depVerifyMap, followerQuorum);
 
     if (depVerifiesFollowerQuorum.size() < (this.maxFaults * 2)) {
+      logger.info("Did not reach follower quorum yet.");
       return;
     }
 
@@ -480,6 +485,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // Add all dependencies to a single dependency set
+    // TODO Kai: do we have to check our own dependencySet as well?
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum);
     var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
 
@@ -492,12 +498,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
                       depVerifyMap.values().stream()
                           .filter(msg -> msg.depSet().dependencies().contains(seqNum))
                           .count();
-                  return depCount > (this.maxFaults + 1);
+                  logger.info("Sequence Number {} reported by {} followers", seqNum, depCount);
+                  return depCount >= (this.maxFaults + 1);
                 });
 
     if (!depsOk) {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
+      logger.info(
+          "At least 1 dependency is not reported by at least f+1 followers. Enter reconciliation path.");
       enterReconciliationPath(depVerifyHash);
       return;
     }
@@ -508,7 +517,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var depCommitMsg = new DepCommitMessage(this.seqNum, this.ownReplicaId, depVerifyHash);
 
     var wrapper = new ISOSMessageWrapper(depCommitMsg, this.ownReplicaId.value());
-    this.msgSender.broadcastToReplicas(false, wrapper);
+
+    // Page 4 ISOS: agreement slot is fp-committed once a replica has obtained matching DepCommits
+    // from
+    // 2f+1 replicas (possibly including itself)
+    this.msgSender.broadcastToReplicas(true, wrapper);
   }
 
   private void handleReceivedDepCommit(DepCommitMessage depCommit) {
@@ -668,6 +681,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
           this.slot.getViewNumber(),
           commit.viewNumber());
     }
+
+    logger.info("We have reached 2f+1 quorum!");
 
     this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
