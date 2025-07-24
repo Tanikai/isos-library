@@ -64,7 +64,7 @@ class AgmtSlotQueueProcessorTest {
     var clientRequestHash = clientRequest.calculateHash();
 
     RequestConflictChecker conflictChecker =
-        (r) -> new DependencySet(List.of(new SequenceNumber(ownReplicaId, 0)));
+        (r) -> new DependencySet(new SequenceNumber(ownReplicaId, 0));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
     // coordinator
@@ -88,15 +88,15 @@ class AgmtSlotQueueProcessorTest {
     var queueProcessorThread = new Thread(queueProcessor);
     queueProcessorThread.start();
 
-    var argumentCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
+    var msgCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
 
     // Because the queueProcessor is in another thread, we use timeout to wait until the function is
     // called
-    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), argumentCaptor.capture());
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), msgCaptor.capture());
 
     // When the queueProcessor handles the clientRequest, it should broadcast the DepPropose and
     // client request
-    var wrapper = argumentCaptor.getValue();
+    var wrapper = msgCaptor.getValue();
     var depProposeWithRequest = (DepProposeWithRequest) wrapper.getPayload();
     var depPropose = depProposeWithRequest.depPropose();
     assertEquals(seqNum, depProposeWithRequest.seqNum());
@@ -104,8 +104,7 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, depPropose.seqNum());
     assertEquals(ownReplicaId, depPropose.coordinatorId());
     assertEquals(clientRequestHash, depPropose.requestHash());
-    assertEquals(
-        new DependencySet(List.of(new SequenceNumber(ownReplicaId, 0))), depPropose.depSet());
+    assertEquals(new DependencySet(new SequenceNumber(ownReplicaId, 0)), depPropose.depSet());
     assertEquals(Set.of(new ReplicaId(3), new ReplicaId(0)), depPropose.followerQuorum());
 
     // When other replicas receive the DepPropose message, they calculate their dependencies and
@@ -116,7 +115,7 @@ class AgmtSlotQueueProcessorTest {
     // f+1 Replicas reply with an additional dependency, thus it has to be included in the DepCommit
     // The original dependency is included in all replies
     DependencySet finalDepSet =
-        new DependencySet(List.of(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(0, 0)));
+        new DependencySet(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(0, 0));
 
     // Only the replicas in the follower quorum send a DepVerify message
     for (var r : depPropose.followerQuorum()) {
@@ -128,9 +127,9 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.addAll(replies);
 
     // Now we expect a DepCommit message that is sent
-    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), argumentCaptor.capture());
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
 
-    wrapper = argumentCaptor.getValue();
+    wrapper = msgCaptor.getValue();
     var depCommit = (DepCommitMessage) wrapper.getPayload();
     incomingQueue.add(depCommit);
     // as broadcast is called with includeSelf true, we have to add it to the incomingQueue
@@ -147,9 +146,9 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(depCommit1);
     incomingQueue.add(depCommit2);
 
-    var execArgCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
-    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execArgCaptor.capture());
-    var execMessage = execArgCaptor.getValue();
+    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
+    var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
     assertEquals(clientRequest, execMessage.clientRequest());
     assertEquals(finalDepSet, execMessage.depSet());
@@ -171,7 +170,9 @@ class AgmtSlotQueueProcessorTest {
     var clientRequestHash = clientRequest.calculateHash();
 
     RequestConflictChecker conflictChecker =
-        (r) -> new DependencySet(List.of(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)));
+        (r) ->
+            new DependencySet(
+                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
     // coordinator
@@ -195,15 +196,15 @@ class AgmtSlotQueueProcessorTest {
     var queueProcessorThread = new Thread(queueProcessor);
     queueProcessorThread.start();
 
-    var argumentCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
+    var msgCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
 
     // Because the queueProcessor is in another thread, we use timeout to wait until the function is
     // called
-    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), argumentCaptor.capture());
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), msgCaptor.capture());
 
     // When the queueProcessor handles the clientRequest, it should broadcast the DepPropose and
     // client request
-    var wrapper = argumentCaptor.getValue();
+    var wrapper = msgCaptor.getValue();
     var depProposeWithRequest = (DepProposeWithRequest) wrapper.getPayload();
     var depPropose = depProposeWithRequest.depPropose();
     assertEquals(seqNum, depProposeWithRequest.seqNum());
@@ -213,8 +214,7 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(clientRequestHash, depPropose.requestHash());
     assertEquals(
         new DependencySet(
-            List.of(
-                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0))),
+            new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)),
         depPropose.depSet());
     assertEquals(Set.of(new ReplicaId(3), new ReplicaId(0)), depPropose.followerQuorum());
 
@@ -223,12 +223,10 @@ class AgmtSlotQueueProcessorTest {
 
     DependencySet depSet1 =
         new DependencySet(
-            List.of(
-                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[1], 0)));
+            new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[1], 0));
     DependencySet depSet2 =
         new DependencySet(
-            List.of(
-                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[2], 0)));
+            new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[2], 0));
 
     replies.add(new DepVerifyMessage(seqNum, new ReplicaId(0), depProposeHash, depSet1));
     replies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), depProposeHash, depSet2));
@@ -237,9 +235,9 @@ class AgmtSlotQueueProcessorTest {
     var depVerifiesHash = DepVerifyMessage.calculateDepVerifyHash(replies);
 
     // As some dependencies do not have a f+1 quorum,
-    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), argumentCaptor.capture());
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
 
-    wrapper = argumentCaptor.getValue();
+    wrapper = msgCaptor.getValue();
     var prepare = (PrepareMessage) wrapper.getPayload();
     incomingQueue.add(prepare);
     assertEquals(seqNum, prepare.seqNum());
@@ -260,10 +258,9 @@ class AgmtSlotQueueProcessorTest {
         new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
     incomingQueue.addAll(prepares);
 
-    verify(msgSenderMock, timeout(500).times(2))
-        .broadcastToReplicas(eq(true), argumentCaptor.capture());
+    verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
 
-    wrapper = argumentCaptor.getValue();
+    wrapper = msgCaptor.getValue();
     var commit = (CommitMessage) wrapper.getPayload();
     incomingQueue.add(commit);
     assertEquals(seqNum, commit.seqNum());
@@ -282,15 +279,14 @@ class AgmtSlotQueueProcessorTest {
     // The final dependency set is the union of all dependency sets
     var depSetUnion =
         new DependencySet(
-            List.of(
-                new SequenceNumber(ownReplicaId, 0),
-                new SequenceNumber(otherReplicaIds[0], 0),
-                new SequenceNumber(otherReplicaIds[1], 0),
-                new SequenceNumber(otherReplicaIds[2], 0)));
+            new SequenceNumber(ownReplicaId, 0),
+            new SequenceNumber(otherReplicaIds[0], 0),
+            new SequenceNumber(otherReplicaIds[1], 0),
+            new SequenceNumber(otherReplicaIds[2], 0));
 
-    var execArgCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
-    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execArgCaptor.capture());
-    var execMessage = execArgCaptor.getValue();
+    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
+    var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
     assertEquals(clientRequest, execMessage.clientRequest());
     assertEquals(depSetUnion, execMessage.depSet());
@@ -306,7 +302,7 @@ class AgmtSlotQueueProcessorTest {
     var otherFollowerId = new ReplicaId(3);
     var seqNum = new SequenceNumber(coordinatorId, 1);
 
-    var depSet = new DependencySet(List.of(new SequenceNumber(0, 0)));
+    var depSet = new DependencySet(new SequenceNumber(0, 0));
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
@@ -317,7 +313,7 @@ class AgmtSlotQueueProcessorTest {
     var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
 
     RequestConflictChecker conflictChecker =
-        (r) -> new DependencySet(List.of(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
+        (r) -> new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
     // We have 1 dependencySet with 0.0 and 2 with 0.0+1.0
 
     var slot = new AgreementSlot(seqNum);
@@ -339,29 +335,27 @@ class AgmtSlotQueueProcessorTest {
     // Follower is in FollowerQuorum, so we have to broadcast a DepVerify
     incomingQueue.add(depProposeWithRequest);
 
-    ArgumentCaptor<ISOSMessageWrapper> argCaptor =
-        ArgumentCaptor.forClass(ISOSMessageWrapper.class);
+    var msgCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
 
     // DepVerify
-    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), argCaptor.capture());
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
 
-    var wrapper = argCaptor.getValue();
+    var wrapper = msgCaptor.getValue();
     var depVerify = (DepVerifyMessage) wrapper.getPayload();
     incomingQueue.add(depVerify);
     assertEquals(seqNum, depVerify.seqNum());
     assertEquals(ownReplicaId, depVerify.followerId());
     assertEquals(depProposeHash, depVerify.depProposeHash());
     assertEquals(
-        new DependencySet(List.of(new SequenceNumber(0, 0), new SequenceNumber(1, 0))),
-        depVerify.depSet());
+        new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)), depVerify.depSet());
 
     // We still have to receive the second DepVerify from the other replica
     var otherDepVerify =
         new DepVerifyMessage(
             seqNum,
-            new ReplicaId(3),
+            otherFollowerId,
             depProposeHash,
-            new DependencySet(List.of(new SequenceNumber(0, 0), new SequenceNumber(1, 0))));
+            new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
     incomingQueue.add(otherDepVerify);
 
     var depVerifiesHash =
@@ -372,9 +366,9 @@ class AgmtSlotQueueProcessorTest {
 
     // With the DepPropose, own DepVerify, and DepVerify from other replica with matching
     // Dependencies, the follower broadcasts a DepCommit message
-    verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), argCaptor.capture());
+    verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
 
-    wrapper = argCaptor.getValue();
+    wrapper = msgCaptor.getValue();
     var depCommit = (DepCommitMessage) wrapper.getPayload();
     incomingQueue.add(depCommit);
     assertEquals(seqNum, depCommit.seqNum());
@@ -387,18 +381,123 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(depCommit1);
     incomingQueue.add(depCommit2);
 
-    var execArgCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
-    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execArgCaptor.capture());
-    var execMessage = execArgCaptor.getValue();
+    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
+    var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
     assertEquals(clientRequest, execMessage.clientRequest());
     assertEquals(
-        new DependencySet(List.of(new SequenceNumber(0, 0), new SequenceNumber(1, 0))),
+        new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)),
         execMessage.depSet());
   }
 
   @Test
-  void testFollowerReconciliationPath() {}
+  void testFollowerReconciliationPath() {
+    var coordinatorId = new ReplicaId(1);
+    var ownReplicaId = new ReplicaId(3);
+    var otherFollowerId = new ReplicaId(0);
+    var otherReplicaIds = new ReplicaId[] {new ReplicaId(0), new ReplicaId(1), new ReplicaId(2)};
+
+    var seqNum = new SequenceNumber(coordinatorId, 3);
+    var depSet = new DependencySet(new SequenceNumber(0, 0));
+    var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
+
+    var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
+    var clientRequestHash = clientRequest.calculateHash();
+    var depPropose =
+        new DepProposeMessage(seqNum, coordinatorId, clientRequestHash, depSet, followerQuorum);
+    var depProposeHash = depPropose.calculateHash();
+    var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
+
+    RequestConflictChecker conflictChecker =
+        (r) -> new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
+
+    var slot = new AgreementSlot(seqNum);
+    var queueProcessor =
+        new AgmtSlotQueueProcessor(
+            ownReplicaId,
+            seqNum,
+            incomingQueue,
+            timeoutConfig,
+            msgSenderMock,
+            slot,
+            conflictChecker,
+            dependencyWaitMock,
+            requestExecutorMock,
+            maxFaults);
+    var queueProcessorThread = new Thread(queueProcessor);
+    queueProcessorThread.start();
+
+    // Follower is in FollowerQuorum, so we have to broadcast dePVerify
+    incomingQueue.add(depProposeWithRequest);
+
+    var msgCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
+
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
+
+    var wrapper = msgCaptor.getValue();
+    var depVerify = (DepVerifyMessage) wrapper.getPayload();
+    incomingQueue.add(depVerify);
+    assertEquals(seqNum, depVerify.seqNum());
+    assertEquals(ownReplicaId, depVerify.followerId());
+    assertEquals(depProposeHash, depVerify.depProposeHash());
+    assertEquals(
+        new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)), depVerify.depSet());
+
+    var otherDepVerify =
+        new DepVerifyMessage(
+            seqNum, otherFollowerId, depProposeHash, new DependencySet(new SequenceNumber(0, 0)));
+    incomingQueue.add(otherDepVerify);
+
+    // Technically there are f+1 replicas with the SequenceNumber(1,0) in the DependencySet, but as
+    // the f+1 does not come from the follower Quroum, the ISOS paper tells us that we have to go to
+    // the reconciliation path
+
+    var depVerifiesHash =
+        DepVerifyMessage.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+
+    verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
+
+    wrapper = msgCaptor.getValue();
+    var prepare = (PrepareMessage) wrapper.getPayload();
+    incomingQueue.add(prepare);
+    assertEquals(seqNum, prepare.seqNum());
+    assertEquals(new ViewNumber(-1), prepare.viewNumber());
+    assertEquals(ownReplicaId, prepare.replicaId());
+    assertEquals(depVerifiesHash, prepare.depVerifiesHash());
+
+    // Create the remaining prepare messages
+    List<PrepareMessage> prepares = new LinkedList<>();
+    prepares.add(
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
+    prepares.add(
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+    incomingQueue.addAll(prepares);
+
+    verify(msgSenderMock, timeout(500).times(3)).broadcastToReplicas(eq(true), msgCaptor.capture());
+
+    wrapper = msgCaptor.getValue();
+    var commit = (CommitMessage) wrapper.getPayload();
+    incomingQueue.add(commit);
+    assertEquals(seqNum, commit.seqNum());
+    assertEquals(new ViewNumber(-1), commit.viewNumber());
+    assertEquals(ownReplicaId, commit.replicaId());
+    assertEquals(depVerifiesHash, commit.depVerifiesHash());
+
+    List<CommitMessage> commits = new LinkedList<>();
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+    incomingQueue.addAll(commits);
+
+    var depSetUnion = new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
+
+    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
+    var execMessage = execCaptor.getValue();
+    assertEquals(seqNum, execMessage.seqNum());
+    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(depSetUnion, execMessage.depSet());
+  }
 
   /** A replica that is not included in the followerQuorum of the DepPropose message. */
   @Test

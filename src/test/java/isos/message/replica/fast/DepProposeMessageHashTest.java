@@ -1,14 +1,12 @@
 package isos.message.replica.fast;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
-import isos.message.replica.fast.DepProposeMessage;
 import isos.utils.ReplicaId;
-import org.junit.jupiter.api.Test;
-
 import java.util.Set;
-
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class DepProposeMessageHashTest {
 
@@ -17,9 +15,9 @@ class DepProposeMessageHashTest {
     SequenceNumber seqNum = new SequenceNumber(1, 42);
     ReplicaId coordinatorId = new ReplicaId(7);
     String requestHash = "abc123";
-    DependencySet depSet = new DependencySet(Set.of(
+    DependencySet depSet = new DependencySet(
         new SequenceNumber(2, 10),
-        new SequenceNumber(3, 20)));
+        new SequenceNumber(3, 20));
     Set<ReplicaId> followerQuorum = Set.of(new ReplicaId(5), new ReplicaId(2));
 
     DepProposeMessage msg1 = new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
@@ -35,9 +33,9 @@ class DepProposeMessageHashTest {
     SequenceNumber seqNum = new SequenceNumber(1, 42);
     ReplicaId coordinatorId = new ReplicaId(7);
     String requestHash = "abc123";
-    DependencySet depSet = new DependencySet(Set.of(
+    DependencySet depSet = new DependencySet(
         new SequenceNumber(2, 10),
-        new SequenceNumber(3, 20)));
+        new SequenceNumber(3, 20));
     Set<ReplicaId> followerQuorum = Set.of(new ReplicaId(5), new ReplicaId(2));
 
     DepProposeMessage msg1 = new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);

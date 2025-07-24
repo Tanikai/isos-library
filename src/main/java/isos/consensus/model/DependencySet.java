@@ -24,6 +24,10 @@ public class DependencySet implements Externalizable {
     this.depSet = new HashSet<>(depSetList);
   }
 
+  public DependencySet(SequenceNumber... depSet) {
+    this.depSet = new HashSet<>(Arrays.stream(depSet).toList());
+  }
+
   /**
    * Returns the sequence numbers of the dependencies as an unmodifiable set.
    *

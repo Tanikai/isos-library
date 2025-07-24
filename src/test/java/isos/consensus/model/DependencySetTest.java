@@ -29,8 +29,8 @@ class DependencySetTest {
     SequenceNumber sn1 = new SequenceNumber(new ReplicaId(1), 100);
     SequenceNumber sn2 = new SequenceNumber(new ReplicaId(2), 200);
     SequenceNumber sn3 = new SequenceNumber(new ReplicaId(3), 300);
-    DependencySet depSetA = new DependencySet(Set.of(sn1, sn2));
-    DependencySet depSetB = new DependencySet(Set.of(sn1, sn3));
+    DependencySet depSetA = new DependencySet(sn1, sn2);
+    DependencySet depSetB = new DependencySet(sn1, sn3);
     byte[] bytesA = depSetA.asBytes();
     byte[] bytesB = depSetB.asBytes();
     assertFalse(Arrays.equals(bytesA, bytesB), "asBytes() should produce different output for sets with different elements");
