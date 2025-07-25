@@ -3,8 +3,12 @@ package isos.api;
 import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.configuration.ConfigurationManager;
 import isos.consensus.*;
+import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
+import isos.execution.ExecuteMessage;
+import isos.execution.ExecutionManager;
+import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import java.util.Collection;
@@ -17,7 +21,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * DECISION Kai: Maybe interface instead of class? This class is used as the central manager of the
- * replica-side state and logic.
+ * replica-side state and logic. -> Use class as baseline, and let users extend certain parts of
+ * logic via inheritance, or pass lambda functions to the constructor.
  */
 public class ISOSApplication {
 
@@ -25,8 +30,10 @@ public class ISOSApplication {
   private final TimeoutConfiguration timeoutConf = new TimeoutConfiguration(1000);
   private final ReplicaId ownReplicaId;
 
-  // DECISION Kai: AgreementSlotSequence that contains slots of all replicas, or
-  // AgreementSlotSequence per replica?
+  /**
+   * DECISION Kai: AgreementSlotSequence that contains slots of all replicas, or
+   * AgreementSlotSequence per replica? -> All slots of replicas
+   */
   private final AgreementSlotManager agrSlotManager;
 
   /**
@@ -40,6 +47,8 @@ public class ISOSApplication {
   private ServerCommunicationSystem scs;
 
   private final ConfigurationManager configManager;
+  private final ExecutionManager executionManager;
+  private final Thread executionManagerThread;
 
   private final BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
   private BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
@@ -55,6 +64,8 @@ public class ISOSApplication {
             ownReplicaId,
             timeoutConf,
             configManager.getStaticConf().getInitialViewAsReplicaId(),
+            this::getConflictsForClientRequest,
+            this::receiveCommittedRequest,
             maxFaults);
     try {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
@@ -64,8 +75,15 @@ public class ISOSApplication {
     }
     this.agrSlotManager.initialize(scs);
 
-    // Request
+    // Request Execution
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
+
+    this.executionManager =
+        new ExecutionManager(
+            50, // TODO Kai: ExecutionWindow should be configurable, and what is a good value for
+            // the window?
+            new TrivialDependencyGraphBuilder());
+    this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
   }
 
   /** Starts the application by connecting to the repliacs first. */
@@ -77,6 +95,11 @@ public class ISOSApplication {
 
   public ServerCommunicationSystem debug_getSCS() {
     return this.scs;
+  }
+
+  private DependencySet getConflictsForClientRequest(OrderedClientRequest r) {
+    // FIXME Kai
+    return new DependencySet();
   }
 
   /**
@@ -106,7 +129,7 @@ public class ISOSApplication {
             // value is List<AgreementSlot>
             .values()
             // allow for parallelStream() as well, as dependencies can be calculated independently
-            .stream()
+            .parallelStream()
             // turn the Stream<List<AgreementSlot>> into Stream<AgreementSlot>
             .flatMap(Collection::stream)
             // if they conflict, return the sequence number, else return null for "no conflict"
@@ -141,5 +164,17 @@ public class ISOSApplication {
     }
 
     return true;
+  }
+
+  /**
+   * Receive a committed request from the {@link AgreementSlotManager} that can be executed by the
+   * execution engine.
+   *
+   * @param r
+   */
+  public void receiveCommittedRequest(ExecuteMessage r) {
+    if (!this.executionManager.submitCommittedRequest(r)) {
+      logger.error("Could not add committed request to executionManager due to maximum capacity.");
+    }
   }
 }

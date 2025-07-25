@@ -6,8 +6,8 @@ import bftsmart.communication.client.RequestReceiver;
 import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
-import isos.graph.ExecuteMessage;
-import isos.message.client.ClientRequest;
+import isos.execution.ExecutableRequestReceiver;
+import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
@@ -46,6 +46,15 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   /** Callbacks for threads to communicate with services */
   private MessageSender msgSender; // Handler for outgoing messages from the QueueProcessors
 
+  /** Callback when a request was committed and can be executed (with the dependency graph). */
+  private final ExecutableRequestReceiver executableRequestReceiver;
+
+  /**
+   * Callback to get the conflicts of a given request. Has to be definable by the application
+   * developer, so we use a callback function
+   */
+  private final RequestConflictChecker conflictChecker;
+
   private final int maxFaults;
 
   /**
@@ -58,6 +67,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       ReplicaId ownReplicaId,
       TimeoutConfiguration timeoutConfig,
       ReplicaId[] replicaIds,
+      RequestConflictChecker conflictChecker,
+      ExecutableRequestReceiver executableRequestReceiver,
       int maxFaults) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
@@ -70,6 +81,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     for (var rId : replicaIds) {
       this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId));
     }
+    this.conflictChecker = conflictChecker;
+    this.executableRequestReceiver = executableRequestReceiver;
     this.maxFaults = maxFaults;
   }
 
@@ -123,9 +136,9 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             timeoutConfig,
             msgSender,
             slot,
-            this::conflictsForRequest,
+            this.conflictChecker,
             this::waitForDeps,
-            this::receiveRequestForExecution,
+            this.executableRequestReceiver,
             this.maxFaults);
     Thread newQueueProcessorThread =
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
@@ -171,17 +184,6 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   }
 
   /**
-   * Pseudocode 66, 67
-   *
-   * @param r
-   * @return
-   */
-  private DependencySet conflictsForRequest(ClientRequest r) {
-    // TODO Kai: Determine Dependency Set
-    return new DependencySet();
-  }
-
-  /**
    * Waits for all dependencies in the Dependency Set. Called by QueueProcessors that have to wait
    * for progress of their dependencies in order to proceed.
    *
@@ -222,10 +224,6 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
 
     // For CountDownLatch, we do not have to wait in a while loop
     allDepLatch.await();
-  }
-
-  public void receiveRequestForExecution(ExecuteMessage request) {
-    // TODO Kai:
   }
 
   /**

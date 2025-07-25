@@ -1,3 +1,3 @@
-package isos.graph;
+package isos.execution.graph;
 
 public class DependencyGraph {}

@@ -1,4 +1,4 @@
-package isos.graph;
+package isos.execution;
 
 @FunctionalInterface
 public interface ExecutableRequestReceiver {

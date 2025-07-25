@@ -2,9 +2,9 @@ package isos.consensus;
 
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
-import isos.graph.ExecutableRequestReceiver;
-import isos.graph.ExecuteMessage;
-import isos.graph.RequestConflictChecker;
+import isos.execution.ExecutableRequestReceiver;
+import isos.execution.ExecuteMessage;
+import isos.execution.graph.RequestConflictChecker;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepCommitMessage;
@@ -486,7 +486,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Add all dependencies to a single dependency set
     // TODO Kai: do we have to check our own dependencySet as well?
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
+    var unionDepsFollowerQuorum =
+        DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
     var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
 
     // Line 46: Every dependency is reported by at least f+1 followers
@@ -576,7 +577,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Dependency set used in execution is union set of all dependencies of the follower quorum
     // defined initially by the DepPropose
     // TODO Kai: do we have to include depPropose dependencies here?
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
+    var unionDepsFollowerQuorum =
+        DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
@@ -655,7 +657,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   }
 
   /**
-   * Preconditions are similar to the
+   * Preconditions are similar to {@link #handleReceivedPrepareMessage(PrepareMessage)}.
    *
    * @param commit
    */
@@ -674,7 +676,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Before we can continue processing, we need to fulfill the preconditions
     if (this.slot.getStep() != AgreementSlotPhase.RP_PREPARED) {
-      logger.info("Step mismatch while handling commit message. Current step is {}", this.slot.getStep());
+      logger.info(
+          "Step mismatch while handling commit message. Current step is {}", this.slot.getStep());
       return;
     }
 
@@ -695,8 +698,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
 
-    // ISOS Paper: ...together with the union of the dependency sets of all DepVerifys and the associated DepPropose.
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, this.slot.getDepPropose());
+    // ISOS Paper: ...together with the union of the dependency sets of all DepVerifys and the
+    // associated DepPropose.
+    var unionDepsFollowerQuorum =
+        DepVerifyMessage.unionOfDependencies(depVerifies, this.slot.getDepPropose());
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);

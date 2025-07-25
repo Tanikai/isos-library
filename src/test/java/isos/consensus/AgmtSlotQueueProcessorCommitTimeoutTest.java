@@ -5,8 +5,8 @@ import static org.mockito.Mockito.*;
 
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
-import isos.graph.ExecutableRequestReceiver;
-import isos.graph.RequestConflictChecker;
+import isos.execution.ExecutableRequestReceiver;
+import isos.execution.graph.RequestConflictChecker;
 import isos.message.replica.ISOSMessage;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.fast.DepProposeMessage;
