@@ -2,11 +2,7 @@ package isos.execution;
 
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
-import isos.message.client.ClientRequest;
+import isos.message.client.OrderedClientRequest;
 
 public record ExecuteMessage(
-        SequenceNumber seqNum,
-        ClientRequest clientRequest,
-        DependencySet depSet
-) {
-}
+    SequenceNumber seqNum, OrderedClientRequest clientRequest, DependencySet depSet) {}

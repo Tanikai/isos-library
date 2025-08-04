@@ -8,16 +8,17 @@ import isos.api.ISOSApplication;
 import isos.communication.ClientMessageWrapper;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
-import isos.message.replica.ISOSMessageWrapper;
+import isos.execution.ExecuteInApplication;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.utils.ReplicaId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.util.HashSet;
+import java.util.function.BiPredicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class is just a test to see whether ISOSApplication can send and receive messages with other
@@ -35,16 +36,21 @@ public class MessagingExample extends Thread {
   }
 
   private int replicaId;
-  private ConfigurationManager configManager;
+  private final ConfigurationManager configManager;
+  private final BiPredicate<OrderedClientRequest, OrderedClientRequest> conflictChecker;
+  private final ExecuteInApplication appExecutor;
 
   private ISOSApplication app;
 
   public MessagingExample(int replicaId, String configHome, KeyLoader loader) {
     super(String.format("ReplicaId %d", replicaId));
 
+    this.conflictChecker = (r1, r2) -> true; // all requests conflict with each other
+    this.appExecutor = (requests, depGraph) -> {};
+
     this.replicaId = replicaId;
     this.configManager = new ConfigurationManager(replicaId, configHome, loader);
-    this.app = new ISOSApplication(configManager);
+    this.app = new ISOSApplication(configManager, conflictChecker, appExecutor);
   }
 
   @Override

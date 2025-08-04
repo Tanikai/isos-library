@@ -1,8 +1,10 @@
 package isos.execution.graph;
 
+import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 
 import java.util.Set;
+import java.util.concurrent.ConcurrentMap;
 
 /** */
 public interface DependencyGraphBuilder {
@@ -23,7 +25,10 @@ public interface DependencyGraphBuilder {
    * @param v
    * @return
    */
-  DependencyGraph buildDependencyGraph(SequenceNumber v);
+  DependencyGraph buildDependencyGraph(
+      SequenceNumber v,
+      ConcurrentMap<SequenceNumber, DependencySet> deps,
+      Set<SequenceNumber> executed);
 
   /**
    * Calculate dependency graph for slot v. Excludes slots outside the execution window.
@@ -35,5 +40,8 @@ public interface DependencyGraphBuilder {
    * @return
    */
   DependencyGraph buildDependencyGraphExp(
-      SequenceNumber v, Set<SequenceNumber> executionWindowSlots);
+      SequenceNumber v,
+      Set<SequenceNumber> executionWindowSlots,
+      ConcurrentMap<SequenceNumber, DependencySet> deps,
+      Set<SequenceNumber> executed);
 }
