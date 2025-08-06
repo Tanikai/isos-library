@@ -24,8 +24,8 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,7 +34,7 @@ class AgmtSlotQueueProcessorTest {
 
   private TimeoutConfiguration timeoutConfig;
   private MessageSender msgSenderMock;
-  private BlockingQueue<ISOSMessage> incomingQueue;
+  private BlockingDeque<ISOSMessage> incomingQueue;
   private DependencyWaitFunction dependencyWaitMock;
   private ExecutableRequestReceiver requestExecutorMock;
   private int maxFaults = 1;
@@ -44,7 +44,7 @@ class AgmtSlotQueueProcessorTest {
     // when debugging, increase the Timeout delta
     timeoutConfig = new TimeoutConfiguration(1000);
     msgSenderMock = mock(MessageSender.class);
-    incomingQueue = new LinkedBlockingQueue<>();
+    incomingQueue = new LinkedBlockingDeque<>();
     dependencyWaitMock = mock(DependencyWaitFunction.class);
     requestExecutorMock = mock(ExecutableRequestReceiver.class);
   }

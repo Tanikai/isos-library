@@ -51,4 +51,15 @@ public class TimeoutConfiguration {
   public long getQueryExecTimeout() {
     return queryExecTimeout;
   }
+
+  public long getTimeoutDurationByType(ISOSTimeoutType timeoutType) {
+    return switch (timeoutType) {
+      case NULL -> 0L;
+      case PROPOSE -> this.proposeTimeout;
+      case COMMIT -> this.commitTimeout;
+      case VIEWCHANGE -> this.viewChangeTimeout;
+      case VIEWCHANGE_COMMIT -> this.viewChangeCommitTimeout;
+      case QUERY_EXEC -> this.queryExecTimeout;
+    };
+  }
 }

@@ -7,14 +7,14 @@ import isos.communication.MessageSender;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.RequestConflictChecker;
-import isos.message.replica.ISOSMessage;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ISOSMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.util.HashSet;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import org.junit.jupiter.api.Test;
 
 class AgmtSlotQueueProcessorCommitTimeoutTest {
@@ -33,7 +33,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
 
     AgreementSlot slot = new AgreementSlot(seqNum);
 
-    var incomingQueue = new LinkedBlockingQueue<ISOSMessage>();
+    var incomingQueue = new LinkedBlockingDeque<ISOSMessage>();
     var timeoutConfig = new TimeoutConfiguration(100); // commit timeout is delta * 9 -> 0.9 sec
 
     MessageSender msgSender = mock(MessageSender.class);

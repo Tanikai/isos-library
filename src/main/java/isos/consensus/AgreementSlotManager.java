@@ -119,7 +119,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     }
 
     // Create queue to communicate
-    BlockingQueue<ISOSMessage> inputQueue = new LinkedBlockingQueue<>();
+    BlockingDeque<ISOSMessage> inputQueue = new LinkedBlockingDeque<>();
     this.queueProcessorInputQueue.put(newSlot, inputQueue);
 
     // Get agreement slot object for the thread processor
@@ -203,7 +203,6 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
 
     // TODO Kai: maybe use structured concurrency for this use case?
     try (var taskExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
-      // for every dependency in depSet, wait until either:
       for (var dep : depSet) {
         taskExecutor.submit(
             () -> {

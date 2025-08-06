@@ -109,6 +109,7 @@ class AgreementSlotSequenceTest {
                 AgreementSlotPhase.FP_COMMITTED, //
                 null,
                 null,
+                null,
                 null);
     seq.putAgreementSlotValue(firstEntryExpected);
 

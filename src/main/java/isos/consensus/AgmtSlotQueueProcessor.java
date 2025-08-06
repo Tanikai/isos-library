@@ -2,11 +2,14 @@ package isos.consensus;
 
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
+import isos.consensus.model.viewchange.FastPathCertificate;
+import isos.consensus.model.viewchange.ReconciliationPathCertificate;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.ExecuteMessage;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
+import isos.message.replica.TimeoutMessage;
 import isos.message.replica.fast.DepCommitMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -42,7 +45,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // --- Messaging ---
   /** Queue of incoming messages */
-  private final BlockingQueue<ISOSMessage> incomingQueue;
+  private final BlockingDeque<ISOSMessage> incomingQueue;
 
   /**
    * Messages that have been deferred because we were not in the correct step yet. After the
@@ -60,6 +63,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private final TimeoutConfiguration timeoutConfig;
   private final ScheduledExecutorService timeoutExecutor;
   private final Map<ISOSTimeoutType, ScheduledFuture<?>> currentTimeouts;
+
+  /** Is accessed concurrently by the SlotProcessor and Timeout tasks. */
+  private final ConcurrentMap<ISOSTimeoutType, TimeoutState> timeoutStates;
 
   // --- AgreementSlot State ---
   /**
@@ -103,7 +109,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   public AgmtSlotQueueProcessor(
       ReplicaId ownReplicaId,
       SequenceNumber seqNum,
-      BlockingQueue<ISOSMessage> incomingQueue,
+      BlockingDeque<ISOSMessage> incomingQueue,
       TimeoutConfiguration timeoutConfig,
       MessageSender msgSender,
       AgreementSlot slot,
@@ -127,6 +133,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.timeoutExecutor =
         new ScheduledThreadPoolExecutor(2); // TODO Kai: how to determine the corePoolSize?
     this.currentTimeouts = new HashMap<>();
+    this.timeoutStates = new ConcurrentHashMap<>();
 
     // AgreementSlot State
     this.slot = slot;
@@ -187,9 +194,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
         "Queue received message of type {} from sender {}", msg.msgType(), msg.logicalSender());
 
     // Use different handlers depending on the received message
-
+    if (msg instanceof TimeoutMessage timeoutMessage) {
+      this.handleTimeoutMessage(timeoutMessage);
+    }
     // Fast path
-    if (msg instanceof DepProposeWithRequest depPropose) {
+    else if (msg instanceof DepProposeWithRequest depPropose) {
       // This case only happens if we receive a depPropose from another replica. For requests where
       // the current replica acts as the coordinator, see handleReceivedClientRequest().
       this.handleReceivedDepProposeWithRequest(depPropose);
@@ -250,75 +259,146 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Broadcast to all replicas
     this.msgSender.broadcastToReplicas(false, msg);
 
-    this.startCommitTimeout();
+    this.startTimeout(ISOSTimeoutType.COMMIT);
   }
 
   // region Timeouts
+
+  private void startTimeout(ISOSTimeoutType timeoutType) {
+    var currentState = this.timeoutStates.getOrDefault(timeoutType, TimeoutState.NULL);
+
+    // NULL -> we create new timeout
+    // STARTED -> running, we do not create new timeout
+    // EXPIRED -> we want to recreate the timeout
+    // CANCELED -> see expired
+    if (currentState.equals(TimeoutState.STARTED)) {
+      logger.error(
+          "Timeout of type {} has already been started: {}. Do not create new timeout",
+          timeoutType,
+          currentState);
+      return;
+    }
+
+    if (this.currentTimeouts.containsKey(timeoutType)) {
+      logger.warn(
+          "A timeout of type {} with the state {} already exists!", timeoutType, currentState);
+    }
+
+    var timeout =
+        this.timeoutExecutor.schedule(
+            () ->
+                this.incomingQueue.addFirst(
+                    new TimeoutMessage(timeoutType, this.seqNum, this.ownReplicaId)),
+            timeoutConfig.getTimeoutDurationByType(timeoutType),
+            TimeUnit.MILLISECONDS);
+    this.currentTimeouts.put(timeoutType, timeout);
+    this.timeoutStates.put(timeoutType, TimeoutState.STARTED);
+  }
+
   /**
-   * Cancels the timeout of the given timeoutType. If cancelTimeout is called before the scheduled
-   * timeout has started, the timeout never runs. If it has already started, it cannot be canceled.
+   * When a timeout expires, a TimeoutMessage is added to the incomingQueue, so that the logic is
+   * executed sequentially by the processor. (Timeout expiry is done by another thread)
+   *
+   * @param timeoutMessage
+   */
+  private void handleTimeoutMessage(TimeoutMessage timeoutMessage) {
+    // We have to check whether the timeout was already canceled by a previous message or not
+    logger.info("Handle {} timeout", timeoutMessage.timeoutType());
+    var timeoutType = timeoutMessage.timeoutType();
+    var currentState = this.timeoutStates.get(timeoutType);
+    if (currentState.equals(TimeoutState.CANCELED)) {
+      logger.warn(
+          "Received timeout message of type {}, but already set to canceled. Stop processing",
+          timeoutType);
+      return;
+    }
+
+    if (currentState.equals(TimeoutState.EXPIRED)) {
+      logger.warn(
+          "Received timeout message of type {}, but it has already expired. Stop processing",
+          timeoutType);
+      return;
+    }
+
+    switch (timeoutMessage.timeoutType()) {
+      case PROPOSE:
+        {
+          /** Pseudocode Line 68, 69 */
+          // TODO Kai: Why are we sending this without the request? (defined in the pseudocode)
+          var depPropose = new DepProposeWithRequest(this.slot.getDepPropose(), null);
+          var msg = new ISOSMessageWrapper(depPropose, this.ownReplicaId.value());
+
+          this.msgSender.broadcastToReplicas(false, msg);
+        }
+        break;
+      case COMMIT:
+        {
+          /** Pseudocode Line 70, 71 */
+          this.moveToNewView();
+        }
+        break;
+      case VIEWCHANGE:
+        {
+          // Pseudocode line 121, 122
+          // Move to new view  v_{s_j}+1
+          this.moveToNewView();
+        }
+        break;
+      case VIEWCHANGE_COMMIT:
+        {
+          // is actually not its "own" timeout type, instead commit timeout with reduced duration
+          this.moveToNewView();
+        }
+        break;
+      case QUERY_EXEC:
+        {
+          // TODO Kai: broadcast to self or not?
+          //        this.msgSender.broadcastToReplicas(true, new QueryExecMessage());
+        }
+        break;
+    }
+    timeoutStates.put(
+        timeoutType,
+        TimeoutState.EXPIRED); // when set to expired, we know that it was already executed
+  }
+
+  /**
+   * Cancels the timeout of the given timeoutType by setting the canceled flag. If cancelTimeout is
+   * called before the scheduled timeout has started, the timeout never runs. If the timeout expires
+   * while cancelTimeout runs, it will not run, because the timeout logic checks the flag before
+   * running.
    *
    * @param timeoutType
-   * @return True if timeout was canceled successfully, false if the timeout was already started /
-   *     finished executing.
    */
-  private boolean cancelTimeout(ISOSTimeoutType timeoutType) {
+  private void cancelTimeout(ISOSTimeoutType timeoutType) throws IllegalStateException {
+    this.timeoutStates.put(timeoutType, TimeoutState.CANCELED);
+    logger.info("Cancel timeout {}", timeoutType);
+
     var timeout = this.currentTimeouts.get(timeoutType);
     if (timeout == null) {
       logger.warn("Tried to cancel timeout of type {}, but doesn't exist", timeoutType);
-      return true; // if the timeout doesn't exist, we assume that it is canceled
+      return;
     }
     timeout.cancel(false);
-    return timeout.isCancelled();
   }
 
-  /** Pseudocode Line 70, 71 */
-  private void startCommitTimeout() {
-    if (this.currentTimeouts.containsKey(ISOSTimeoutType.COMMIT)) {
-      logger.warn("A commit timeout already exists!");
+  /**
+   * Triggers the timeout logic if it hasn't happened yet.
+   *
+   * @param timeoutType
+   * @return
+   */
+  private void triggerTimeoutExpiry(ISOSTimeoutType timeoutType) {
+    // We have to cancel the timeout, if it hasn't run yet. If it already expired, we only have
+    // double messages, which is fine.
+    this.cancelTimeout(timeoutType);
+
+    var timeout = this.currentTimeouts.get(timeoutType);
+    if (timeout == null) {
+      logger.info("Tried to timeout of type {}, but doesn't exist", timeoutType);
       return;
     }
-
-    var commitTimeout =
-        this.timeoutExecutor.schedule(
-            () -> {
-              // TODO Kai: Timeout handling should be protected by a lock -> we do not want timeout
-              // handler and "normal" message handler running simultaneously
-
-              // Move to new view v_s_j+1
-              var currentViewNum = this.slot.getViewNumber();
-              var newViewNum = ViewNumber.increaseViewNumber(currentViewNum);
-              logger.info(
-                  "Timeout expired, move from view {} to new view {}", currentViewNum, newViewNum);
-              this.slot.setViewNumber(newViewNum);
-
-              // TODO Kai: we need to notify here somehow (pseudocode line 86 "upon move to new view
-              // do...")
-            },
-            timeoutConfig.getCommitTimeout(),
-            TimeUnit.MILLISECONDS);
-    this.currentTimeouts.put(ISOSTimeoutType.COMMIT, commitTimeout);
-  }
-
-  /** Pseudocode Line 68, 69 */
-  private void startProposeTimeout() {
-    if (this.currentTimeouts.containsKey(ISOSTimeoutType.PROPOSE)) {
-      logger.warn("A propose timeout already exists!");
-      return;
-    }
-
-    var proposeTimeout =
-        this.timeoutExecutor.schedule(
-            () -> {
-              // TODO Kai: Why are we sending this without the request? (defined in the pseudocode)
-              var depPropose = new DepProposeWithRequest(this.slot.getDepPropose(), null);
-              var msg = new ISOSMessageWrapper(depPropose, this.ownReplicaId.value());
-
-              this.msgSender.broadcastToReplicas(false, msg);
-            },
-            timeoutConfig.getProposeTimeout(),
-            TimeUnit.MILLISECONDS);
-    this.currentTimeouts.put(ISOSTimeoutType.PROPOSE, proposeTimeout);
+    this.incomingQueue.addFirst(new TimeoutMessage(timeoutType, this.seqNum, this.ownReplicaId));
   }
 
   // endregion
@@ -375,9 +455,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // Line 25
+    // Propose timeout is only created by followers, not coordinators
     if (this.slot.getDepPropose() == null) {
-      this.startCommitTimeout();
-      this.startProposeTimeout();
+      this.startTimeout(ISOSTimeoutType.COMMIT);
+      this.startTimeout(ISOSTimeoutType.PROPOSE);
       this.slotLock.lock();
       try {
         this.slot.setDepPropose(depPropose);
@@ -464,7 +545,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // add to the map
     var depVerifyMap = this.slot.getDepVerifies();
-    depVerifyMap.put(depVerify.followerId(), depVerify);
+    this.slot.setDepVerify(depVerify.followerId(), depVerify);
 
     // Get all DepVerify messages that are in the follower quorum of the depPropose and filter the
     // map entries
@@ -478,11 +559,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    if (!this.cancelTimeout(ISOSTimeoutType.PROPOSE)) {
-      logger.error(
-          "Propose timeout expired before it could be canceled. Stop processing DepVerify");
-      return;
-    }
+    this.cancelTimeout(ISOSTimeoutType.PROPOSE);
 
     // Add all dependencies to a single dependency set
     // TODO Kai: do we have to check our own dependencySet as well?
@@ -562,16 +639,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // Our DepVerify hash matches with a quorum of DepVerifyHashes of received commit messages
-    if (!this.cancelTimeout(ISOSTimeoutType.PROPOSE)) {
-      logger.warn(
-          "Propose timeout expired before it could be canceled. Stop processing handleDepCommit");
-      return;
-    }
-    if (!this.cancelTimeout(ISOSTimeoutType.COMMIT)) {
-      logger.warn(
-          "Commit timeout expired before it could be canceled. Stop processing handleDepCommit");
-      return;
-    }
+    this.cancelTimeout(ISOSTimeoutType.PROPOSE);
+    this.cancelTimeout(ISOSTimeoutType.COMMIT);
 
     // Forward the slot to execution
     // Dependency set used in execution is union set of all dependencies of the follower quorum
@@ -710,9 +779,99 @@ public class AgmtSlotQueueProcessor implements Runnable {
   // endregion
 
   // region View Change
-  private void handleReceivedNewViewMessage(NewViewMessage newView) {}
 
+  /**
+   * This function is called when a timeout expires.
+   *
+   * <p>Pseudocode line 86-100
+   */
+  private void moveToNewView() {
+    // Paper: Once a replica decides to abort a view, the replica stops to process requests for the
+    // old view and broadcasts a ViewChange message for the new view.
+
+    // Move to new view v_s_j+1
+    var previousViewNum = this.slot.getViewNumber();
+    var newViewNum = ViewNumber.increaseViewNumber(previousViewNum);
+    logger.info("Move from view {} to new view {}", previousViewNum, newViewNum);
+    this.slot.setViewNumber(newViewNum);
+
+    // If propose timeout is active, trigger its expiry (i.e., timeout logic should be executed now)
+    this.triggerTimeoutExpiry(ISOSTimeoutType.PROPOSE);
+
+    this.cancelTimeout(ISOSTimeoutType.COMMIT);
+    this.cancelTimeout(ISOSTimeoutType.VIEWCHANGE);
+
+    DepProposeMessage dp = this.slot.getDepPropose();
+    List<DepVerifyMessage> dv =
+        AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(
+            this.slot.getDepVerifies(), dp.followerQuorum());
+    // has to be 2f matching DepVerifies in both cases
+
+    var currentStep = this.slot.getStep();
+
+    // Pseudocode line 91-95
+    // Fast path Certificate
+    if (currentStep.equals(AgreementSlotPhase.FP_VERIFIED)
+        || currentStep.equals(AgreementSlotPhase.FP_COMMITTED)) {
+      this.slot.setViewChangeCertificate(new FastPathCertificate(dp, dv, -1));
+
+    }
+    // Reconciliation Path Certificate
+    else if (currentStep.equals(AgreementSlotPhase.RP_PREPARED)
+        || currentStep.equals(AgreementSlotPhase.RP_COMMITTED)) {
+      String depVerifiesHash = DepVerifyMessage.calculateDepVerifyHash(dv);
+      // Line 94: Set of 2f+1 Prepares with h(dv)
+      // !!! The prepares must be from the same view!
+      // TODO: here
+      List<PrepareMessage> prep =
+          this.prepareQuorum.values().stream()
+              .filter((prepare) -> prepare.depVerifiesHash().equals(depVerifiesHash))
+              .toList();
+
+      /**
+       * FIXME Kai: Are we sending the new view number, or the previous one? -> Pseudocode says to
+       * send the view number that is stored in the view variable, before it is updated with the new
+       * view number -> older one
+       * However, the new view number would intuitively make more sense (according to me)
+       * Is it because the PREPAREs that are sent in the have to be from the same view
+       */
+      this.slot.setViewChangeCertificate(
+          new ReconciliationPathCertificate(dp, dv, prep, previousViewNum));
+    }
+
+    // After creating the certificate (if the conditions are fulfilled), update the view number
+    // Pseudocode line 96-97
+    this.slot.setViewNumber(newViewNum);
+    this.slot.setPeerViewNumber(this.ownReplicaId, newViewNum);
+  }
+
+  /**
+   * This function determines the coordinator for a given view and sequence number.
+   *
+   * @param originalCoordinatorId $s_j.co$: (original) Coordinator Id of the agreement slot
+   * @param currentViewNumber: $v_{s_j}$: View number of the new view
+   * @param replicaCount: $N$: current count of replicas, used for m
+   */
+  private static int getNextViewCoordinator(
+      int originalCoordinatorId, int currentViewNumber, int replicaCount) {
+    return (originalCoordinatorId + Math.max(0, currentViewNumber)) % replicaCount;
+  }
+
+  // TODO: We need a "upon move to new view for slot"
+
+  /**
+   * Pseudocode line 101-107, 109-116
+   *
+   * @param viewChange
+   */
   private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {}
+
+  /**
+   * Broadcasted by the View-change coordinator.
+   *
+   * @param newView
+   */
+  private void handleReceivedNewViewMessage(NewViewMessage newView) {}
 
   // endregion
 

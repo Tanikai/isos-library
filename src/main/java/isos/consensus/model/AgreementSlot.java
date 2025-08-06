@@ -1,17 +1,22 @@
 package isos.consensus.model;
 
+import isos.consensus.model.viewchange.EmptyCertificate;
+import isos.consensus.model.viewchange.ViewChangeCertificate;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Single agreement slot. Used solely as a data class. Logic is contained in the
- * AgreementSlotSequence and the AgreementSlotManager.
+ * AgreementSlotSequence and the AgreementSlotManager. All maps are returned as unmodifiable, and
+ * values have to be put via the respective set method for a single entry.
  */
 public class AgreementSlot {
   // s_j: Agreement Slot s_j
@@ -41,6 +46,8 @@ public class AgreementSlot {
   // DECISION kai: Should AgreementSlot be record, or normal object? -> normal object, due to
   // frequent changes to the fields
 
+  private ViewChangeCertificate viewChangeCertificate;
+
   public AgreementSlot(SequenceNumber seqNum) {
     this(seqNum, null);
   }
@@ -60,7 +67,8 @@ public class AgreementSlot {
         AgreementSlotPhase.INIT,
         new HashMap<>(),
         new ViewNumber(),
-        new HashMap<>());
+        new HashMap<>(),
+        new EmptyCertificate());
   }
 
   public AgreementSlot(
@@ -71,7 +79,8 @@ public class AgreementSlot {
       AgreementSlotPhase step,
       Map<ReplicaId, ViewChangeMessage> viewChanges,
       ViewNumber viewNumber,
-      Map<ReplicaId, ViewNumber> peerViewNumbers) {
+      Map<ReplicaId, ViewNumber> peerViewNumbers,
+      ViewChangeCertificate viewChangeCertificate) {
     this.seqNum = seqNum;
     this.request = request;
     this.depPropose = depPropose;
@@ -80,6 +89,7 @@ public class AgreementSlot {
     this.viewChanges = viewChanges;
     this.viewNumber = viewNumber;
     this.peerViewNumbers = peerViewNumbers;
+    this.viewChangeCertificate = viewChangeCertificate;
   }
 
   public SequenceNumber getSeqNum() {
@@ -106,12 +116,14 @@ public class AgreementSlot {
     this.depPropose = depPropose;
   }
 
+  // TODO Kai: Instead of returning the whole map as mutable, we could return an immutable map and
+  // instead set via a key-specific setter method?
   public Map<ReplicaId, DepVerifyMessage> getDepVerifies() {
-    return depVerifies;
+    return Collections.unmodifiableMap(depVerifies);
   }
 
-  public void setDepVerifies(Map<ReplicaId, DepVerifyMessage> depVerifies) {
-    this.depVerifies = depVerifies;
+  public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify) {
+    this.depVerifies.put(replicaId, depVerify);
   }
 
   public AgreementSlotPhase getStep() {
@@ -123,11 +135,11 @@ public class AgreementSlot {
   }
 
   public Map<ReplicaId, ViewChangeMessage> getViewChanges() {
-    return viewChanges;
+    return Collections.unmodifiableMap(viewChanges);
   }
 
-  public void setViewChanges(Map<ReplicaId, ViewChangeMessage> viewChanges) {
-    this.viewChanges = viewChanges;
+  public void setViewChange(ReplicaId replicaId, ViewChangeMessage viewChange) {
+    this.viewChanges.put(replicaId, viewChange);
   }
 
   public ViewNumber getViewNumber() {
@@ -139,10 +151,18 @@ public class AgreementSlot {
   }
 
   public Map<ReplicaId, ViewNumber> getPeerViewNumbers() {
-    return peerViewNumbers;
+    return Collections.unmodifiableMap(peerViewNumbers);
   }
 
-  public void setPeerViewNumbers(Map<ReplicaId, ViewNumber> peerViewNumbers) {
-    this.peerViewNumbers = peerViewNumbers;
+  public void setPeerViewNumber(ReplicaId replicaId, ViewNumber peerViewNumber) {
+    this.peerViewNumbers.put(replicaId, peerViewNumber);
+  }
+
+  public ViewChangeCertificate getViewChangeCertificate() {
+    return viewChangeCertificate;
+  }
+
+  public void setViewChangeCertificate(ViewChangeCertificate viewChangeCertificate) {
+    this.viewChangeCertificate = viewChangeCertificate;
   }
 }
