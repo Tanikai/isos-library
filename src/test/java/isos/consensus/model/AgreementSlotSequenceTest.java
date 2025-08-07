@@ -105,7 +105,6 @@ class AgreementSlotSequenceTest {
             firstSeqEntry,
                 null, //
                 null, //
-                null, //
                 AgreementSlotPhase.FP_COMMITTED, //
                 null,
                 null,

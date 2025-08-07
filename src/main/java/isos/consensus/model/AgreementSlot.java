@@ -63,7 +63,6 @@ public class AgreementSlot {
         seqNum,
         r,
         null,
-        new HashMap<>(),
         AgreementSlotPhase.INIT,
         new HashMap<>(),
         new ViewNumber(),
@@ -75,7 +74,6 @@ public class AgreementSlot {
       SequenceNumber seqNum,
       OrderedClientRequest request,
       DepProposeMessage depPropose,
-      Map<ReplicaId, DepVerifyMessage> depVerifies,
       AgreementSlotPhase step,
       Map<ReplicaId, ViewChangeMessage> viewChanges,
       ViewNumber viewNumber,
@@ -113,7 +111,12 @@ public class AgreementSlot {
   }
 
   public void setDepPropose(DepProposeMessage depPropose) {
+    if (this.depPropose != null) {
+      throw new IllegalStateException("DepPropose cannot be set again");
+    }
+
     this.depPropose = depPropose;
+    this.depVerifies.setFollowerQuroum(depPropose.followerQuorum());
   }
 
   // TODO Kai: Instead of returning the whole map as mutable, we could return an immutable map and
@@ -126,12 +129,20 @@ public class AgreementSlot {
     this.depVerifies.setDepVerify(replicaId, depVerify);
   }
 
+  public boolean isFpVerified(int maxFaults) {
+    return this.depVerifies.isFpVerified(maxFaults);
+  }
+
   /**
    * Not thread-safe.
    * @return
    */
   public String getDepVerifyHashCached() {
     return this.depVerifies.getdepVerifyHashCached();
+  }
+
+  public boolean reachedDepVerifyQuorum(int maxFaults) {
+    return this.depVerifies.reachedQuorum(maxFaults);
   }
 
   public AgreementSlotPhase getStep() {

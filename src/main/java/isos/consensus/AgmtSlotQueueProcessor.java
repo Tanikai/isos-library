@@ -419,6 +419,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Line 22: assert F is valid fast-path quorum
     // TODO Kai: what is a valid fast-path quorum?
+    // Answer: Exactly 2f replicaIds, replicaIds exist,
 
     // Line 23: First propose from coordinator
     if (this.slot.getRequest() != null) {
@@ -537,10 +538,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Add received DepVerify
     this.slot.setDepVerify(depVerify.followerId(), depVerify);
-    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
 
-    if (depVerifies.size() < (this.maxFaults * 2)) {
-      logger.info("Did not reach follower quorum yet.");
+    if (!this.slot.reachedDepVerifyQuorum(this.maxFaults)) {
+      logger.info("Did not reach quorum of DepVerify messages yet.");
       return;
     }
 
@@ -548,7 +548,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.cancelTimeout(ISOSTimeoutType.PROPOSE);
 
     // TODO Kai: do we have to check our own dependencySet as well?
-    var fpVerified = AgmtSlotQueueProcessor.isFpVerified(depVerifies, this.maxFaults);
+    var fpVerified = this.slot.isFpVerified(this.maxFaults);
     if (!fpVerified) {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
@@ -573,32 +573,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // from
     // 2f+1 replicas (possibly including itself)
     this.msgSender.broadcastToReplicas(true, wrapper);
-  }
-
-  /**
-   * Checks the fp-verified predicate. Used in {@link #handleReceivedDepCommit(DepCommitMessage)}
-   * and {@link #moveToNewView()}.
-   *
-   * @return
-   */
-  public static boolean isFpVerified(List<DepVerifyMessage> depVerifies, int maxFaults) {
-    // TODO Kai: More efficient implementation by grouping and sum, then check if every sum is GE maxFaults+1?
-
-    // Add all dependencies to a single dependency set
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, null);
-
-    // Line 46: Every dependency is reported by at least f+1 followers
-    var isFpVerified =
-        unionDepsFollowerQuorum.dependencies().parallelStream()
-            .allMatch(
-                (seqNum) -> {
-                  var depCount =
-                      depVerifies.stream()
-                          .filter(msg -> msg.depSet().dependencies().contains(seqNum))
-                          .count();
-                  return depCount >= (maxFaults + 1);
-                });
-    return isFpVerified;
   }
 
   private void handleReceivedDepCommit(DepCommitMessage depCommit) {
@@ -773,6 +747,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   // region View Change
 
   /**
+   * Upon move to new view for slot.
    * This function is called when a timeout expires.
    *
    * <p>Pseudocode line 86-100
@@ -807,7 +782,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       this.slot.setViewChangeCertificate(new FastPathCertificate(dp, dv, -1));
 
       // Sanity check, is not necessary
-      if (!AgmtSlotQueueProcessor.isFpVerified(dv, this.maxFaults)) {
+      if (!this.slot.isFpVerified(this.maxFaults)) {
         throw new RuntimeException(
             String.format("Step is %s, but fp-verified predicate is not fulfilled", currentStep));
       }
@@ -852,8 +827,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
       int originalCoordinatorId, int currentViewNumber, int replicaCount) {
     return (originalCoordinatorId + Math.max(0, currentViewNumber)) % replicaCount;
   }
-
-  // TODO: We need a "upon move to new view for slot"
 
   /**
    * Pseudocode line 101-107, 109-116

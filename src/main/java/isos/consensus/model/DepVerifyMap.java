@@ -2,12 +2,12 @@ package isos.consensus.model;
 
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
-
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DepVerifyMap {
 
@@ -19,12 +19,21 @@ public class DepVerifyMap {
    */
   private Map<ReplicaId, DepVerifyMessage> depVerifies;
 
+  private Set<ReplicaId> followerQuroum = null;
+
   private boolean isHashDirty;
   private String hash;
 
   public DepVerifyMap() {
     this.depVerifies = new HashMap<>();
     this.isHashDirty = false;
+  }
+
+  public void setFollowerQuroum(Set<ReplicaId> followerQuroum) {
+    if (this.followerQuroum != null) {
+      throw new IllegalStateException("FollowerQuorum was already set");
+    }
+    this.followerQuroum = followerQuroum;
   }
 
   /**
@@ -72,7 +81,12 @@ public class DepVerifyMap {
     return Collections.unmodifiableMap(depVerifies);
   }
 
-  public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify) {
+  public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify)
+      throws IllegalArgumentException {
+    if (!followerQuroum.contains(replicaId)) {
+      throw new IllegalArgumentException(
+          String.format("ReplicaId %s is not contained in the follower quorum.", replicaId));
+    }
     this.depVerifies.put(replicaId, depVerify);
     this.isHashDirty = true;
   }
@@ -91,5 +105,67 @@ public class DepVerifyMap {
     }
 
     return this.hash;
+  }
+
+  public boolean reachedQuorum(int maxFaults) {
+    return this.depVerifies.size() == (2 * maxFaults);
+  }
+
+  /**
+   * Checks whether the fp-verified predicate holds. When 2f DepVerify messages are present, we
+   * check whether every dependency is reported by at least f+1 followers.
+   *
+   * <p>(Valid DepPropose and matching hash has to be checked as a precondition)
+   *
+   * <p>Paper page 12: Definition A.2. A slot s_j is verified if a correct replica collects a valid
+   * DEPPROPOSE dp, 2f valid DEPVERIFYs from different replicas with matching h(dp) and each
+   * DEPVERIFY is from a replica in the fast-path quorum dp.F.
+   *
+   * <p>Paper page 12: Definition A.3. A slot s_j is fp-verified if a correct replica verified it
+   * and each dependency in the DEPVERIFYs occurs at least f + 1 times.
+   *
+   * <p>-> This means that the dependency set of the DepPropose is irrelevant for fp-verified.
+   *
+   * @param maxFaults
+   * @return
+   */
+  public boolean isFpVerified(int maxFaults) {
+    // Before we are fp-verified, we need the depVerifies from the 2f followers.
+    if (!this.reachedQuorum(maxFaults)) {
+      return false;
+    }
+
+    // For fp-verified, we only need to check the dependencies of the DepVerify messages of the
+    // followers. (see pseudocode line 47).
+    // Every dependency has to be reported by at least f+1 followers.
+    return DepVerifyMap.minimumDependencyOccurrence(this.depVerifies.values(), maxFaults + 1);
+  }
+
+  /**
+   * Counts the occurrence of dependencies in each DepVerify message, and then checks whether every
+   * dependency has an occurrence equal or greater than minCount. Used in {@link
+   * #isFpVerified(int)}.
+   *
+   * @param minCount The minimum occurrence of each dependency.
+   * @return True if every dependency appears in at least minCount dependency sets, false otherwise.
+   *     If depVerifies is empty, true is always returned.
+   */
+  public static boolean minimumDependencyOccurrence(
+      Collection<DepVerifyMessage> depVerifies, int minCount) {
+
+    // First, we have to count the occurrence of each sequence number
+    Map<SequenceNumber, Long> seqNumCounts =
+        depVerifies.stream()
+            // Get dependency set of each message as Set<SequenceNumber>
+            .map(msg -> msg.depSet().dependencies())
+            // Convert to a single stream of SequenceNumbers
+            .flatMap(Set::stream)
+            // Collect by SequenceNumber, with the occurrence as value
+            // -> a dependency can only appear once in a single dependency set; thus, we are
+            // effectively counting in how many dependency sets the sequence number appeared
+            .collect(Collectors.groupingBy(seqNum -> seqNum, Collectors.counting()));
+
+    // Check whether all dependencies appeared in at least minCount dependency sets
+    return seqNumCounts.values().stream().allMatch((count) -> count >= minCount);
   }
 }
