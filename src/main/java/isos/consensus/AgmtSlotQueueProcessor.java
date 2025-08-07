@@ -194,32 +194,28 @@ public class AgmtSlotQueueProcessor implements Runnable {
         "Queue received message of type {} from sender {}", msg.msgType(), msg.logicalSender());
 
     // Use different handlers depending on the received message
-    if (msg instanceof TimeoutMessage timeoutMessage) {
-      this.handleTimeoutMessage(timeoutMessage);
-    }
-    // Fast path
-    else if (msg instanceof DepProposeWithRequest depPropose) {
-      // This case only happens if we receive a depPropose from another replica. For requests where
-      // the current replica acts as the coordinator, see handleReceivedClientRequest().
-      this.handleReceivedDepProposeWithRequest(depPropose);
-    } else if (msg instanceof DepProposeMessage depPropose) {
-      logger.error("Received DepPropose message without request, throwing away");
-    } else if (msg instanceof DepVerifyMessage depVerify) {
-      this.handleReceivedDepVerify(depVerify);
-    } else if (msg instanceof DepCommitMessage depCommit) {
-      this.handleReceivedDepCommit(depCommit);
-    }
-    // Reconciliation path
-    else if (msg instanceof PrepareMessage prepare) {
-      this.handleReceivedPrepareMessage(prepare);
-    } else if (msg instanceof CommitMessage commit) {
-      this.handleReceivedCommitMessage(commit);
-    }
-    // View change
-    else if (msg instanceof NewViewMessage newView) {
-      this.handleReceivedNewViewMessage(newView);
-    } else if (msg instanceof ViewChangeMessage viewChange) {
-      this.handleReceivedViewChangeMessage(viewChange);
+    switch (msg) {
+      case TimeoutMessage timeoutMessage -> this.handleTimeoutMessage(timeoutMessage);
+
+      // Fast path
+      case DepProposeWithRequest depPropose ->
+        // This case only happens if we receive a depPropose from another replica. For requests where
+        // the current replica acts as the coordinator, see handleReceivedClientRequest().
+              this.handleReceivedDepProposeWithRequest(depPropose);
+      case DepProposeMessage depProposeMessage ->
+              logger.error("Received DepPropose message without request, throwing away");
+      case DepVerifyMessage depVerify -> this.handleReceivedDepVerify(depVerify);
+      case DepCommitMessage depCommit -> this.handleReceivedDepCommit(depCommit);
+
+      // Reconciliation path
+      case PrepareMessage prepare -> this.handleReceivedPrepareMessage(prepare);
+      case CommitMessage commit -> this.handleReceivedCommitMessage(commit);
+
+      // View change
+      case NewViewMessage newView -> this.handleReceivedNewViewMessage(newView);
+      case ViewChangeMessage viewChange -> this.handleReceivedViewChangeMessage(viewChange);
+      default -> {
+      }
     }
   }
 
@@ -492,11 +488,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
   }
 
-  private static List<DepVerifyMessage> getDepVerifyFromFollowerQuorum(
-      Map<ReplicaId, DepVerifyMessage> depVerifyMap, Set<ReplicaId> F) {
-    return depVerifyMap.values().stream().filter(msg -> F.contains(msg.followerId())).toList();
-  }
-
   private void handleReceivedDepVerify(DepVerifyMessage depVerify) {
     // FIXME Kai: Add pseudocode line 53 / 54
     // FIXME: if we receive DepVerify from f+1 replicas, we have to start commit timeout
@@ -535,63 +526,45 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     try {
-      // TODO Kai: While we are waiting, we cannot process any other messages. Is this fine?
-      // Maybe start waiting after we have reached the quorum of depVerifies?
+      // TODO Kai: While we are waiting, we cannot process any other messages. Is this fine? Maybe
+      // start waiting for the union of dependencies after we have reached the quorum of
+      // depVerifies?
       this.dependencyWait.waitUntilConsensusStarted(depVerify.depSet().dependencies());
     } catch (InterruptedException e) {
       logger.error("Interrupted while waiting for dependencies of received DepVerify message.");
       return;
     }
 
-    // add to the map
-    var depVerifyMap = this.slot.getDepVerifies();
+    // Add received DepVerify
     this.slot.setDepVerify(depVerify.followerId(), depVerify);
+    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
 
-    // Get all DepVerify messages that are in the follower quorum of the depPropose and filter the
-    // map entries
-    var followerQuorum = this.slot.getDepPropose().followerQuorum();
-
-    var depVerifiesFollowerQuorum =
-        AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(depVerifyMap, followerQuorum);
-
-    if (depVerifiesFollowerQuorum.size() < (this.maxFaults * 2)) {
+    if (depVerifies.size() < (this.maxFaults * 2)) {
       logger.info("Did not reach follower quorum yet.");
       return;
     }
 
+    // We have reached the quorum of messages
     this.cancelTimeout(ISOSTimeoutType.PROPOSE);
 
-    // Add all dependencies to a single dependency set
     // TODO Kai: do we have to check our own dependencySet as well?
-    var unionDepsFollowerQuorum =
-        DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
-    var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
-
-    // Line 46: Every dependency is reported by at least f+1 followers
-    var depsOk =
-        unionDepsFollowerQuorum.dependencies().parallelStream()
-            .allMatch(
-                (seqNum) -> {
-                  var depCount =
-                      depVerifyMap.values().stream()
-                          .filter(msg -> msg.depSet().dependencies().contains(seqNum))
-                          .count();
-                  logger.info("Sequence Number {} reported by {} followers", seqNum, depCount);
-                  return depCount >= (this.maxFaults + 1);
-                });
-
-    if (!depsOk) {
+    var fpVerified = AgmtSlotQueueProcessor.isFpVerified(depVerifies, this.maxFaults);
+    if (!fpVerified) {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
       logger.info(
           "At least 1 dependency is not reported by at least f+1 followers. Enter reconciliation path.");
+      var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
       enterReconciliationPath(depVerifyHash);
       return;
     }
 
+    // We are fp-Verified
+
     this.slot.setStep(AgreementSlotPhase.FP_VERIFIED);
 
     // Here, h(dv) refers to the set of DepVerifys received from the followers in F.
+    var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
     var depCommitMsg = new DepCommitMessage(this.seqNum, this.ownReplicaId, depVerifyHash);
 
     var wrapper = new ISOSMessageWrapper(depCommitMsg, this.ownReplicaId.value());
@@ -600,6 +573,32 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // from
     // 2f+1 replicas (possibly including itself)
     this.msgSender.broadcastToReplicas(true, wrapper);
+  }
+
+  /**
+   * Checks the fp-verified predicate. Used in {@link #handleReceivedDepCommit(DepCommitMessage)}
+   * and {@link #moveToNewView()}.
+   *
+   * @return
+   */
+  public static boolean isFpVerified(List<DepVerifyMessage> depVerifies, int maxFaults) {
+    // TODO Kai: More efficient implementation by grouping and sum, then check if every sum is GE maxFaults+1?
+
+    // Add all dependencies to a single dependency set
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, null);
+
+    // Line 46: Every dependency is reported by at least f+1 followers
+    var isFpVerified =
+        unionDepsFollowerQuorum.dependencies().parallelStream()
+            .allMatch(
+                (seqNum) -> {
+                  var depCount =
+                      depVerifies.stream()
+                          .filter(msg -> msg.depSet().dependencies().contains(seqNum))
+                          .count();
+                  return depCount >= (maxFaults + 1);
+                });
+    return isFpVerified;
   }
 
   private void handleReceivedDepCommit(DepCommitMessage depCommit) {
@@ -618,10 +617,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Precondition 2: The hash of *our* vector containing the DepVerify messages from the F quorum
     // has to match with the hash from the received DepCommit messages as well
-    var depVerifiesFollowerQuorum =
-        AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(
-            this.slot.getDepVerifies(), this.slot.getDepPropose().followerQuorum());
-    String depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifiesFollowerQuorum);
+    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
+    String depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
     // TODO Kai: Can this be cached?
 
     // We have received at least 2f+1 messages
@@ -646,8 +643,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Dependency set used in execution is union set of all dependencies of the follower quorum
     // defined initially by the DepPropose
     // TODO Kai: do we have to include depPropose dependencies here?
-    var unionDepsFollowerQuorum =
-        DepVerifyMessage.unionOfDependencies(depVerifiesFollowerQuorum, null);
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, null);
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
@@ -755,6 +751,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
           "View number mismatch in commit, own view number: {}, received: {}",
           this.slot.getViewNumber(),
           commit.viewNumber());
+      return;
     }
 
     if (this.commitQuorum.size() < ((2 * this.maxFaults) + 1)) {
@@ -802,11 +799,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.cancelTimeout(ISOSTimeoutType.VIEWCHANGE);
 
     DepProposeMessage dp = this.slot.getDepPropose();
-    List<DepVerifyMessage> dv =
-        AgmtSlotQueueProcessor.getDepVerifyFromFollowerQuorum(
-            this.slot.getDepVerifies(), dp.followerQuorum());
-    // has to be 2f matching DepVerifies in both cases
+    List<DepVerifyMessage> dv = this.slot.getDepVerifies().values().stream().toList();
 
+    // has to be 2f matching DepVerifies in both cases
+    // ->
     var currentStep = this.slot.getStep();
 
     // Pseudocode line 91-95
@@ -815,6 +811,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
         || currentStep.equals(AgreementSlotPhase.FP_COMMITTED)) {
       this.slot.setViewChangeCertificate(new FastPathCertificate(dp, dv, -1));
 
+      // Sanity check, is not necessary
+      if (!AgmtSlotQueueProcessor.isFpVerified(dv, this.maxFaults)) {
+        throw new RuntimeException(
+            String.format("Step is %s, but fp-verified predicate is not fulfilled", currentStep));
+      }
     }
     // Reconciliation Path Certificate
     else if (currentStep.equals(AgreementSlotPhase.RP_PREPARED)
@@ -831,9 +832,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
       /**
        * FIXME Kai: Are we sending the new view number, or the previous one? -> Pseudocode says to
        * send the view number that is stored in the view variable, before it is updated with the new
-       * view number -> older one
-       * However, the new view number would intuitively make more sense (according to me)
-       * Is it because the PREPAREs that are sent in the have to be from the same view
+       * view number -> older one However, the new view number would intuitively make more sense
+       * (according to me) Is it because the PREPAREs that are sent in the have to be from the same
+       * view
        */
       this.slot.setViewChangeCertificate(
           new ReconciliationPathCertificate(dp, dv, prep, previousViewNum));

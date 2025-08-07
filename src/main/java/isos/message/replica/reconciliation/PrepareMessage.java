@@ -9,7 +9,7 @@ import java.io.Serializable;
 
 /**
  * @param seqNum agreement slot
- * @param viewNumber agreement slot-specific view number
+ * @param viewNumber agreement slot-specific view number ->
  * @param replicaId Replica ID of sender
  * @param depVerifiesHash Hash of DepVerifies
  */
