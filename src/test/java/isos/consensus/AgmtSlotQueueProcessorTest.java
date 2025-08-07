@@ -121,7 +121,7 @@ class AgmtSlotQueueProcessorTest {
     for (var r : depPropose.followerQuorum()) {
       replies.add(new DepVerifyMessage(seqNum, r, depProposeHash, finalDepSet));
     }
-    var depVerifiesHash = DepVerifyMessage.calculateDepVerifyHash(replies);
+    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(replies);
 
     // Send replies to our agreement slot
     incomingQueue.addAll(replies);
@@ -232,7 +232,7 @@ class AgmtSlotQueueProcessorTest {
     replies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), depProposeHash, depSet2));
     incomingQueue.addAll(replies);
 
-    var depVerifiesHash = DepVerifyMessage.calculateDepVerifyHash(replies);
+    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(replies);
 
     // As some dependencies do not have a f+1 quorum,
     verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -359,9 +359,9 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(otherDepVerify);
 
     var depVerifiesHash =
-        DepVerifyMessage.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+        DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
     var depVerifiesHashSwapped =
-        DepVerifyMessage.calculateDepVerifyHash(List.of(depVerify, otherDepVerify));
+        DepVerifyMap.calculateDepVerifyHash(List.of(depVerify, otherDepVerify));
     assertEquals(depVerifiesHash, depVerifiesHashSwapped);
 
     // With the DepPropose, own DepVerify, and DepVerify from other replica with matching
@@ -454,7 +454,7 @@ class AgmtSlotQueueProcessorTest {
     // the reconciliation path
 
     var depVerifiesHash =
-        DepVerifyMessage.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+        DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
 
     verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
 

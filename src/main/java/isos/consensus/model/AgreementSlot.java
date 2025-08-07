@@ -30,7 +30,7 @@ public class AgreementSlot {
    * v[f_i]: DepVerify for slot s_j from follower f_i This map only contains DepVerify messages
    * received from followers that are defined in the follower quorum F of the depPropose message.
    */
-  private Map<ReplicaId, DepVerifyMessage> depVerifies;
+  private DepVerifyMap depVerifies;
 
   // current phase
   private AgreementSlotPhase step;
@@ -84,7 +84,7 @@ public class AgreementSlot {
     this.seqNum = seqNum;
     this.request = request;
     this.depPropose = depPropose;
-    this.depVerifies = depVerifies;
+    this.depVerifies = new DepVerifyMap();
     this.step = step;
     this.viewChanges = viewChanges;
     this.viewNumber = viewNumber;
@@ -119,11 +119,19 @@ public class AgreementSlot {
   // TODO Kai: Instead of returning the whole map as mutable, we could return an immutable map and
   // instead set via a key-specific setter method?
   public Map<ReplicaId, DepVerifyMessage> getDepVerifies() {
-    return Collections.unmodifiableMap(depVerifies);
+    return depVerifies.getDepVerifies();
   }
 
   public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify) {
-    this.depVerifies.put(replicaId, depVerify);
+    this.depVerifies.setDepVerify(replicaId, depVerify);
+  }
+
+  /**
+   * Not thread-safe.
+   * @return
+   */
+  public String getDepVerifyHashCached() {
+    return this.depVerifies.getdepVerifyHashCached();
   }
 
   public AgreementSlotPhase getStep() {

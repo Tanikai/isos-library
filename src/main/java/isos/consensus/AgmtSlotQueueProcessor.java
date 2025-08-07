@@ -554,7 +554,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // Enter reconciliation path, stop participating in fast path
       logger.info(
           "At least 1 dependency is not reported by at least f+1 followers. Enter reconciliation path.");
-      var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
+      var depVerifyHash = this.slot.getDepVerifyHashCached();
       enterReconciliationPath(depVerifyHash);
       return;
     }
@@ -564,7 +564,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.slot.setStep(AgreementSlotPhase.FP_VERIFIED);
 
     // Here, h(dv) refers to the set of DepVerifys received from the followers in F.
-    var depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
+    var depVerifyHash = this.slot.getDepVerifyHashCached();
     var depCommitMsg = new DepCommitMessage(this.seqNum, this.ownReplicaId, depVerifyHash);
 
     var wrapper = new ISOSMessageWrapper(depCommitMsg, this.ownReplicaId.value());
@@ -618,8 +618,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Precondition 2: The hash of *our* vector containing the DepVerify messages from the F quorum
     // has to match with the hash from the received DepCommit messages as well
     var depVerifies = this.slot.getDepVerifies().values().stream().toList();
-    String depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
-    // TODO Kai: Can this be cached?
+    String depVerifyHash = this.slot.getDepVerifyHashCached();
 
     // We have received at least 2f+1 messages
     // Now we need to check whether our depVerifyHash matches with the hashes
@@ -681,10 +680,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // We have to check our DepVerify hash as well
     // Set of previously received DepVerifies
-    String depVerifyHash =
-        DepVerifyMessage.calculateDepVerifyHash(
-            this.slot.getDepVerifies().values().stream().toList());
-    // TODO Kai: somehow cache our own depVerifyHash?
+    String depVerifyHash = this.slot.getDepVerifyHashCached();
 
     if (!depVerifyHash.equals(prepare.depVerifiesHash())) {
       logger.warn("Hash mismatch with received prepare message, throwing message away");
@@ -728,8 +724,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void handleReceivedCommitMessage(CommitMessage commit) {
     var depVerifies = this.slot.getDepVerifies().values().stream().toList();
-    String depVerifyHash = DepVerifyMessage.calculateDepVerifyHash(depVerifies);
-    // TODO Kai: somehow cache the depVerifyHash?
+    String depVerifyHash = this.slot.getDepVerifyHashCached();
 
     if (!depVerifyHash.equals(commit.depVerifiesHash())) {
       logger.warn("Hash mismatch with received commit message, throwing message away");
@@ -820,7 +815,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Reconciliation Path Certificate
     else if (currentStep.equals(AgreementSlotPhase.RP_PREPARED)
         || currentStep.equals(AgreementSlotPhase.RP_COMMITTED)) {
-      String depVerifiesHash = DepVerifyMessage.calculateDepVerifyHash(dv);
+      String depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(dv);
       // Line 94: Set of 2f+1 Prepares with h(dv)
       // !!! The prepares must be from the same view!
       // TODO: here
