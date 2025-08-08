@@ -25,8 +25,7 @@ public record NewViewMessage(
     ReplicaId coordinatorId,
     DepProposeMessage depPropose,
     List<DepVerifyMessage> depVerifys,
-    Set<ViewChangeMessage> viewChanges
-    )
+    Set<ViewChangeMessage> viewChanges)
     implements ISOSMessage, Serializable {
 
   @Override

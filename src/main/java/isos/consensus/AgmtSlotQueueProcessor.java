@@ -24,9 +24,6 @@ import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,14 +67,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * slot. However, the AgreementSlotManager is able to read this slot.
    */
   private final AgreementSlot slot;
-
-  private final Lock slotLock;
-
-  /**
-   * When the DepPropose, DepVerify, or ViewChange messages change, this condition has to be
-   * notified
-   */
-  private final Condition messageCountCondition;
 
   // --- Outside Dependencies ---
   /** Callback function to broadcast messages to replicas */
@@ -130,8 +119,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // AgreementSlot State
     this.slot = slot;
-    this.slotLock = new ReentrantLock();
-    this.messageCountCondition = this.slotLock.newCondition();
 
     // Outside Dependencies
     this.msgSender = msgSender;
@@ -150,27 +137,13 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @param maxFaults
    * @throws InterruptedException
    */
-  public void awaitWaitConditionCompleted(int maxFaults) throws InterruptedException {
+  public void awaitConditionCompleted(int maxFaults) throws InterruptedException {
     if (maxFaults < 0) {
       throw new IllegalArgumentException("Maximum faults is smaller than 0");
     } else if (maxFaults == 0) {
       logger.warn("Maximum faults is 0. Is ISOS configured correctly?");
     }
-    int quorumSize = maxFaults + 1;
-
-    this.slotLock.lock();
-    try {
-      while (slot.getDepPropose() == null // received valid DepPropose
-          && slot.getDepVerifies().size() < quorumSize // received f+1 correctly signed DepVerifys
-          && slot.getViewChanges().size() < quorumSize // received f+1 correctly signed ViewChanges
-      ) {
-        // if depPropose, depVerify, or viewChanges get changed, the condition should be
-        // notified
-        this.messageCountCondition.await();
-      }
-    } finally {
-      this.slotLock.unlock();
-    }
+    this.slot.awaitConditionCompleted(maxFaults + 1);
   }
 
   /**
@@ -231,17 +204,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
     DepProposeWithRequest dp =
         new DepProposeWithRequest(propose, r); // Create wrapper message that includes the request
 
-    this.slotLock.lock();
-    try {
-      this.slot.setDepPropose(propose);
-      this.slot.setRequest(r);
-      this.slot.setStep(AgreementSlotPhase.PROPOSED);
-      // we have changed the messages in the slot, so signal all waiting threads
-
-      this.messageCountCondition.signalAll();
-    } finally {
-      this.slotLock.unlock();
-    }
+    this.slot.setDepPropose(propose);
+    this.slot.setRequest(r);
+    this.slot.setStep(AgreementSlotPhase.PROPOSED);
+    // we have changed the messages in the slot, so signal all waiting threads
 
     var msg = new ISOSMessageWrapper(dp, this.ownReplicaId.value());
 
@@ -478,27 +444,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
     if (this.slot.getDepPropose() == null) {
       this.startTimeout(ISOSTimeoutType.COMMIT);
       this.startTimeout(ISOSTimeoutType.PROPOSE);
-      this.slotLock.lock();
-      try {
-        this.slot.setDepPropose(depPropose);
-        this.messageCountCondition.signalAll();
-      } finally {
-        this.slotLock.unlock();
-      }
+      this.slot.setDepPropose(depPropose);
     }
 
     // Line 29
     if (request != null) {
       // TODO Kai: assert r correctly signed
       var dependencies = this.conflictChecker.conflicts(request);
-      this.slotLock.lock();
-      try {
-        this.slot.setRequest(request);
-        this.slot.setStep(AgreementSlotPhase.PROPOSED);
-        this.messageCountCondition.signalAll();
-      } finally {
-        this.slotLock.unlock();
-      }
+      this.slot.setRequest(request);
+      this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // if we are in the Follower quorum, send a DepPropose message
       if (depPropose.followerQuorum().contains(this.ownReplicaId)) {
         var depVerify =
@@ -865,7 +819,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {
     // TODO Kai: Here, we have to differentiate whether we are the coordinator or not
-
 
   }
 

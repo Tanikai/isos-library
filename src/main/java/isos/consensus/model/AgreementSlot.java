@@ -12,6 +12,9 @@ import isos.utils.ViewNumber;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Single agreement slot. Used solely as a data class. Logic is contained in the
@@ -34,7 +37,7 @@ public class AgreementSlot {
 
   // current phase
   private AgreementSlotPhase step;
-  private Map<ReplicaId, ViewChangeMessage> viewChanges;
+  private ViewChangeMap viewChanges;
   // View number for slot s_j, initially -1
   private ViewNumber viewNumber;
   // Highest view number for slot s_j seen for replica r_i
@@ -47,6 +50,16 @@ public class AgreementSlot {
   // frequent changes to the fields
 
   private ViewChangeCertificate viewChangeCertificate;
+
+  // Fields required for waiting / notifying efficiently (not for concurrency control)
+
+  private final Lock slotLock;
+
+  /**
+   * When the DepPropose, DepVerify, or ViewChange messages change, this condition has to be
+   * notified
+   */
+  private final Condition messageCountCondition;
 
   public AgreementSlot(SequenceNumber seqNum) {
     this(seqNum, null);
@@ -84,10 +97,30 @@ public class AgreementSlot {
     this.depPropose = depPropose;
     this.depVerifies = new DepVerifyMap();
     this.step = step;
-    this.viewChanges = viewChanges;
+    this.viewChanges = new ViewChangeMap();
     this.viewNumber = viewNumber;
     this.peerViewNumbers = peerViewNumbers;
     this.viewChangeCertificate = viewChangeCertificate;
+
+    this.slotLock = new ReentrantLock();
+    this.messageCountCondition = this.slotLock.newCondition();
+  }
+
+  public void awaitConditionCompleted(int quorumSize) throws InterruptedException {
+    this.slotLock.lock();
+    try {
+      while (this.depPropose == null // received valid DepPropose
+          && !this.reachedDepVerifyQuorum(quorumSize) // received f+1 correctly signed DepVerifys
+          && !this.reachedViewChangeQuorum(
+              this.viewNumber, quorumSize) // received f+1 correctly signed ViewChanges
+      // TODO Kai: do we have to check for a correct view number here?
+      ) {
+        // if depPropose, depVerify, or viewChanges get changed, the condition will be notified
+        this.messageCountCondition.await();
+      }
+    } finally {
+      this.slotLock.unlock();
+    }
   }
 
   public SequenceNumber getSeqNum() {
@@ -115,8 +148,14 @@ public class AgreementSlot {
       throw new IllegalStateException("DepPropose cannot be set again");
     }
 
-    this.depPropose = depPropose;
-    this.depVerifies.setFollowerQuroum(depPropose.followerQuorum());
+    this.slotLock.lock();
+    try {
+      this.depPropose = depPropose;
+      this.depVerifies.setFollowerQuroum(depPropose.followerQuorum());
+    } finally {
+      this.messageCountCondition.signalAll();
+      this.slotLock.unlock();
+    }
   }
 
   public Map<ReplicaId, DepVerifyMessage> getDepVerifies() {
@@ -124,7 +163,13 @@ public class AgreementSlot {
   }
 
   public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify) {
-    this.depVerifies.setDepVerify(replicaId, depVerify);
+    this.slotLock.lock();
+    try {
+      this.depVerifies.setDepVerify(replicaId, depVerify);
+    } finally {
+      this.messageCountCondition.signalAll();
+      this.slotLock.unlock();
+    }
   }
 
   public boolean isFpVerified(int maxFaults) {
@@ -133,6 +178,7 @@ public class AgreementSlot {
 
   /**
    * Not thread-safe.
+   *
    * @return
    */
   public String getDepVerifyHashCached() {
@@ -143,6 +189,10 @@ public class AgreementSlot {
     return this.depVerifies.reachedQuorum(quorumSize);
   }
 
+  public boolean reachedViewChangeQuorum(ViewNumber viewNumber, int quorumSize) {
+    return this.viewChanges.reachedQuorum(viewNumber, quorumSize);
+  }
+
   public AgreementSlotPhase getStep() {
     return step;
   }
@@ -151,12 +201,18 @@ public class AgreementSlot {
     this.step = step;
   }
 
-  public Map<ReplicaId, ViewChangeMessage> getViewChanges() {
-    return Collections.unmodifiableMap(viewChanges);
+  public Map<ReplicaId, ViewChangeMessage> getViewChanges(ViewNumber viewNumber) {
+    return this.viewChanges.getViewChanges(viewNumber);
   }
 
-  public void setViewChange(ReplicaId replicaId, ViewChangeMessage viewChange) {
-    this.viewChanges.put(replicaId, viewChange);
+  public void setViewChange(ViewChangeMessage viewChange) {
+    this.slotLock.lock();
+    try {
+      this.viewChanges.setViewChange(viewChange);
+    } finally {
+      this.messageCountCondition.signalAll();
+      this.slotLock.unlock();
+    }
   }
 
   public ViewNumber getViewNumber() {

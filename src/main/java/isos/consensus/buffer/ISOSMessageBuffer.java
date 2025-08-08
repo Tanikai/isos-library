@@ -5,7 +5,6 @@ import isos.message.replica.ISOSMessageType;
 import isos.message.replica.fast.DepCommitMessage;
 import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
-import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.util.Collection;
@@ -33,8 +32,6 @@ public class ISOSMessageBuffer {
 
   private final Map<ViewNumber, Map<ReplicaId, CommitMessage>> commitQuorum;
 
-  private final Map<ViewNumber, Map<ReplicaId, ViewChangeMessage>> viewChangeQuorum;
-
   public ISOSMessageBuffer() {
     this.bufferedMessages = new HashMap<>();
 
@@ -46,7 +43,6 @@ public class ISOSMessageBuffer {
     this.depCommitQuorum = new HashMap<>();
     this.prepareQuorum = new HashMap<>();
     this.commitQuorum = new HashMap<>();
-    this.viewChangeQuorum = new HashMap<>();
   }
 
   public void bufferMessage(ISOSMessage msg) throws ReplicaMessageAlreadyPresent {
@@ -139,27 +135,5 @@ public class ISOSMessageBuffer {
 
   public Collection<CommitMessage> getCommits(ViewNumber viewNumber) {
     return this.commitQuorum.computeIfAbsent(viewNumber, x -> new HashMap<>()).values();
-  }
-
-  public void storeViewChange(ViewChangeMessage viewChange) throws ReplicaMessageAlreadyPresent {
-    var sender = viewChange.replicaId();
-    var viewNumber = viewChange.viewNumber();
-
-    var viewChanges = this.viewChangeQuorum.computeIfAbsent(viewNumber, x -> new HashMap<>());
-
-    if (viewChanges.containsKey(sender)) {
-      throw new ReplicaMessageAlreadyPresent(sender, viewNumber, viewChange.msgType());
-    }
-
-    viewChanges.put(sender, viewChange);
-  }
-
-  public boolean viewChangeQuorumReached(ViewNumber viewNumber, int quorumSize) {
-    return this.viewChangeQuorum.computeIfAbsent(viewNumber, x -> new HashMap<>()).size()
-        >= quorumSize;
-  }
-
-  public Collection<ViewChangeMessage> getViewChanges(ViewNumber viewNumber) {
-    return this.viewChangeQuorum.computeIfAbsent(viewNumber, x -> new HashMap<>()).values();
   }
 }

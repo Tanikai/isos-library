@@ -358,8 +358,7 @@ class AgmtSlotQueueProcessorTest {
             new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
     incomingQueue.add(otherDepVerify);
 
-    var depVerifiesHash =
-        DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
     var depVerifiesHashSwapped =
         DepVerifyMap.calculateDepVerifyHash(List.of(depVerify, otherDepVerify));
     assertEquals(depVerifiesHash, depVerifiesHashSwapped);
@@ -453,8 +452,7 @@ class AgmtSlotQueueProcessorTest {
     // the f+1 does not come from the follower Quroum, the ISOS paper tells us that we have to go to
     // the reconciliation path
 
-    var depVerifiesHash =
-        DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
 
     verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
 

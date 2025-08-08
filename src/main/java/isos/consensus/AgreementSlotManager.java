@@ -208,7 +208,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             () -> {
               var processorSlot = this.queueProcessors.get(dep);
               try {
-                processorSlot.awaitWaitConditionCompleted(this.maxFaults);
+                processorSlot.awaitConditionCompleted(this.maxFaults);
                 // After this, the condition of the agreement slot is
                 allDepLatch.countDown();
               } catch (InterruptedException e) {
