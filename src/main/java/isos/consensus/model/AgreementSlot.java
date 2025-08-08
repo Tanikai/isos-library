@@ -30,7 +30,7 @@ public class AgreementSlot {
    * v[f_i]: DepVerify for slot s_j from follower f_i This map only contains DepVerify messages
    * received from followers that are defined in the follower quorum F of the depPropose message.
    */
-  private DepVerifyMap depVerifies;
+  private final DepVerifyMap depVerifies;
 
   // current phase
   private AgreementSlotPhase step;
@@ -119,8 +119,6 @@ public class AgreementSlot {
     this.depVerifies.setFollowerQuroum(depPropose.followerQuorum());
   }
 
-  // TODO Kai: Instead of returning the whole map as mutable, we could return an immutable map and
-  // instead set via a key-specific setter method?
   public Map<ReplicaId, DepVerifyMessage> getDepVerifies() {
     return depVerifies.getDepVerifies();
   }
@@ -141,8 +139,8 @@ public class AgreementSlot {
     return this.depVerifies.getdepVerifyHashCached();
   }
 
-  public boolean reachedDepVerifyQuorum(int maxFaults) {
-    return this.depVerifies.reachedQuorum(maxFaults);
+  public boolean reachedDepVerifyQuorum(int quorumSize) {
+    return this.depVerifies.reachedQuorum(quorumSize);
   }
 
   public AgreementSlotPhase getStep() {

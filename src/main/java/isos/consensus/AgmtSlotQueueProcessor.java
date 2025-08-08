@@ -471,6 +471,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
+    // End of preconditions, assert, and wait
+
     // Line 25
     // Propose timeout is only created by followers, not coordinators
     if (this.slot.getDepPropose() == null) {
@@ -553,7 +555,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Add received DepVerify
     this.slot.setDepVerify(depVerify.followerId(), depVerify);
 
-    if (!this.slot.reachedDepVerifyQuorum(this.maxFaults)) {
+    if (!this.slot.reachedDepVerifyQuorum(2 * this.maxFaults)) {
       logger.info("Did not reach quorum of DepVerify messages yet.");
       return;
     }
@@ -861,7 +863,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * @param viewChange
    */
-  private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {}
+  private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {
+    // TODO Kai: Here, we have to differentiate whether we are the coordinator or not
+
+
+  }
 
   /**
    * Broadcasted by the View-change coordinator.

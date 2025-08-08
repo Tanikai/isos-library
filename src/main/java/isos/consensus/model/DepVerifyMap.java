@@ -107,8 +107,8 @@ public class DepVerifyMap {
     return this.hash;
   }
 
-  public boolean reachedQuorum(int maxFaults) {
-    return this.depVerifies.size() == (2 * maxFaults);
+  public boolean reachedQuorum(int quorumSize) {
+    return this.depVerifies.size() >= quorumSize;
   }
 
   /**
@@ -131,7 +131,7 @@ public class DepVerifyMap {
    */
   public boolean isFpVerified(int maxFaults) {
     // Before we are fp-verified, we need the depVerifies from the 2f followers.
-    if (!this.reachedQuorum(maxFaults)) {
+    if (!this.reachedQuorum(2 * maxFaults)) {
       return false;
     }
 
