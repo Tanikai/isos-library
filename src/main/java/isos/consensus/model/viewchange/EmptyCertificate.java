@@ -1,8 +1,17 @@
 package isos.consensus.model.viewchange;
 
-public record EmptyCertificate() implements  ViewChangeCertificate {
+import isos.utils.ViewNumber;
+
+import java.io.Serializable;
+
+public record EmptyCertificate() implements ViewChangeCertificate, Serializable {
   @Override
   public CertificateType certificate() {
     return CertificateType.NULL;
+  }
+
+  @Override
+  public ViewNumber previousViewNumber() {
+    return null;
   }
 }

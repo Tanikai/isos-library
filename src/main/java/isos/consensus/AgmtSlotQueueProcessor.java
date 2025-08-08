@@ -1,6 +1,7 @@
 package isos.consensus;
 
 import isos.communication.MessageSender;
+import isos.consensus.buffer.ISOSMessageBuffer;
 import isos.consensus.model.*;
 import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.consensus.model.viewchange.ReconciliationPathCertificate;
@@ -8,6 +9,7 @@ import isos.execution.ExecutableRequestReceiver;
 import isos.execution.ExecuteMessage;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.replica.ISOSMessage;
+import isos.message.replica.ISOSMessageType;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.TimeoutMessage;
 import isos.message.replica.fast.DepCommitMessage;
@@ -51,13 +53,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * Messages that have been deferred because we were not in the correct step yet. After the
    * preconditions are met, they can be processed.
    */
-  private Queue<ISOSMessage> deferredQueue;
-
-  /** Stores processed messages until a Quorum size is reached. */
-  private final Map<ReplicaId, DepCommitMessage> depCommitQuorum;
-
-  private final Map<ReplicaId, PrepareMessage> prepareQuorum;
-  private final Map<ReplicaId, CommitMessage> commitQuorum;
+  private final ISOSMessageBuffer bufferedMessages;
 
   // --- Timeouts ---
   private final TimeoutConfiguration timeoutConfig;
@@ -123,10 +119,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Messaging
     this.incomingQueue = incomingQueue;
-    this.deferredQueue = new LinkedBlockingQueue<>();
-    this.depCommitQuorum = new HashMap<>();
-    this.prepareQuorum = new HashMap<>();
-    this.commitQuorum = new HashMap<>();
+    this.bufferedMessages = new ISOSMessageBuffer();
 
     // Timeouts
     this.timeoutConfig = timeoutConfig;
@@ -199,11 +192,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
       // Fast path
       case DepProposeWithRequest depPropose ->
-        // This case only happens if we receive a depPropose from another replica. For requests where
-        // the current replica acts as the coordinator, see handleReceivedClientRequest().
-              this.handleReceivedDepProposeWithRequest(depPropose);
-      case DepProposeMessage depProposeMessage ->
-              logger.error("Received DepPropose message without request, throwing away");
+          // This case only happens if we receive a depPropose from another replica. For requests
+          // where
+          // the current replica acts as the coordinator, see handleReceivedClientRequest().
+          this.handleReceivedDepProposeWithRequest(depPropose);
+      case DepProposeMessage ignored ->
+          logger.error("Received DepPropose message without request, throwing away");
       case DepVerifyMessage depVerify -> this.handleReceivedDepVerify(depVerify);
       case DepCommitMessage depCommit -> this.handleReceivedDepCommit(depCommit);
 
@@ -214,8 +208,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // View change
       case NewViewMessage newView -> this.handleReceivedNewViewMessage(newView);
       case ViewChangeMessage viewChange -> this.handleReceivedViewChangeMessage(viewChange);
-      default -> {
-      }
+      default -> {}
     }
   }
 
@@ -399,6 +392,34 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // endregion
 
+  // region Preconditions, buffering message
+
+  private boolean checkStepPrecond(ISOSMessageType msgType, AgreementSlotPhase currentStep) {
+    boolean isCorrectStep = false;
+    switch (msgType) {
+      case DEP_PROPOSE -> {}
+      case DEP_PROPOSE_WITH_REQ -> isCorrectStep = currentStep == AgreementSlotPhase.INIT;
+      case DEP_VERIFY -> isCorrectStep = currentStep == AgreementSlotPhase.PROPOSED;
+      case DEP_COMMIT -> {}
+      case REC_PREPARE -> {}
+      case REC_COMMIT -> {}
+      case VC_VIEWCHANGE -> {}
+      case VC_NEWVIEW -> {}
+      case TIMEOUT -> {}
+      default -> {
+        logger.warn("Passed invalid msgType {}", msgType);
+        return false;
+      }
+    }
+
+    if (!isCorrectStep) {
+      logger.warn("Step mismatch when processing {}, current step {}", msgType, currentStep);
+    }
+    return isCorrectStep;
+  }
+
+  // endregion
+
   // region Fast Path
   /**
    * Handles a depPropose message, which means that we are the follower for this agreement slot.
@@ -408,9 +429,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void handleReceivedDepProposeWithRequest(DepProposeWithRequest depProposeWithR) {
     // Line 21: pre: step == init
-    if (slot.getStep() != AgreementSlotPhase.INIT) {
-      logger.info("Step mismatch, maybe duplicated DepPropose?");
-      //      this.deferredQueue.add(depPropose);
+    if (!this.checkStepPrecond(ISOSMessageType.DEP_PROPOSE_WITH_REQ, this.slot.getStep())) {
       return;
     }
 
@@ -441,9 +460,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
       waitDeps.add(prevSlot); // wait for D ∪ s_{j−1}
     }
 
-    // TODO: we have to wait in a loop with condition check
+    // TODO Kai: do we have to wait in a loop with condition check?
     try {
       this.dependencyWait.waitUntilConsensusStarted(waitDeps);
+      // TODO Kai: Expiring timeouts should cancel this waiting as well (?)
     } catch (InterruptedException e) {
       logger.error(
           "Interrupted while waiting for dependencies {}. Stop processing depPropose.", waitDeps);
@@ -494,14 +514,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // FIXME: if we receive DepVerify from f+1 replicas, we have to start commit timeout
     // (disregarding fast path quorum, hash, and dependencies)
 
-    if (slot.getStep() != AgreementSlotPhase.PROPOSED) {
-      logger.warn("Step mismatch");
-      try {
-        this.deferredQueue.add(depVerify);
-      } catch (IllegalStateException e) {
-        logger.error(
-            "DeferredQueue for Sequence Number {} is full, throwing message away", this.seqNum);
-      }
+    if (!this.checkStepPrecond(ISOSMessageType.DEP_VERIFY, this.slot.getStep())) {
+      this.bufferedMessages.bufferMessage(depVerify);
       return;
     }
 
@@ -576,11 +590,14 @@ public class AgmtSlotQueueProcessor implements Runnable {
   }
 
   private void handleReceivedDepCommit(DepCommitMessage depCommit) {
-    this.depCommitQuorum.put(depCommit.replicaId(), depCommit);
+    this.bufferedMessages.storeDepCommit(depCommit);
 
-    if (depCommitQuorum.size() < ((2 * this.maxFaults) + 1)) {
+    if (!this.bufferedMessages.depCommitQuorumReached((2 * this.maxFaults) + 1)) {
       return;
     }
+
+    // We have received at least 2f+1 messages
+    // Now we need to check whether our depVerifyHash matches with the hashes
 
     // Preconditions
     // Precondition 1
@@ -591,22 +608,13 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Precondition 2: The hash of *our* vector containing the DepVerify messages from the F quorum
     // has to match with the hash from the received DepCommit messages as well
-    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
-    String depVerifyHash = this.slot.getDepVerifyHashCached();
-
-    // We have received at least 2f+1 messages
-    // Now we need to check whether our depVerifyHash matches with the hashes
-
-    // Count occurrences of each hash
-    depCommitQuorum.values().stream()
-        .filter(msg -> depVerifyHash.equals(msg.depVerifiesHash()))
-        .toList();
-    var quorumSize = (2 * this.maxFaults) + 1;
-
-    if (depCommitQuorum.size() < quorumSize) {
+    if (!this.bufferedMessages.depCommitQuorumWithSameHashReached(
+        this.slot.getDepVerifyHashCached(), (2 * this.maxFaults) + 1)) {
       logger.info("Commit Quorum with same DepVerifyHash not reached yet");
       return;
     }
+
+    // Preconditions done
 
     // Our DepVerify hash matches with a quorum of DepVerifyHashes of received commit messages
     this.cancelTimeout(ISOSTimeoutType.PROPOSE);
@@ -616,6 +624,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Dependency set used in execution is union set of all dependencies of the follower quorum
     // defined initially by the DepPropose
     // TODO Kai: do we have to include depPropose dependencies here?
+    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, null);
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
@@ -661,8 +670,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    // save to quorum
-    this.prepareQuorum.put(prepare.replicaId(), prepare);
+    // Save to prepare quorum
+    this.bufferedMessages.storePrepare(prepare);
 
     // Before we can continue processing, we need to fulfill the preconditions
     if (this.slot.getStep() != AgreementSlotPhase.RP_VERIFIED) {
@@ -679,8 +688,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // If we have a 2f+1 quorum, we can continue
-    if (this.prepareQuorum.size() < ((2 * this.maxFaults) + 1)) {
-      logger.info("Received prepare message, but quorum not reached yet.");
+    // TODO Kai: do we need to check for other conditions of the quorum? Same hash?
+    if (!this.bufferedMessages.prepareQuorumReached(
+        this.slot.getViewNumber(), (2 * this.maxFaults) + 1)) {
+      logger.info(
+          "Received prepare message for view {}, but quorum not reached yet.",
+          this.slot.getViewNumber());
       return;
     }
 
@@ -706,7 +719,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // save to quorum
-    this.commitQuorum.put(commit.replicaId(), commit);
+    this.bufferedMessages.storeCommit(commit);
 
     // Before we can continue processing, we need to fulfill the preconditions
     if (this.slot.getStep() != AgreementSlotPhase.RP_PREPARED) {
@@ -723,12 +736,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    if (this.commitQuorum.size() < ((2 * this.maxFaults) + 1)) {
-      logger.info("Received commit message, but quorum not reached yet.");
+    if (!this.bufferedMessages.commitQuorumReached(
+        this.slot.getViewNumber(), (2 * this.maxFaults) + 1)) {
+      logger.info(
+          "Received commit message for view {}, but quorum not reached yet.",
+          this.slot.getViewNumber());
       return;
     }
 
-    logger.info("We have reached 2f+1 RpCommit messages!");
+    logger.info("We have reached 2f+1 RpCommit messages for view {}!", this.slot.getViewNumber());
 
     this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
@@ -747,8 +763,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   // region View Change
 
   /**
-   * Upon move to new view for slot.
-   * This function is called when a timeout expires.
+   * Upon move to new view for slot. This function is called when a timeout expires.
    *
    * <p>Pseudocode line 86-100
    */
@@ -760,7 +775,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var previousViewNum = this.slot.getViewNumber();
     var newViewNum = ViewNumber.increaseViewNumber(previousViewNum);
     logger.info("Move from view {} to new view {}", previousViewNum, newViewNum);
-    this.slot.setViewNumber(newViewNum);
 
     // If propose timeout is active, trigger its expiry (i.e., timeout logic should be executed now)
     this.triggerTimeoutExpiry(ISOSTimeoutType.PROPOSE);
@@ -779,7 +793,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Fast path Certificate
     if (currentStep.equals(AgreementSlotPhase.FP_VERIFIED)
         || currentStep.equals(AgreementSlotPhase.FP_COMMITTED)) {
-      this.slot.setViewChangeCertificate(new FastPathCertificate(dp, dv, -1));
+      this.slot.setViewChangeCertificate(
+          new FastPathCertificate(dp, dv /*ViewNumber of FPC is constant -1*/));
 
       // Sanity check, is not necessary
       if (!this.slot.isFpVerified(this.maxFaults)) {
@@ -790,21 +805,25 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Reconciliation Path Certificate
     else if (currentStep.equals(AgreementSlotPhase.RP_PREPARED)
         || currentStep.equals(AgreementSlotPhase.RP_COMMITTED)) {
-      String depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(dv);
+
       // Line 94: Set of 2f+1 Prepares with h(dv)
-      // !!! The prepares must be from the same view!
-      // TODO: here
+      // h(dv) is already checked when adding the prepare
       List<PrepareMessage> prep =
-          this.prepareQuorum.values().stream()
-              .filter((prepare) -> prepare.depVerifiesHash().equals(depVerifiesHash))
-              .toList();
+          this.bufferedMessages.getPrepares(previousViewNum).stream().toList();
 
       /**
-       * FIXME Kai: Are we sending the new view number, or the previous one? -> Pseudocode says to
-       * send the view number that is stored in the view variable, before it is updated with the new
-       * view number -> older one However, the new view number would intuitively make more sense
-       * (according to me) Is it because the PREPAREs that are sent in the have to be from the same
-       * view
+       * Are we sending the new view number, or the previous one?
+       *
+       * <p>Pseudocode says to send the view number that is stored in the view variable, before it
+       * is updated with the new view number -> older one
+       *
+       * <p>However, the new view number would make more sense intuitively, because we are currently
+       * in the moveToNewView step
+       *
+       * <p>Looking at the FPC as well where -1 is used in the certificate, we are using the
+       * messages that we received in the *previous* view for the certificate. When the fast path is
+       * successful, a view change is not necessary, so the view number is always -1. Thus, we use
+       * the previousViewNum in the certificate.
        */
       this.slot.setViewChangeCertificate(
           new ReconciliationPathCertificate(dp, dv, prep, previousViewNum));
@@ -814,6 +833,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Pseudocode line 96-97
     this.slot.setViewNumber(newViewNum);
     this.slot.setPeerViewNumber(this.ownReplicaId, newViewNum);
+    this.slot.setStep(AgreementSlotPhase.VIEW_CHANGE);
+    this.startTimeout(ISOSTimeoutType.QUERY_EXEC);
+    // TODO Kai: Do we need to broadcast to ourselves or not?
+    this.msgSender.broadcastToReplicas(
+        false,
+        new ISOSMessageWrapper(
+            new ViewChangeMessage(
+                this.seqNum, newViewNum, this.ownReplicaId, this.slot.getViewChangeCertificate()),
+            this.ownReplicaId));
   }
 
   /**
@@ -853,7 +881,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // When we received a ClientRequest, the AgreementSlot request is already populated
     if (this.slot.getRequest() != null) {
       handleReceivedClientRequest();
-      // we can then set the agreement slot to step
     }
 
     while (!Thread.currentThread().isInterrupted()) {

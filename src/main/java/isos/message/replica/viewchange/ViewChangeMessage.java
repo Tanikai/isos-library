@@ -1,31 +1,24 @@
 package isos.message.replica.viewchange;
 
 import isos.consensus.model.SequenceNumber;
+import isos.consensus.model.viewchange.ViewChangeCertificate;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
-import isos.message.replica.fast.DepProposeMessage;
-import isos.message.replica.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.io.Serializable;
-import java.util.List;
-import java.util.Set;
 
 /**
- * @param seqNum agreement slot
- * @param viewNumber New view number
- * @param coordinatorId Newly selected coordinator of view
- * @param depPropose Original DepPropose message
- * @param depVerifies Accompanying DepVerifys
- * @param viewChanges Set of 2f+1 ViewChanges
+ * @param seqNum Agreement slot
+ * @param viewNumber New view number of the agreement slot
+ * @param replicaId Sender of message that moved to new view (not the new coordinator!)
+ * @param certificate View change certificate, or null
  */
 public record ViewChangeMessage(
     SequenceNumber seqNum,
     ViewNumber viewNumber,
-    ReplicaId coordinatorId,
-    DepProposeMessage depPropose,
-    List<DepVerifyMessage> depVerifies,
-    Set<NewViewMessage> viewChanges)
+    ReplicaId replicaId,
+    ViewChangeCertificate certificate)
     implements ISOSMessage, Serializable {
 
   @Override
@@ -35,6 +28,6 @@ public record ViewChangeMessage(
 
   @Override
   public ReplicaId logicalSender() {
-    return this.coordinatorId;
+    return this.replicaId;
   }
 }

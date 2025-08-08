@@ -4,17 +4,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
+import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepVerifyMessage;
-import isos.message.replica.viewchange.NewViewMessage;
-import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class ViewChangeMessageSerializationTest {
@@ -25,20 +23,12 @@ class ViewChangeMessageSerializationTest {
     ReplicaId coordinatorId = new ReplicaId(2);
     DepProposeMessage depPropose =
         new DepProposeMessage(
-            seqNum,
-            coordinatorId,
-            "hashViewChange",
-            new DependencySet(),
-            new HashSet<>());
+            seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     List<DepVerifyMessage> depVerifies = new ArrayList<>();
-    depVerifies.add(
-        new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
-    Set<NewViewMessage> viewChanges = new HashSet<>();
-    viewChanges.add(new NewViewMessage(seqNum, viewNumber, new ReplicaId(4), null));
+    depVerifies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
 
-    ViewChangeMessage original =
-        new ViewChangeMessage(
-            seqNum, viewNumber, coordinatorId, depPropose, depVerifies, viewChanges);
+    var fpc = new FastPathCertificate(depPropose, depVerifies);
+    ViewChangeMessage original = new ViewChangeMessage(seqNum, viewNumber, coordinatorId, fpc);
 
     byte[] bytes;
     try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -57,7 +47,6 @@ class ViewChangeMessageSerializationTest {
     assertEquals(original, deserialized);
     assertEquals(original.seqNum(), deserialized.seqNum());
     assertEquals(original.viewNumber(), deserialized.viewNumber());
-    assertEquals(original.coordinatorId(), deserialized.coordinatorId());
-    assertNotNull(deserialized.depPropose());
+    assertEquals(original.certificate(), deserialized.certificate());
   }
 }
