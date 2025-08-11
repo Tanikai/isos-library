@@ -161,7 +161,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Use different handlers depending on the received message
     switch (msg) {
-      case TimeoutMessage timeoutMessage -> this.handleTimeoutMessage(timeoutMessage);
 
       // Fast path
       case DepProposeWithRequest depPropose ->
@@ -183,6 +182,31 @@ public class AgmtSlotQueueProcessor implements Runnable {
       case ViewChangeMessage viewChange -> this.handleReceivedViewChangeMessage(viewChange);
       default -> {}
     }
+  }
+
+  /**
+   * Unified method that checks whether the step precondition holds for a message in the current
+   * state. Generally, if a step precondition does not hold, the message should be buffered so that
+   * it can be processed later when the correct step is reached.
+   */
+  private boolean stepPrecondHolds(ISOSMessageType msgType) {
+    var currentStep = this.slot.getStep();
+    return switch (msgType) {
+      // Fast Path
+      case DEP_PROPOSE_WITH_REQ -> currentStep == AgreementSlotPhase.INIT; // Throw away message
+      case DEP_VERIFY -> currentStep == AgreementSlotPhase.PROPOSED; // Keep Message
+      case DEP_COMMIT -> currentStep == AgreementSlotPhase.FP_VERIFIED; // Keep Message
+      // Reconciliation Path
+      case REC_PREPARE -> currentStep == AgreementSlotPhase.RP_VERIFIED; // Keep Message
+      case REC_COMMIT -> currentStep == AgreementSlotPhase.RP_PREPARED; // Keep Message
+      // View Change
+      case VC_VIEWCHANGE -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
+      case VC_NEWVIEW -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
+      // Invalid cases
+      case DEP_PROPOSE -> throw new IllegalArgumentException();
+      case TIMEOUT -> throw new IllegalArgumentException("Timeout message does not have precond");
+      default -> throw new IllegalArgumentException(String.format("Invalid msgType %s", msgType));
+    };
   }
 
   /**
@@ -360,30 +384,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // region Preconditions, buffering message
 
-  private boolean checkStepPrecond(ISOSMessageType msgType, AgreementSlotPhase currentStep) {
-    boolean isCorrectStep = false;
-    switch (msgType) {
-      case DEP_PROPOSE -> {}
-      case DEP_PROPOSE_WITH_REQ -> isCorrectStep = currentStep == AgreementSlotPhase.INIT;
-      case DEP_VERIFY -> isCorrectStep = currentStep == AgreementSlotPhase.PROPOSED;
-      case DEP_COMMIT -> {}
-      case REC_PREPARE -> {}
-      case REC_COMMIT -> {}
-      case VC_VIEWCHANGE -> {}
-      case VC_NEWVIEW -> {}
-      case TIMEOUT -> {}
-      default -> {
-        logger.warn("Passed invalid msgType {}", msgType);
-        return false;
-      }
-    }
-
-    if (!isCorrectStep) {
-      logger.warn("Step mismatch when processing {}, current step {}", msgType, currentStep);
-    }
-    return isCorrectStep;
-  }
-
   // endregion
 
   // region Fast Path
@@ -394,10 +394,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @param depProposeWithR
    */
   private void handleReceivedDepProposeWithRequest(DepProposeWithRequest depProposeWithR) {
-    // Line 21: pre: step == init
-    if (!this.checkStepPrecond(ISOSMessageType.DEP_PROPOSE_WITH_REQ, this.slot.getStep())) {
-      return;
-    }
+    // Step precondition checked in separate method
 
     var depPropose = depProposeWithR.depPropose();
     var request = depProposeWithR.request();
@@ -444,12 +441,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
     if (this.slot.getDepPropose() == null) {
       this.startTimeout(ISOSTimeoutType.COMMIT);
       this.startTimeout(ISOSTimeoutType.PROPOSE);
-      this.slot.setDepPropose(depPropose);
     }
+
+    this.slot.setDepPropose(depPropose);
 
     // Line 29
     if (request != null) {
-      // TODO Kai: assert r correctly signed
       var dependencies = this.conflictChecker.conflicts(request);
       this.slot.setRequest(request);
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
@@ -466,13 +463,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
   }
 
   private void handleReceivedDepVerify(DepVerifyMessage depVerify) {
-    // FIXME Kai: Add pseudocode line 53 / 54
-    // FIXME: if we receive DepVerify from f+1 replicas, we have to start commit timeout
-    // (disregarding fast path quorum, hash, and dependencies)
-
-    if (!this.checkStepPrecond(ISOSMessageType.DEP_VERIFY, this.slot.getStep())) {
-      this.bufferedMessages.bufferMessage(depVerify);
-      return;
+    // Line 53: if we receive DepVerify from f+1 replicas, start commit timeout
+    // Note: In this case, we assume that we have received f+1 *valid* DepVerify messages.
+    // The pseudocode is ambiguous in this case, whether we should count DepVerify messages that
+    // are not valid, e.g., due to a hash mismatch.
+    if (this.slot.reachedDepVerifyQuorum(this.maxFaults + 1)) {
+      // Start commit timeout if it wasn't started yet
+      if (this.timeoutStates.get(ISOSTimeoutType.COMMIT) == TimeoutState.NULL) {
+        this.startTimeout(ISOSTimeoutType.COMMIT);
+      }
     }
 
     if (!slot.getDepPropose().calculateHash().equals(depVerify.depProposeHash())) {
@@ -555,13 +554,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // We have received at least 2f+1 messages
     // Now we need to check whether our depVerifyHash matches with the hashes
 
-    // Preconditions
-    // Precondition 1
-    if (this.slot.getStep() != AgreementSlotPhase.FP_VERIFIED) {
-      logger.error("Step mismatch for DepCommit, returning early");
-      return;
-    }
-
     // Precondition 2: The hash of *our* vector containing the DepVerify messages from the F quorum
     // has to match with the hash from the received DepCommit messages as well
     if (!this.bufferedMessages.depCommitQuorumWithSameHashReached(
@@ -569,8 +561,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
       logger.info("Commit Quorum with same DepVerifyHash not reached yet");
       return;
     }
-
-    // Preconditions done
 
     // Our DepVerify hash matches with a quorum of DepVerifyHashes of received commit messages
     this.cancelTimeout(ISOSTimeoutType.PROPOSE);
@@ -630,10 +620,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.bufferedMessages.storePrepare(prepare);
 
     // Before we can continue processing, we need to fulfill the preconditions
-    if (this.slot.getStep() != AgreementSlotPhase.RP_VERIFIED) {
-      logger.info("Step mismatch");
-      return;
-    }
 
     if (!this.slot.getViewNumber().equals(prepare.viewNumber())) {
       logger.info(
@@ -678,12 +664,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.bufferedMessages.storeCommit(commit);
 
     // Before we can continue processing, we need to fulfill the preconditions
-    if (this.slot.getStep() != AgreementSlotPhase.RP_PREPARED) {
-      logger.info(
-          "Step mismatch while handling commit message. Current step is {}", this.slot.getStep());
-      return;
-    }
-
     if (!this.slot.getViewNumber().equals(commit.viewNumber())) {
       logger.info(
           "View number mismatch in commit, own view number: {}, received: {}",
@@ -845,6 +825,31 @@ public class AgmtSlotQueueProcessor implements Runnable {
     while (!Thread.currentThread().isInterrupted()) {
       try {
         ISOSMessage msg = this.incomingQueue.take();
+
+        // Do not check timeout messages for preconditions
+        if (msg instanceof TimeoutMessage timeoutMsg) {
+          this.handleTimeoutMessage(timeoutMsg);
+          continue;
+        }
+
+        try {
+          if (!this.stepPrecondHolds(msg.msgType())) {
+            logger.warn(
+                "Step mismatch when processing {}, current step {}",
+                msg.msgType(),
+                this.slot.getStep());
+            // Defer processing of messages if preconditions do not hold.
+            if (msg.msgType() != ISOSMessageType.DEP_PROPOSE_WITH_REQ) {
+              this.bufferedMessages.bufferMessage(msg);
+            }
+            continue;
+          }
+        } catch (AssertionError e) {
+          logger.error("Assertion has failed, throwing message away. Reason: {}", e.getMessage());
+          continue;
+        }
+
+        // If the preconditions hold and all asserts passed, we can handle the message normally.
         this.handleMessage(msg);
       } catch (InterruptedException e) {
         // interrupted while waiting to take new message from incomingQueue
