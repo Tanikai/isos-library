@@ -167,19 +167,19 @@ public class AgmtSlotQueueProcessor implements Runnable {
           // This case only happens if we receive a depPropose from another replica. For requests
           // where
           // the current replica acts as the coordinator, see handleReceivedClientRequest().
-          this.handleReceivedDepProposeWithRequest(depPropose);
+          this.handleDepProposeWithRequest(depPropose);
       case DepProposeMessage ignored ->
           logger.error("Received DepPropose message without request, throwing away");
-      case DepVerifyMessage depVerify -> this.handleReceivedDepVerify(depVerify);
-      case DepCommitMessage depCommit -> this.handleReceivedDepCommit(depCommit);
+      case DepVerifyMessage depVerify -> this.handleDepVerify(depVerify);
+      case DepCommitMessage depCommit -> this.handleDepCommit(depCommit);
 
       // Reconciliation path
-      case PrepareMessage prepare -> this.handleReceivedPrepareMessage(prepare);
-      case CommitMessage commit -> this.handleReceivedCommitMessage(commit);
+      case PrepareMessage prepare -> this.handlePrepareMessage(prepare);
+      case CommitMessage commit -> this.handleCommitMessage(commit);
 
       // View change
-      case NewViewMessage newView -> this.handleReceivedNewViewMessage(newView);
-      case ViewChangeMessage viewChange -> this.handleReceivedViewChangeMessage(viewChange);
+      case NewViewMessage newView -> this.handleNewViewMessage(newView);
+      case ViewChangeMessage viewChange -> this.handleViewChangeMessage(viewChange);
       default -> {}
     }
   }
@@ -215,7 +215,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * <p>Pseudocode Line 10-19
    */
-  private void handleReceivedClientRequest() {
+  private void handleClientRequest() {
     // We can only be coordinator of a client request if the generated SequenceNumber is our own
     assert Objects.equals(this.ownReplicaId, this.seqNum.replicaIdRec());
     var r = slot.getRequest();
@@ -393,7 +393,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * @param depProposeWithR
    */
-  private void handleReceivedDepProposeWithRequest(DepProposeWithRequest depProposeWithR) {
+  private void handleDepProposeWithRequest(DepProposeWithRequest depProposeWithR) {
     // Step precondition checked in separate method
 
     var depPropose = depProposeWithR.depPropose();
@@ -462,7 +462,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
   }
 
-  private void handleReceivedDepVerify(DepVerifyMessage depVerify) {
+  private void handleDepVerify(DepVerifyMessage depVerify) {
     // Line 53: if we receive DepVerify from f+1 replicas, start commit timeout
     // Note: In this case, we assume that we have received f+1 *valid* DepVerify messages.
     // The pseudocode is ambiguous in this case, whether we should count DepVerify messages that
@@ -544,7 +544,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.msgSender.broadcastToReplicas(true, wrapper);
   }
 
-  private void handleReceivedDepCommit(DepCommitMessage depCommit) {
+  private void handleDepCommit(DepCommitMessage depCommit) {
     this.bufferedMessages.storeDepCommit(depCommit);
 
     if (!this.bufferedMessages.depCommitQuorumReached((2 * this.maxFaults) + 1)) {
@@ -603,7 +603,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * @param prepare
    */
-  private void handleReceivedPrepareMessage(PrepareMessage prepare) {
+  private void handlePrepareMessage(PrepareMessage prepare) {
     // a correct replica that has reached fp-verified does not contribute to the reconciliation
     // path.
 
@@ -647,11 +647,11 @@ public class AgmtSlotQueueProcessor implements Runnable {
   }
 
   /**
-   * Preconditions are similar to {@link #handleReceivedPrepareMessage(PrepareMessage)}.
+   * Preconditions are similar to {@link #handlePrepareMessage(PrepareMessage)}.
    *
    * @param commit
    */
-  private void handleReceivedCommitMessage(CommitMessage commit) {
+  private void handleCommitMessage(CommitMessage commit) {
     var depVerifies = this.slot.getDepVerifies().values().stream().toList();
     String depVerifyHash = this.slot.getDepVerifyHashCached();
 
@@ -797,7 +797,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * @param viewChange
    */
-  private void handleReceivedViewChangeMessage(ViewChangeMessage viewChange) {
+  private void handleViewChangeMessage(ViewChangeMessage viewChange) {
     // TODO Kai: Here, we have to differentiate whether we are the coordinator or not
 
   }
@@ -807,7 +807,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * @param newView
    */
-  private void handleReceivedNewViewMessage(NewViewMessage newView) {}
+  private void handleNewViewMessage(NewViewMessage newView) {}
 
   // endregion
 
@@ -819,7 +819,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // When we received a ClientRequest, the AgreementSlot request is already populated
     if (this.slot.getRequest() != null) {
-      handleReceivedClientRequest();
+      handleClientRequest();
     }
 
     while (!Thread.currentThread().isInterrupted()) {
