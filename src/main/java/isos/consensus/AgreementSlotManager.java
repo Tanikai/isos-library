@@ -5,21 +5,25 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
 import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
-import isos.consensus.model.*;
+import isos.consensus.model.AgreementSlot;
+import isos.consensus.model.AgreementSlotSequence;
+import isos.consensus.model.SequenceNumber;
+import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class maintains an AgreementSlotSequence for each replica.
@@ -56,6 +60,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   private final RequestConflictChecker conflictChecker;
 
   private final int maxFaults;
+  private final int replicaCount;
 
   /**
    * @param ownReplicaId The id of the current replica.
@@ -69,7 +74,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       ReplicaId[] replicaIds,
       RequestConflictChecker conflictChecker,
       ExecutableRequestReceiver executableRequestReceiver,
-      int maxFaults) {
+      int maxFaults,
+      int replicaCount) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
@@ -84,6 +90,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     this.conflictChecker = conflictChecker;
     this.executableRequestReceiver = executableRequestReceiver;
     this.maxFaults = maxFaults;
+    this.replicaCount = replicaCount;
   }
 
   public void initialize(MessageSender msgSender) {
@@ -139,7 +146,8 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             this.conflictChecker,
             this::waitForDeps,
             this.executableRequestReceiver,
-            this.maxFaults);
+            this.maxFaults,
+                this.replicaCount);
     Thread newQueueProcessorThread =
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
     this.queueProcessorThreads.put(newSlot, newQueueProcessorThread);

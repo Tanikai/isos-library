@@ -4,11 +4,13 @@ import isos.communication.MessageSender;
 import isos.consensus.buffer.ISOSMessageBuffer;
 import isos.consensus.model.*;
 import isos.consensus.model.viewchange.CertificateType;
+import isos.consensus.model.viewchange.DepProposeAndDepVerifys;
 import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.consensus.model.viewchange.ReconciliationPathCertificate;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.ExecuteMessage;
 import isos.execution.graph.RequestConflictChecker;
+import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.message.replica.ISOSMessageWrapper;
@@ -19,15 +21,18 @@ import isos.message.replica.fast.DepProposeWithRequest;
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
+import isos.message.replica.viewchange.ExecMessage;
 import isos.message.replica.viewchange.NewViewMessage;
 import isos.message.replica.viewchange.QueryExecMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
-import java.util.*;
-import java.util.concurrent.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * This class handles incoming messages and delegates them to subtasks, depending on the current
@@ -104,7 +109,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       RequestConflictChecker conflictChecker,
       DependencyWaitFunction dependencyWait,
       ExecutableRequestReceiver requestExecutor,
-      int maxFaults) {
+      int maxFaults,
+      int replicaCount) {
     // Attributes
     this.ownReplicaId = ownReplicaId;
     this.seqNum = seqNum;
@@ -130,6 +136,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.requestExecutor = requestExecutor;
 
     this.maxFaults = maxFaults;
+    this.replicaCount = replicaCount;
 
     this.logger = LoggerFactory.getLogger(String.format("QueueProcessor %s", seqNum.toString()));
   }
@@ -183,6 +190,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // View change
       case NewViewMessage newView -> this.handleNewViewMessage(newView);
       case ViewChangeMessage viewChange -> this.handleViewChangeMessage(viewChange);
+      case QueryExecMessage queryExec -> this.handleQueryExecMessage(queryExec);
+      case ExecMessage exec -> this.handleExecMessage(exec);
       default -> {}
     }
   }
@@ -583,6 +592,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, null);
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+    this.slot.setExec(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
 
@@ -692,14 +702,17 @@ public class AgmtSlotQueueProcessor implements Runnable {
     logger.info("We have reached 2f+1 RpCommit messages for view {}!", this.slot.getViewNumber());
 
     this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
+    // Line 83
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
 
     // ISOS Paper: ...together with the union of the dependency sets of all DepVerifys and the
     // associated DepPropose.
+    // Line 85
     var unionDepsFollowerQuorum =
         DepVerifyMessage.unionOfDependencies(depVerifies, this.slot.getDepPropose());
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+    this.slot.setExec(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
 
@@ -727,7 +740,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.cancelTimeout(ISOSTimeoutType.COMMIT);
     this.cancelTimeout(ISOSTimeoutType.VIEWCHANGE);
 
-    DepProposeMessage dp = this.slot.getDepPropose();
+    DepProposeWithRequest dp =
+        new DepProposeWithRequest(this.slot.getDepPropose(), this.slot.getRequest());
     List<DepVerifyMessage> dv = this.slot.getDepVerifies().values().stream().toList();
 
     // has to be 2f matching DepVerifies in both cases
@@ -868,19 +882,16 @@ public class AgmtSlotQueueProcessor implements Runnable {
       var viewChangeSet = this.slot.getViewChanges(this.slot.getViewNumber());
 
       // Assert all view changes are valid, and sort the ViewChanges based on their certificate
-      Map<ReplicaId, ViewNumber> rpcReplicas = new HashMap<>();
-      List<ReplicaId> fpcReplicas = new LinkedList<>();
 
       var vcsValid =
           viewChangeSet.entrySet().stream()
               .allMatch(
                   (entry) -> {
                     var msg = entry.getValue();
-                    if (msg.certificate().certificate().equals(CertificateType.NULL)) {
+                    if (msg.certificate().certificateType().equals(CertificateType.NULL)) {
                       return true;
                     } else if (msg.certificate() instanceof FastPathCertificate fpc) {
                       if (fpc.previousViewNumber().compareTo(msg.viewNumber()) <= 0) {
-                        fpcReplicas.add(entry.getKey());
                         return true;
                       }
                       logger.error(
@@ -890,7 +901,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
                           msg.viewNumber());
                     } else if (msg.certificate() instanceof ReconciliationPathCertificate rpc) {
                       if (rpc.previousViewNumber().compareTo(msg.viewNumber()) <= 0) {
-                        rpcReplicas.put(entry.getKey(), msg.viewNumber());
                         return true;
                       }
                       logger.error(
@@ -910,34 +920,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
       // Line 112-115
       // Certificate Priority (highest->lowest): RPC -> FPC -> null
-      // If we have an RPC certificate,
-      DepProposeMessage dp = null;
-      List<DepVerifyMessage> vecDv = null;
-
-      if (!rpcReplicas.isEmpty()) {
-        // Pseudocode: Reconciliation-path result for highest view if RPC certificate exists
-        ReplicaId highestRpcViewReplica =
-            rpcReplicas.entrySet().stream()
-                .max(Map.Entry.comparingByKey())
-                .map(Map.Entry::getKey)
-                .get();
-        ReconciliationPathCertificate rpc =
-            (ReconciliationPathCertificate) viewChangeSet.get(highestRpcViewReplica).certificate();
-        dp = rpc.originalDepPropose();
-        vecDv = rpc.depVerifyMessages();
-
-      } else if (!fpcReplicas.isEmpty()) {
-        // Fast-Path result from any
-        // Cast is always correct as fpcReplicas is only added if certificate is instance of
-        // FastPathCertificate
-        FastPathCertificate fpc =
-            (FastPathCertificate) viewChangeSet.get(fpcReplicas.getFirst()).certificate();
-        dp = fpc.originalDepPropose();
-        vecDv = fpc.depVerifyMessages();
-      } else {
-        logger.warn(
-            "Could not find any FPC or RPC. Broadcasting NewView with DepPropose and DepVerifies as null");
-      }
+      Optional<DepProposeAndDepVerifys> dpdv =
+          AgmtSlotQueueProcessor.pickDepProposeAndDepVerifys(viewChangeSet.values());
+      DepProposeWithRequest dp = dpdv.map(DepProposeAndDepVerifys::depPropose).orElse(null);
+      List<DepVerifyMessage> vecDv = dpdv.map(DepProposeAndDepVerifys::depVerifys).orElse(null);
 
       this.msgSender.broadcastToReplicas(
           true,
@@ -962,13 +948,159 @@ public class AgmtSlotQueueProcessor implements Runnable {
   }
 
   /**
+   * Line 112-115
+   *
+   * <p>Certificate Priority (highest->lowest): RPC -> FPC -> null
+   *
+   * @param viewChanges
+   * @return
+   */
+  public static Optional<DepProposeAndDepVerifys> pickDepProposeAndDepVerifys(
+      Collection<ViewChangeMessage> viewChanges) {
+
+    Map<CertificateType, List<ViewChangeMessage>> msgsByCertificateType =
+        viewChanges.stream()
+            .collect(Collectors.groupingBy(msg -> msg.certificate().certificateType()));
+
+    if (msgsByCertificateType.containsKey(CertificateType.RPC)
+        && !msgsByCertificateType.get(CertificateType.RPC).isEmpty()) {
+      List<ViewChangeMessage> rpcMsgs = msgsByCertificateType.get(CertificateType.RPC);
+
+      // Pseudocode: Reconciliation-path result for highest view if RPC certificate exists
+      ReconciliationPathCertificate highestViewRpc =
+          (ReconciliationPathCertificate)
+              rpcMsgs.stream()
+                  .max(Comparator.comparing(ViewChangeMessage::viewNumber))
+                  .map(ViewChangeMessage::certificate)
+                  .get();
+
+      return Optional.of(
+          new DepProposeAndDepVerifys(
+              highestViewRpc.originalDepPropose(),
+              DepVerifyMessage.sortDepVerifys(highestViewRpc.depVerifyMessages())));
+    } else if (msgsByCertificateType.containsKey(CertificateType.FPC)
+        && !msgsByCertificateType.get(CertificateType.FPC).isEmpty()) {
+      // Fast-Path result from any
+      // Cast is always correct as fpcReplicas is only added if certificate is instance of
+      // FastPathCertificate
+      List<ViewChangeMessage> fpcMsgs = msgsByCertificateType.get(CertificateType.FPC);
+      FastPathCertificate fpc = (FastPathCertificate) fpcMsgs.getFirst().certificate();
+      return Optional.of(
+          new DepProposeAndDepVerifys(
+              fpc.originalDepPropose(), DepVerifyMessage.sortDepVerifys(fpc.depVerifyMessages())));
+    } else {
+      return Optional.empty();
+    }
+  }
+
+  /**
    * Broadcasted by the View-change coordinator.
    *
    * <p>Pseudocode line 123-135
    *
    * @param newView
    */
-  private void handleNewViewMessage(NewViewMessage newView) {}
+  private void handleNewViewMessage(NewViewMessage newView) {
+
+    if (this.slot.getViewNumber() != newView.viewNumber()) {
+      logger.warn(
+          "View mismatch for current slot {} and received NewView message {}, buffering for later viewchange",
+          this.slot.getViewNumber(),
+          newView.viewNumber());
+      this.bufferedMessages.bufferMessage(newView);
+      return;
+    }
+
+    // Start asserts
+    if (getNextViewCoordinator(
+            this.slot.getDepPropose().coordinatorId(), this.slot.getViewNumber(), replicaCount)
+        != newView.coordinatorId().value()) {
+      logger.error(
+          "Received NewView message from {}, but doesn't match with determined ViewCoordinator by original DepProposer {}, current view number {}, and replica count {}",
+          newView.coordinatorId(),
+          this.slot.getDepPropose().coordinatorId(),
+          this.slot.getViewNumber(),
+          replicaCount);
+      return;
+    }
+
+    // TODO Kai: What is a valid View-Change message?
+
+    // Assert dp, dv are correctly picked based on View Change Set
+    var depProposeAndDepVerifys =
+        AgmtSlotQueueProcessor.pickDepProposeAndDepVerifys(newView.viewChanges());
+    if (depProposeAndDepVerifys.isEmpty()
+        && (newView.depPropose() != null || newView.depVerifys() != null)) {
+      logger.error(
+          "Own determined FPC/RPC is null, but NewView message depPropose and/or depVerifys are not null. Stop processing");
+      return;
+
+    } else if (!depProposeAndDepVerifys.get().depPropose().equals(newView.depPropose())
+        // We are able to equal the two lists, because they are sorted before being returned by the
+        // pick method
+        || !depProposeAndDepVerifys.get().depVerifys().equals(newView.depVerifys())) {
+      logger.error(
+          "DepPropose and/or DepVerifys determined by current replica differ from received ones in NewView message. Stop processing");
+      return;
+    }
+    // End asserts
+
+    var dp = newView.depPropose();
+    var vecDv = newView.depVerifys();
+
+    this.slot.setDepPropose(dp.depPropose());
+    this.slot.setRequest(dp.request());
+    // Line 129: Cleanup DepVerifys
+    this.slot.replaceDepVerifys(vecDv);
+
+    if (newView.seqNum().replicaId() == ownReplicaId.value() && dp.depPropose() == null) {
+      // permute-fast-quorum() (?)
+      // Re-propose request in a new slot (?)
+      // But if dp is null, where do we get the request from?
+    }
+    this.startTimeout(ISOSTimeoutType.VIEWCHANGE); // same as commit timeout, but with reduced time
+    // Line 135: Enter reconciliation path
+    enterReconciliationPath(this.slot.getDepVerifyHashCached());
+  }
+
+  private void handleQueryExecMessage(QueryExecMessage queryExec) {
+    if (this.slot.getExec() == null) {
+      logger.info(
+          "Received QueryExec, but did not forward request to execution yet. Throwing message away");
+      return;
+    }
+
+    OrderedClientRequest dp = this.slot.getExec().clientRequest();
+    DependencySet D = this.slot.getExec().depSet();
+
+    ReplicaId[] receivers = new ReplicaId[] {queryExec.logicalSender()};
+    this.msgSender.sendToReplicas(
+        receivers,
+        new ISOSMessageWrapper(
+            new ExecMessage(this.seqNum, this.ownReplicaId, dp, D), this.ownReplicaId));
+  }
+
+  private void handleExecMessage(ExecMessage exec) {
+    // We have to reach a f+1 quorum
+    if (this.slot.getExec() == null) {
+      logger.info(
+          "Received QueryExec, but did already forward message to execution. Throwing message away");
+      return;
+    }
+
+    this.bufferedMessages.storeExec(exec);
+
+    if (!this.bufferedMessages.execQuorumWithSameContentsReached(
+        exec.clientRequest(), exec.dependencySet(), this.maxFaults + 1)) {
+      logger.info("Did not reach f+1 quorum for exec messages yet.");
+      return;
+    }
+
+    // We have reached quorum
+    var executeMsg = new ExecuteMessage(this.seqNum, exec.clientRequest(), exec.dependencySet());
+    this.slot.setExec(executeMsg);
+    this.requestExecutor.forwardRequestToExecution(executeMsg);
+  }
 
   // endregion
 

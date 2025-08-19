@@ -1,10 +1,13 @@
 package isos.consensus.buffer;
 
+import isos.consensus.model.DependencySet;
+import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.message.replica.fast.DepCommitMessage;
 import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
+import isos.message.replica.viewchange.ExecMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import java.util.Collection;
@@ -32,6 +35,8 @@ public class ISOSMessageBuffer {
 
   private final Map<ViewNumber, Map<ReplicaId, CommitMessage>> commitQuorum;
 
+  private final Map<ReplicaId, ExecMessage> execQuorum;
+
   public ISOSMessageBuffer() {
     this.bufferedMessages = new HashMap<>();
 
@@ -43,6 +48,7 @@ public class ISOSMessageBuffer {
     this.depCommitQuorum = new HashMap<>();
     this.prepareQuorum = new HashMap<>();
     this.commitQuorum = new HashMap<>();
+    this.execQuorum = new HashMap<>();
   }
 
   public void bufferMessage(ISOSMessage msg) throws ReplicaMessageAlreadyPresent {
@@ -135,5 +141,35 @@ public class ISOSMessageBuffer {
 
   public Collection<CommitMessage> getCommits(ViewNumber viewNumber) {
     return this.commitQuorum.computeIfAbsent(viewNumber, x -> new HashMap<>()).values();
+  }
+
+  public void storeExec(ExecMessage exec) throws ReplicaMessageAlreadyPresent {
+    var sender = exec.replicaId();
+    if (this.execQuorum.containsKey(sender)) {
+      throw new ReplicaMessageAlreadyPresent(sender, exec.msgType());
+    }
+
+    this.execQuorum.put(sender, exec);
+  }
+
+  public boolean execQuorumReached(int quorumSize) {
+    return execQuorum.size() >= quorumSize;
+  }
+
+  public boolean execQuorumWithSameContentsReached(
+      OrderedClientRequest clientRequest, DependencySet depSet, int quorumSize) {
+    if (!execQuorumReached(quorumSize)) {
+      return false;
+    }
+
+    // Client request and Dependency Set has to be the same
+    long sameCount =
+        this.execQuorum.values().stream()
+            .filter(
+                msg ->
+                    clientRequest.equals(msg.clientRequest()) && depSet.equals(msg.dependencySet()))
+            .count();
+
+    return sameCount >= quorumSize;
   }
 }

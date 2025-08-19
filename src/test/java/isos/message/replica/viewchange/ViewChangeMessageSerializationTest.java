@@ -1,19 +1,25 @@
 package isos.message.replica.viewchange;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.viewchange.FastPathCertificate;
+import isos.message.client.OrderedClientRequest;
 import isos.message.replica.fast.DepProposeMessage;
+import isos.message.replica.fast.DepProposeWithRequest;
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
-import java.io.*;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ViewChangeMessageSerializationTest {
   @Test
@@ -24,10 +30,12 @@ class ViewChangeMessageSerializationTest {
     DepProposeMessage depPropose =
         new DepProposeMessage(
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
+    OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
+    DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, req);
     List<DepVerifyMessage> depVerifies = new ArrayList<>();
     depVerifies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
 
-    var fpc = new FastPathCertificate(depPropose, depVerifies);
+    var fpc = new FastPathCertificate(dp, depVerifies);
     ViewChangeMessage original = new ViewChangeMessage(seqNum, viewNumber, coordinatorId, fpc);
 
     byte[] bytes;

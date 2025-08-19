@@ -3,6 +3,6 @@ package isos.consensus.model.viewchange;
 import isos.utils.ViewNumber;
 
 public interface ViewChangeCertificate {
-  CertificateType certificate();
+  CertificateType certificateType();
   ViewNumber previousViewNumber();
 }

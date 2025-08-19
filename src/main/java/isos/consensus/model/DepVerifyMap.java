@@ -107,6 +107,10 @@ public class DepVerifyMap {
     return this.hash;
   }
 
+  public void clearDepVerifys() {
+    this.depVerifies.clear();
+  }
+
   public boolean reachedQuorum(int quorumSize) {
     return this.depVerifies.size() >= quorumSize;
   }

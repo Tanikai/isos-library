@@ -1,9 +1,5 @@
 package isos.consensus;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
@@ -20,15 +16,21 @@ import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 class AgmtSlotQueueProcessorTest {
 
@@ -38,6 +40,7 @@ class AgmtSlotQueueProcessorTest {
   private DependencyWaitFunction dependencyWaitMock;
   private ExecutableRequestReceiver requestExecutorMock;
   private int maxFaults = 1;
+  private int replicaCount = 4;
 
   @BeforeEach
   void setUp() {
@@ -84,7 +87,8 @@ class AgmtSlotQueueProcessorTest {
             conflictChecker,
             dependencyWaitMock,
             requestExecutorMock,
-            maxFaults);
+            maxFaults,
+            replicaCount);
     var queueProcessorThread = new Thread(queueProcessor);
     queueProcessorThread.start();
 
@@ -192,7 +196,8 @@ class AgmtSlotQueueProcessorTest {
             conflictChecker,
             dependencyWaitMock,
             requestExecutorMock,
-            maxFaults);
+            maxFaults,
+            replicaCount);
     var queueProcessorThread = new Thread(queueProcessor);
     queueProcessorThread.start();
 
@@ -328,7 +333,8 @@ class AgmtSlotQueueProcessorTest {
             conflictChecker,
             dependencyWaitMock,
             requestExecutorMock,
-            maxFaults);
+            maxFaults,
+            replicaCount);
     var queueProcessorThread = new Thread(queueProcessor);
     queueProcessorThread.start();
 
@@ -423,7 +429,8 @@ class AgmtSlotQueueProcessorTest {
             conflictChecker,
             dependencyWaitMock,
             requestExecutorMock,
-            maxFaults);
+            maxFaults,
+            replicaCount);
     var queueProcessorThread = new Thread(queueProcessor);
     queueProcessorThread.start();
 

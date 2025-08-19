@@ -1,8 +1,5 @@
 package isos.consensus;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
@@ -12,11 +9,15 @@ import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class AgreementSlotManagerWaitForDepsTest {
 
@@ -35,7 +36,8 @@ class AgreementSlotManagerWaitForDepsTest {
             otherReplicaIds,
             mock(RequestConflictChecker.class),
             mock(ExecutableRequestReceiver.class),
-            1);
+            1,
+            4);
 
     // We are waiting for the first agreement slot of each of the 4 replicas
     Set<SequenceNumber> waitDepSet = new HashSet<>();

@@ -3,10 +3,11 @@ package isos.message.replica.viewchange;
 import isos.consensus.model.SequenceNumber;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
-import isos.message.replica.fast.DepProposeMessage;
+import isos.message.replica.fast.DepProposeWithRequest;
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
@@ -23,8 +24,8 @@ public record NewViewMessage(
     SequenceNumber seqNum,
     ViewNumber viewNumber,
     ReplicaId coordinatorId,
-    DepProposeMessage depPropose,
-    List<DepVerifyMessage> depVerifys,
+    DepProposeWithRequest depPropose, // is nullable!
+    List<DepVerifyMessage> depVerifys, // is nullable!
     Set<ViewChangeMessage> viewChanges)
     implements ISOSMessage, Serializable {
 

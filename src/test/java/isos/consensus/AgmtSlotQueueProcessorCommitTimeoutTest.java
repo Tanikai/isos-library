@@ -1,8 +1,5 @@
 package isos.consensus;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
@@ -13,9 +10,13 @@ import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashSet;
 import java.util.concurrent.LinkedBlockingDeque;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
 
 class AgmtSlotQueueProcessorCommitTimeoutTest {
 
@@ -58,7 +59,8 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
             conflictChecker,
             dependencyWait,
             executeReceiver,
-            1);
+            1,
+            4);
 
     // Act
     Thread processorThread = new Thread(processor);

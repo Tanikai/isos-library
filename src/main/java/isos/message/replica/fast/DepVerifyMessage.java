@@ -6,6 +6,7 @@ import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.utils.ReplicaId;
 import java.io.Serializable;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,4 +47,7 @@ public record DepVerifyMessage(
     return new DependencySet(allDeps);
   }
 
+  public static List<DepVerifyMessage> sortDepVerifys(List<DepVerifyMessage> input) {
+    return input.stream().sorted(Comparator.comparingInt(msg -> msg.followerId().value())).toList();
+  }
 }

@@ -6,7 +6,7 @@ import java.io.Serializable;
 
 public record EmptyCertificate() implements ViewChangeCertificate, Serializable {
   @Override
-  public CertificateType certificate() {
+  public CertificateType certificateType() {
     return CertificateType.NULL;
   }
 

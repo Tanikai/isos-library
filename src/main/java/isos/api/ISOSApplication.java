@@ -2,7 +2,7 @@ package isos.api;
 
 import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.configuration.ConfigurationManager;
-import isos.consensus.*;
+import isos.consensus.AgreementSlotManager;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
@@ -12,13 +12,14 @@ import isos.execution.ExecutionManager;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * DECISION Kai: Maybe interface instead of class? This class is used as the central manager of the
@@ -65,6 +66,7 @@ public class ISOSApplication {
 
     // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
     var maxFaults = configManager.getStaticConf().getF();
+    var replicaCount = configManager.getStaticConf().getN();
     this.agrSlotManager =
         new AgreementSlotManager(
             ownReplicaId,
@@ -72,7 +74,8 @@ public class ISOSApplication {
             configManager.getStaticConf().getInitialViewAsReplicaId(),
             this::conflicts,
             this::receiveCommittedRequest,
-            maxFaults);
+            maxFaults,
+            replicaCount);
     try {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
       this.scs.setRequestReceiver(this.agrSlotManager);

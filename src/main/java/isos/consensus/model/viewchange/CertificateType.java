@@ -14,6 +14,6 @@ package isos.consensus.model.viewchange;
  */
 public enum CertificateType {
   NULL, // when neither conditions can be fulfilled
-  FAST_PATH_CERTIFICATE,
-  RECONCILIATION_PATH_CERTIFICATE,
+  FPC, // Fast Path Certificate
+  RPC, // Reconciliation Path Certificate
 }

@@ -3,9 +3,11 @@ package isos.consensus.model;
 import isos.consensus.ViewNumberNotLargerException;
 import isos.consensus.model.viewchange.EmptyCertificate;
 import isos.consensus.model.viewchange.ViewChangeCertificate;
+import isos.execution.ExecuteMessage;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepVerifyMessage;
+import isos.message.replica.viewchange.ExecMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
@@ -50,6 +52,8 @@ public class AgreementSlot {
   // frequent changes to the fields
 
   private ViewChangeCertificate viewChangeCertificate;
+
+  private ExecuteMessage exec;
 
   // Fields required for waiting / notifying efficiently (not for concurrency control)
 
@@ -174,6 +178,23 @@ public class AgreementSlot {
     }
   }
 
+  /**
+   * Used in Pseudocode line 129/130 in case of a view change. All previous DepVerifys should be
+   * deleted.
+   */
+  public void replaceDepVerifys(List<DepVerifyMessage> depVerifys) {
+    this.slotLock.lock();
+    try {
+      this.depVerifies.clearDepVerifys();
+      for (var d: depVerifys) {
+        this.depVerifies.setDepVerify(d.followerId(), d);
+      }
+    } finally {
+      this.messageCountCondition.signalAll();
+      this.slotLock.unlock();
+    }
+  }
+
   public boolean isFpVerified(int maxFaults) {
     return this.depVerifies.isFpVerified(maxFaults);
   }
@@ -239,7 +260,7 @@ public class AgreementSlot {
 
   public void setPeerViewNumber(ReplicaId replicaId, ViewNumber newPeerViewNumber) {
     var currentViewNumber = this.peerViewNumbers.get(replicaId);
-    if (newPeerViewNumber.compareTo(currentViewNumber) <= 0) { // smaller or equal
+    if (currentViewNumber != null && newPeerViewNumber.compareTo(currentViewNumber) <= 0) { // smaller or equal
       throw new ViewNumberNotLargerException(currentViewNumber, newPeerViewNumber);
     }
 
@@ -268,5 +289,13 @@ public class AgreementSlot {
 
   public void setViewChangeCertificate(ViewChangeCertificate viewChangeCertificate) {
     this.viewChangeCertificate = viewChangeCertificate;
+  }
+
+  public ExecuteMessage getExec() {
+    return exec;
+  }
+
+  public void setExec(ExecuteMessage exec) {
+    this.exec = exec;
   }
 }
