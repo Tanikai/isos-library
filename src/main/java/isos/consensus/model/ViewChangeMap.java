@@ -29,10 +29,16 @@ public class ViewChangeMap {
   }
 
   public boolean reachedQuorum(ViewNumber viewNumber, int quorumSize) {
+    if (viewNumber.value() == -1) {
+      // We will never have ViewChanges for the default, fast path view number.
+      return false;
+    }
+
     return this.viewChanges.computeIfAbsent(viewNumber, x -> new HashMap<>()).size() >= quorumSize;
   }
 
   public Map<ReplicaId, ViewChangeMessage> getViewChanges(ViewNumber viewNumber) {
-    return Collections.unmodifiableMap(this.viewChanges.computeIfAbsent(viewNumber, x -> new HashMap<>()));
+    return Collections.unmodifiableMap(
+        this.viewChanges.computeIfAbsent(viewNumber, x -> new HashMap<>()));
   }
 }

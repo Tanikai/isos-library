@@ -3,6 +3,7 @@ package isos.consensus;
 import isos.communication.MessageSender;
 import isos.consensus.buffer.ISOSMessageBuffer;
 import isos.consensus.model.*;
+import isos.consensus.model.viewchange.CertificateType;
 import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.consensus.model.viewchange.ReconciliationPathCertificate;
 import isos.execution.ExecutableRequestReceiver;
@@ -19,6 +20,7 @@ import isos.message.replica.fast.DepVerifyMessage;
 import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
 import isos.message.replica.viewchange.NewViewMessage;
+import isos.message.replica.viewchange.QueryExecMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
@@ -90,6 +92,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private final ExecutableRequestReceiver requestExecutor;
 
   private final int maxFaults;
+  private final int replicaCount;
 
   public AgmtSlotQueueProcessor(
       ReplicaId ownReplicaId,
@@ -313,26 +316,32 @@ public class AgmtSlotQueueProcessor implements Runnable {
       case COMMIT:
         {
           /** Pseudocode Line 70, 71 */
-          this.moveToNewView();
+          this.moveSelfToNewView(ViewNumber.increaseViewNumber(this.slot.getViewNumber()));
         }
         break;
       case VIEWCHANGE:
         {
           // Pseudocode line 121, 122
           // Move to new view  v_{s_j}+1
-          this.moveToNewView();
+          this.moveSelfToNewView(ViewNumber.increaseViewNumber(this.slot.getViewNumber()));
         }
         break;
       case VIEWCHANGE_COMMIT:
         {
           // is actually not its "own" timeout type, instead commit timeout with reduced duration
-          this.moveToNewView();
+          this.moveSelfToNewView(ViewNumber.increaseViewNumber(this.slot.getViewNumber()));
         }
         break;
       case QUERY_EXEC:
         {
-          // TODO Kai: broadcast to self or not?
-          //        this.msgSender.broadcastToReplicas(true, new QueryExecMessage());
+          // Pseudocode Line 136, 137
+          // I assume that the QueryExec message is not broadcast to itself, because we ask for the
+          // DepPropose message and the dependencies so that we can commit and forward it to the
+          // execution.
+          this.msgSender.broadcastToReplicas(
+              false,
+              new ISOSMessageWrapper(
+                  new QueryExecMessage(this.seqNum, this.ownReplicaId), this.ownReplicaId));
         }
         break;
     }
@@ -699,17 +708,17 @@ public class AgmtSlotQueueProcessor implements Runnable {
   // region View Change
 
   /**
-   * Upon move to new view for slot. This function is called when a timeout expires.
+   * Upon move to new view for slot. This function is called when a timeout expires, or when enough
+   * ViewChange messages are received.
    *
    * <p>Pseudocode line 86-100
    */
-  private void moveToNewView() {
+  private void moveSelfToNewView(ViewNumber newViewNum) {
     // Paper: Once a replica decides to abort a view, the replica stops to process requests for the
     // old view and broadcasts a ViewChange message for the new view.
 
     // Move to new view v_s_j+1
     var previousViewNum = this.slot.getViewNumber();
-    var newViewNum = ViewNumber.increaseViewNumber(previousViewNum);
     logger.info("Move from view {} to new view {}", previousViewNum, newViewNum);
 
     // If propose timeout is active, trigger its expiry (i.e., timeout logic should be executed now)
@@ -788,22 +797,174 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @param replicaCount: $N$: current count of replicas, used for m
    */
   private static int getNextViewCoordinator(
-      int originalCoordinatorId, int currentViewNumber, int replicaCount) {
-    return (originalCoordinatorId + Math.max(0, currentViewNumber)) % replicaCount;
+      ReplicaId originalCoordinatorId, ViewNumber currentViewNumber, int replicaCount) {
+    return (originalCoordinatorId.value() + Math.max(0, currentViewNumber.value())) % replicaCount;
   }
 
   /**
-   * Pseudocode line 101-107, 109-116
+   * Pseudocode line 101-107 (Receiving single ViewChange message), 109-116 (2f+1 Quorum for
+   * View-Change coordinator), 117-120 (2f+1 quorum for normal replica)
    *
    * @param viewChange
    */
   private void handleViewChangeMessage(ViewChangeMessage viewChange) {
-    // TODO Kai: Here, we have to differentiate whether we are the coordinator or not
+    // region General replica
+    var currentPeerViewNumber = this.slot.getPeerViewNumber(viewChange.replicaId());
+    if (viewChange.viewNumber().compareTo(currentPeerViewNumber) <= 0) {
+      // if view number of message is smaller than currently stored view number
+      logger.error(
+          "View number of received ViewChange message {} is smaller or equal than currently known view number {} of replica {}, throwing message away",
+          viewChange.viewNumber(),
+          currentPeerViewNumber,
+          viewChange.replicaId());
+      return;
+    }
 
+    // end precondition
+
+    // Line 103
+    this.slot.setPeerViewNumber(viewChange.replicaId(), viewChange.viewNumber());
+
+    var highestQuorumViewNumber = this.slot.getHighestViewNumberByQuorum(this.maxFaults + 1);
+
+    // Line 106
+    if (highestQuorumViewNumber.isPresent()
+        && highestQuorumViewNumber.get().compareTo(this.slot.getViewNumber()) > 0) {
+      // Line 107: if the highest view number of others is larger than our own, move to that view
+      // number
+      this.moveSelfToNewView(highestQuorumViewNumber.get());
+    }
+    // endregion
+
+    // -> After handling the viewChange logic when receiving a single viewchange message, we store
+    // the ViewChange messages in a helper structure to determine whether we have a ViewChange
+    // message
+    // quorum for the current view
+    this.slot.setViewChange(viewChange);
+
+    // The next steps, regardless of whether we are the ViewChange coordinator or just a replica,
+    // are
+    // only executed if a 2f+1 quorum of ViewChanges is reached with ViewChange messages that are in
+    // the same view as us currently.
+
+    if (!this.slot.reachedViewChangeQuorum(this.slot.getViewNumber(), 2 * maxFaults + 1)) {
+      logger.info(
+          "We have not reached a quorum of ViewChange messages for the view {} yet, stop processing",
+          this.slot.getViewNumber());
+      return;
+    }
+
+    // We have reached a quorum of 2f+1 ViewChange messages! Now, depending on whether we are the
+    // view-change coordinator of the new view, we have different logic (Pseudocode Line 109-116 for
+    // coordinator, Line 117-120 for normal replica)
+
+    var nextCoordinator =
+        AgmtSlotQueueProcessor.getNextViewCoordinator(
+            this.slot.getDepPropose().coordinatorId(), this.slot.getViewNumber(), replicaCount);
+
+    if (this.ownReplicaId.value() == nextCoordinator) { // We are the coordinator.
+      // Line 111
+      // This variable is called "VCS" in pseudocode
+      var viewChangeSet = this.slot.getViewChanges(this.slot.getViewNumber());
+
+      // Assert all view changes are valid, and sort the ViewChanges based on their certificate
+      Map<ReplicaId, ViewNumber> rpcReplicas = new HashMap<>();
+      List<ReplicaId> fpcReplicas = new LinkedList<>();
+
+      var vcsValid =
+          viewChangeSet.entrySet().stream()
+              .allMatch(
+                  (entry) -> {
+                    var msg = entry.getValue();
+                    if (msg.certificate().certificate().equals(CertificateType.NULL)) {
+                      return true;
+                    } else if (msg.certificate() instanceof FastPathCertificate fpc) {
+                      if (fpc.previousViewNumber().compareTo(msg.viewNumber()) <= 0) {
+                        fpcReplicas.add(entry.getKey());
+                        return true;
+                      }
+                      logger.error(
+                          "FPC of Replica {} is invalid due to its viewNumber {} being larger than the view number {} of the containing message",
+                          entry.getKey(),
+                          fpc.previousViewNumber(),
+                          msg.viewNumber());
+                    } else if (msg.certificate() instanceof ReconciliationPathCertificate rpc) {
+                      if (rpc.previousViewNumber().compareTo(msg.viewNumber()) <= 0) {
+                        rpcReplicas.put(entry.getKey(), msg.viewNumber());
+                        return true;
+                      }
+                      logger.error(
+                          "RPC of Replica {} is invalid due to its viewNumber {} being larger than the view number {} of the containing message",
+                          entry.getKey(),
+                          rpc.previousViewNumber(),
+                          msg.viewNumber());
+                    }
+
+                    return false;
+                  });
+
+      if (!vcsValid) {
+        logger.error("View Change Set is invalid, do not broadcast NewView message");
+        return;
+      }
+
+      // Line 112-115
+      // Certificate Priority (highest->lowest): RPC -> FPC -> null
+      // If we have an RPC certificate,
+      DepProposeMessage dp = null;
+      List<DepVerifyMessage> vecDv = null;
+
+      if (!rpcReplicas.isEmpty()) {
+        // Pseudocode: Reconciliation-path result for highest view if RPC certificate exists
+        ReplicaId highestRpcViewReplica =
+            rpcReplicas.entrySet().stream()
+                .max(Map.Entry.comparingByKey())
+                .map(Map.Entry::getKey)
+                .get();
+        ReconciliationPathCertificate rpc =
+            (ReconciliationPathCertificate) viewChangeSet.get(highestRpcViewReplica).certificate();
+        dp = rpc.originalDepPropose();
+        vecDv = rpc.depVerifyMessages();
+
+      } else if (!fpcReplicas.isEmpty()) {
+        // Fast-Path result from any
+        // Cast is always correct as fpcReplicas is only added if certificate is instance of
+        // FastPathCertificate
+        FastPathCertificate fpc =
+            (FastPathCertificate) viewChangeSet.get(fpcReplicas.getFirst()).certificate();
+        dp = fpc.originalDepPropose();
+        vecDv = fpc.depVerifyMessages();
+      } else {
+        logger.warn(
+            "Could not find any FPC or RPC. Broadcasting NewView with DepPropose and DepVerifies as null");
+      }
+
+      this.msgSender.broadcastToReplicas(
+          true,
+          new ISOSMessageWrapper(
+              new NewViewMessage(
+                  this.seqNum,
+                  this.slot.getViewNumber(),
+                  this.ownReplicaId,
+                  dp,
+                  vecDv,
+                  Set.copyOf(viewChangeSet.values())),
+              this.ownReplicaId));
+
+    } else { // We are not the coordinator.
+      // TODO Kai: Does the view-change coordinator execute this logic as well?
+      // Line 117-120
+      // Precondition in Line 118 already checked above
+
+      this.startTimeout(ISOSTimeoutType.VIEWCHANGE);
+      this.cancelTimeout(ISOSTimeoutType.QUERY_EXEC);
+    }
   }
 
   /**
    * Broadcasted by the View-change coordinator.
+   *
+   * <p>Pseudocode line 123-135
    *
    * @param newView
    */

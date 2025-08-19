@@ -1,5 +1,6 @@
 package isos.consensus.model;
 
+import isos.consensus.ViewNumberNotLargerException;
 import isos.consensus.model.viewchange.EmptyCertificate;
 import isos.consensus.model.viewchange.ViewChangeCertificate;
 import isos.message.client.OrderedClientRequest;
@@ -9,12 +10,11 @@ import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 /**
  * Single agreement slot. Used solely as a data class. Logic is contained in the
@@ -112,7 +112,7 @@ public class AgreementSlot {
       while (this.depPropose == null // received valid DepPropose
           && !this.reachedDepVerifyQuorum(quorumSize) // received f+1 correctly signed DepVerifys
           && !this.reachedViewChangeQuorum(
-              this.viewNumber, quorumSize) // received f+1 correctly signed ViewChanges
+              this.viewNumber, quorumSize) // received f+1 correctly signed ViewChanges (of the view that we are currently in)
       // TODO Kai: do we have to check for a correct view number here?
       ) {
         // if depPropose, depVerify, or viewChanges get changed, the condition will be notified
@@ -153,6 +153,8 @@ public class AgreementSlot {
       this.depPropose = depPropose;
       this.depVerifies.setFollowerQuroum(depPropose.followerQuorum());
     } finally {
+      // We are signaling so that other agreement slots that wait for us can check the wait
+      // condition
       this.messageCountCondition.signalAll();
       this.slotLock.unlock();
     }
@@ -215,6 +217,10 @@ public class AgreementSlot {
     }
   }
 
+  /**
+   * Returns the current view number of the agreement slot.
+   * @return
+   */
   public ViewNumber getViewNumber() {
     return viewNumber;
   }
@@ -227,8 +233,33 @@ public class AgreementSlot {
     return Collections.unmodifiableMap(peerViewNumbers);
   }
 
-  public void setPeerViewNumber(ReplicaId replicaId, ViewNumber peerViewNumber) {
-    this.peerViewNumbers.put(replicaId, peerViewNumber);
+  public ViewNumber getPeerViewNumber(ReplicaId replicaId) {
+    return this.peerViewNumbers.get(replicaId);
+  }
+
+  public void setPeerViewNumber(ReplicaId replicaId, ViewNumber newPeerViewNumber) {
+    var currentViewNumber = this.peerViewNumbers.get(replicaId);
+    if (newPeerViewNumber.compareTo(currentViewNumber) <= 0) { // smaller or equal
+      throw new ViewNumberNotLargerException(currentViewNumber, newPeerViewNumber);
+    }
+
+    this.peerViewNumbers.put(replicaId, newPeerViewNumber);
+  }
+
+  public Optional<ViewNumber> getHighestViewNumberByQuorum(int quorumSize) {
+    return AgreementSlot.getHighestViewNumberByQuorum(this.peerViewNumbers, quorumSize);
+  }
+
+  public static Optional<ViewNumber> getHighestViewNumberByQuorum(
+      Map<ReplicaId, ViewNumber> viewNumbers, int quorumSize) {
+    Map<ViewNumber, Long> groupedByCount =
+        viewNumbers.values().stream().collect(Collectors.groupingBy(v -> v, Collectors.counting()));
+
+    var result = groupedByCount.entrySet().stream()
+        .filter(entry -> entry.getValue() >= quorumSize)
+        .max(Map.Entry.comparingByKey());
+
+    return result.map(Map.Entry::getKey);
   }
 
   public ViewChangeCertificate getViewChangeCertificate() {

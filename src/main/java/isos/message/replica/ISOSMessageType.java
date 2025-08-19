@@ -15,6 +15,8 @@ public enum ISOSMessageType {
   // View Change
   VC_VIEWCHANGE,
   VC_NEWVIEW,
+  VC_QUERYEXEC,
+  VC_EXEC,
   // Special Case: Timeout, only for local processing, not sent to other replicas
   TIMEOUT
 }
