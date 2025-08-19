@@ -499,7 +499,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // Line 38: First verify from follower
-    if (this.slot.getDepVerifies().containsKey(depVerify.followerId())) {
+    if (this.slot.getDepVerifys().containsKey(depVerify.followerId())) {
       logger.warn(
           "Already received DepVerify from follower {}, throwing message away",
           depVerify.followerId());
@@ -516,7 +516,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     try {
       // TODO Kai: While we are waiting, we cannot process any other messages. Is this fine? Maybe
       // start waiting for the union of dependencies after we have reached the quorum of
-      // depVerifies?
+      // depVerifys?
       this.dependencyWait.waitUntilConsensusStarted(depVerify.depSet().dependencies());
     } catch (InterruptedException e) {
       logger.error("Interrupted while waiting for dependencies of received DepVerify message.");
@@ -588,8 +588,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Dependency set used in execution is union set of all dependencies of the follower quorum
     // defined initially by the DepPropose
     // TODO Kai: do we have to include depPropose dependencies here?
-    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
-    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifies, null);
+    var depVerifys = this.slot.getDepVerifys().values().stream().toList();
+    var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifys, null);
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
@@ -600,14 +600,14 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // region Reconciliation Path
   /** Pseudocode line 72-75 */
-  private void enterReconciliationPath(String depVerifiesFollowerQuorumHash) {
+  private void enterReconciliationPath(String depVerifysFollowerQuorumHash) {
     this.slot.setStep(AgreementSlotPhase.RP_VERIFIED);
     var prepareMsg =
         new PrepareMessage(
             this.seqNum,
             this.slot.getViewNumber(),
             this.ownReplicaId,
-            depVerifiesFollowerQuorumHash);
+            depVerifysFollowerQuorumHash);
     var wrapper = new ISOSMessageWrapper(prepareMsg, this.ownReplicaId);
     // We have to process our own prepare message as well, so includeSelf is true
     this.msgSender.broadcastToReplicas(true, wrapper);
@@ -627,10 +627,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // path.
 
     // We have to check our DepVerify hash as well
-    // Set of previously received DepVerifies
+    // Set of previously received DepVerifys
     String depVerifyHash = this.slot.getDepVerifyHashCached();
 
-    if (!depVerifyHash.equals(prepare.depVerifiesHash())) {
+    if (!depVerifyHash.equals(prepare.depVerifysHash())) {
       logger.warn("Hash mismatch with received prepare message, throwing message away");
       return;
     }
@@ -671,10 +671,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @param commit
    */
   private void handleCommitMessage(CommitMessage commit) {
-    var depVerifies = this.slot.getDepVerifies().values().stream().toList();
+    var depVerifys = this.slot.getDepVerifys().values().stream().toList();
     String depVerifyHash = this.slot.getDepVerifyHashCached();
 
-    if (!depVerifyHash.equals(commit.depVerifiesHash())) {
+    if (!depVerifyHash.equals(commit.depVerifysHash())) {
       logger.warn("Hash mismatch with received commit message, throwing message away");
       return;
     }
@@ -709,7 +709,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // associated DepPropose.
     // Line 85
     var unionDepsFollowerQuorum =
-        DepVerifyMessage.unionOfDependencies(depVerifies, this.slot.getDepPropose());
+        DepVerifyMessage.unionOfDependencies(depVerifys, this.slot.getDepPropose());
     var executeMsg =
         new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
@@ -742,9 +742,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     DepProposeWithRequest dp =
         new DepProposeWithRequest(this.slot.getDepPropose(), this.slot.getRequest());
-    List<DepVerifyMessage> dv = this.slot.getDepVerifies().values().stream().toList();
+    List<DepVerifyMessage> dv = this.slot.getDepVerifys().values().stream().toList();
 
-    // has to be 2f matching DepVerifies in both cases
+    // has to be 2f matching DepVerifys in both cases
     // ->
     var currentStep = this.slot.getStep();
 

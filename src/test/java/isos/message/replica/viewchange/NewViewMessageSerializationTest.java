@@ -34,13 +34,13 @@ class NewViewMessageSerializationTest {
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
     DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, req);
-    List<DepVerifyMessage> depVerifies = new ArrayList<>();
-    depVerifies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
+    List<DepVerifyMessage> depVerifys = new ArrayList<>();
+    depVerifys.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
     Set<ViewChangeMessage> viewChanges = new HashSet<>();
     viewChanges.add(new ViewChangeMessage(seqNum, viewNumber, new ReplicaId(4), null));
 
     NewViewMessage original =
-        new NewViewMessage(seqNum, viewNumber, replicaId, dp, depVerifies, viewChanges);
+        new NewViewMessage(seqNum, viewNumber, replicaId, dp, depVerifys, viewChanges);
 
     byte[] bytes;
     try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -73,13 +73,13 @@ class NewViewMessageSerializationTest {
     SequenceNumber seqNum = new SequenceNumber(2, 42);
     ViewNumber viewNumber = new ViewNumber(5);
     ReplicaId replicaId = new ReplicaId(2);
-    List<DepVerifyMessage> depVerifies = new ArrayList<>();
-    depVerifies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
+    List<DepVerifyMessage> depVerifys = new ArrayList<>();
+    depVerifys.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
     Set<ViewChangeMessage> viewChanges = new HashSet<>();
     viewChanges.add(new ViewChangeMessage(seqNum, viewNumber, new ReplicaId(4), null));
 
     NewViewMessage original =
-        new NewViewMessage(seqNum, viewNumber, replicaId, null, depVerifies, viewChanges);
+        new NewViewMessage(seqNum, viewNumber, replicaId, null, depVerifys, viewChanges);
 
     byte[] bytes;
     try (ByteArrayOutputStream bos = new ByteArrayOutputStream();

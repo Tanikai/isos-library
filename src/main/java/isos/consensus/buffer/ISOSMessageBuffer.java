@@ -83,14 +83,14 @@ public class ISOSMessageBuffer {
     return depCommitQuorum.size() >= quorumSize;
   }
 
-  public boolean depCommitQuorumWithSameHashReached(String depVerifiesHash, int quorumSize) {
+  public boolean depCommitQuorumWithSameHashReached(String depVerifysHash, int quorumSize) {
     if (!depCommitQuorumReached(quorumSize)) {
       return false;
     }
 
     long sameHashCount =
         this.depCommitQuorum.values().stream()
-            .filter(msg -> depVerifiesHash.equals(msg.depVerifiesHash()))
+            .filter(msg -> depVerifysHash.equals(msg.depVerifysHash()))
             .count();
 
     return sameHashCount >= quorumSize;

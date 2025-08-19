@@ -9,9 +9,9 @@ import java.io.Serializable;
 /**
  * @param seqNum agreement slot
  * @param replicaId Replica ID of sender
- * @param depVerifiesHash Hash of DepVerifies
+ * @param depVerifysHash Hash of DepVerifys
  */
-public record DepCommitMessage(SequenceNumber seqNum, ReplicaId replicaId, String depVerifiesHash)
+public record DepCommitMessage(SequenceNumber seqNum, ReplicaId replicaId, String depVerifysHash)
     implements ISOSMessage, Serializable {
 
   @Override

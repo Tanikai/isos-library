@@ -125,7 +125,7 @@ class AgmtSlotQueueProcessorTest {
     for (var r : depPropose.followerQuorum()) {
       replies.add(new DepVerifyMessage(seqNum, r, depProposeHash, finalDepSet));
     }
-    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(replies);
+    var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(replies);
 
     // Send replies to our agreement slot
     incomingQueue.addAll(replies);
@@ -140,12 +140,12 @@ class AgmtSlotQueueProcessorTest {
 
     assertEquals(seqNum, depCommit.seqNum());
     assertEquals(ownReplicaId, depCommit.replicaId());
-    assertEquals(depVerifiesHash, depCommit.depVerifiesHash());
+    assertEquals(depVerifysHash, depCommit.depVerifysHash());
 
     // Replica has to receive 2f+1 matching DepCommits (including itself) -> send 2 DepCommits from
     // other followers
-    DepCommitMessage depCommit1 = new DepCommitMessage(seqNum, otherReplicaIds[0], depVerifiesHash);
-    DepCommitMessage depCommit2 = new DepCommitMessage(seqNum, otherReplicaIds[1], depVerifiesHash);
+    DepCommitMessage depCommit1 = new DepCommitMessage(seqNum, otherReplicaIds[0], depVerifysHash);
+    DepCommitMessage depCommit2 = new DepCommitMessage(seqNum, otherReplicaIds[1], depVerifysHash);
 
     incomingQueue.add(depCommit1);
     incomingQueue.add(depCommit2);
@@ -161,7 +161,7 @@ class AgmtSlotQueueProcessorTest {
   }
 
   /**
-   * This tests the reconciliation path after the dependency set from the DepVerifies cannot be
+   * This tests the reconciliation path after the dependency set from the DepVerifys cannot be
    * confirmed.
    */
   @Test
@@ -237,7 +237,7 @@ class AgmtSlotQueueProcessorTest {
     replies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), depProposeHash, depSet2));
     incomingQueue.addAll(replies);
 
-    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(replies);
+    var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(replies);
 
     // As some dependencies do not have a f+1 quorum,
     verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -249,7 +249,7 @@ class AgmtSlotQueueProcessorTest {
     // view number only increases if a timeout triggers
     assertEquals(new ViewNumber(-1), prepare.viewNumber());
     assertEquals(ownReplicaId, prepare.replicaId());
-    assertEquals(depVerifiesHash, prepare.depVerifiesHash());
+    assertEquals(depVerifysHash, prepare.depVerifysHash());
 
     // Page 5 ISOS: After a replica has obtained 2f+1 prepares matching the set of known DepVerifys,
     // the replica
@@ -258,9 +258,9 @@ class AgmtSlotQueueProcessorTest {
     // Create
     List<PrepareMessage> prepares = new LinkedList<>();
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(prepares);
 
     verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -271,11 +271,11 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, commit.seqNum());
     assertEquals(new ViewNumber(-1), commit.viewNumber());
     assertEquals(ownReplicaId, commit.replicaId());
-    assertEquals(depVerifiesHash, commit.depVerifiesHash());
+    assertEquals(depVerifysHash, commit.depVerifysHash());
 
     List<CommitMessage> commits = new LinkedList<>();
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(commits);
 
     // After the coordinator receives 2f+1 commit messages (including its own), it can forward the
@@ -364,10 +364,10 @@ class AgmtSlotQueueProcessorTest {
             new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
     incomingQueue.add(otherDepVerify);
 
-    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
-    var depVerifiesHashSwapped =
+    var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+    var depVerifysHashSwapped =
         DepVerifyMap.calculateDepVerifyHash(List.of(depVerify, otherDepVerify));
-    assertEquals(depVerifiesHash, depVerifiesHashSwapped);
+    assertEquals(depVerifysHash, depVerifysHashSwapped);
 
     // With the DepPropose, own DepVerify, and DepVerify from other replica with matching
     // Dependencies, the follower broadcasts a DepCommit message
@@ -378,11 +378,11 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(depCommit);
     assertEquals(seqNum, depCommit.seqNum());
     assertEquals(ownReplicaId, depCommit.replicaId());
-    assertEquals(depVerifiesHash, depCommit.depVerifiesHash());
+    assertEquals(depVerifysHash, depCommit.depVerifysHash());
 
     // Create the remaining 2f depCommit messages
-    var depCommit1 = new DepCommitMessage(seqNum, coordinatorId, depVerifiesHash);
-    var depCommit2 = new DepCommitMessage(seqNum, otherFollowerId, depVerifiesHash);
+    var depCommit1 = new DepCommitMessage(seqNum, coordinatorId, depVerifysHash);
+    var depCommit2 = new DepCommitMessage(seqNum, otherFollowerId, depVerifysHash);
     incomingQueue.add(depCommit1);
     incomingQueue.add(depCommit2);
 
@@ -459,7 +459,7 @@ class AgmtSlotQueueProcessorTest {
     // the f+1 does not come from the follower Quroum, the ISOS paper tells us that we have to go to
     // the reconciliation path
 
-    var depVerifiesHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
+    var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
 
     verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
 
@@ -469,14 +469,14 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, prepare.seqNum());
     assertEquals(new ViewNumber(-1), prepare.viewNumber());
     assertEquals(ownReplicaId, prepare.replicaId());
-    assertEquals(depVerifiesHash, prepare.depVerifiesHash());
+    assertEquals(depVerifysHash, prepare.depVerifysHash());
 
     // Create the remaining prepare messages
     List<PrepareMessage> prepares = new LinkedList<>();
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(prepares);
 
     verify(msgSenderMock, timeout(500).times(3)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -487,11 +487,11 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, commit.seqNum());
     assertEquals(new ViewNumber(-1), commit.viewNumber());
     assertEquals(ownReplicaId, commit.replicaId());
-    assertEquals(depVerifiesHash, commit.depVerifiesHash());
+    assertEquals(depVerifysHash, commit.depVerifysHash());
 
     List<CommitMessage> commits = new LinkedList<>();
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifiesHash));
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifiesHash));
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
+    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(commits);
 
     var depSetUnion = new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));

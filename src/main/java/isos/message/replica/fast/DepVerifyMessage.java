@@ -31,14 +31,14 @@ public record DepVerifyMessage(
   }
 
   /**
-   * @param depVerifies
+   * @param depVerifys
    * @param depPropose
    * @return
    */
   public static DependencySet unionOfDependencies(
-      List<DepVerifyMessage> depVerifies, DepProposeMessage depPropose) {
+      List<DepVerifyMessage> depVerifys, DepProposeMessage depPropose) {
     var allDeps =
-        depVerifies.stream()
+        depVerifys.stream()
             .flatMap(m -> m.depSet().dependencies().stream())
             .collect(Collectors.toSet());
     if (depPropose != null) {

@@ -13,12 +13,12 @@ class DepCommitMessageSerializationTest {
   void testDepCommitMessageSerialization() throws Exception {
     SequenceNumber seqNum = new SequenceNumber(2, 42);
     ReplicaId replicaId = new ReplicaId(2);
-    String depVerifiesHash = "hash789";
+    String depVerifysHash = "hash789";
 
     DepCommitMessage original = new DepCommitMessage(
         seqNum,
         replicaId,
-        depVerifiesHash
+        depVerifysHash
     );
 
     byte[] bytes;
@@ -37,7 +37,7 @@ class DepCommitMessageSerializationTest {
 
     assertEquals(original.seqNum(), deserialized.seqNum());
     assertEquals(original.replicaId(), deserialized.replicaId());
-    assertEquals(original.depVerifiesHash(), deserialized.depVerifiesHash());
+    assertEquals(original.depVerifysHash(), deserialized.depVerifysHash());
     assertEquals(original.msgType(), deserialized.msgType());
   }
 }

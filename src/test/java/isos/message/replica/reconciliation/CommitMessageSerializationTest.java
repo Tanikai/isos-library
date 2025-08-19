@@ -15,13 +15,13 @@ class CommitMessageSerializationTest {
     SequenceNumber seqNum = new SequenceNumber(2, 42);
     ViewNumber viewNumber = new ViewNumber(5);
     ReplicaId replicaId = new ReplicaId(2);
-    String depVerifiesHash = "hashCommit";
+    String depVerifysHash = "hashCommit";
 
     CommitMessage original = new CommitMessage(
         seqNum,
         viewNumber,
         replicaId,
-        depVerifiesHash
+        depVerifysHash
     );
 
     byte[] bytes;
@@ -41,7 +41,7 @@ class CommitMessageSerializationTest {
     assertEquals(original.seqNum(), deserialized.seqNum());
     assertEquals(original.viewNumber(), deserialized.viewNumber());
     assertEquals(original.replicaId(), deserialized.replicaId());
-    assertEquals(original.depVerifiesHash(), deserialized.depVerifiesHash());
+    assertEquals(original.depVerifysHash(), deserialized.depVerifysHash());
     assertEquals(original.msgType(), deserialized.msgType());
   }
 }

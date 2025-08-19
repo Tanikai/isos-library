@@ -11,10 +11,10 @@ import java.io.Serializable;
  * @param seqNum agreement slot
  * @param viewNumber agreement slot-specific view number ->
  * @param replicaId Replica ID of sender
- * @param depVerifiesHash Hash of DepVerifies
+ * @param depVerifysHash Hash of DepVerifys
  */
 public record PrepareMessage(
-    SequenceNumber seqNum, ViewNumber viewNumber, ReplicaId replicaId, String depVerifiesHash)
+    SequenceNumber seqNum, ViewNumber viewNumber, ReplicaId replicaId, String depVerifysHash)
     implements ISOSMessage, Serializable {
 
   @Override

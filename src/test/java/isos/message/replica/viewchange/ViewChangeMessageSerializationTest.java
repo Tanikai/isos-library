@@ -32,10 +32,10 @@ class ViewChangeMessageSerializationTest {
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
     DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, req);
-    List<DepVerifyMessage> depVerifies = new ArrayList<>();
-    depVerifies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
+    List<DepVerifyMessage> depVerifys = new ArrayList<>();
+    depVerifys.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
 
-    var fpc = new FastPathCertificate(dp, depVerifies);
+    var fpc = new FastPathCertificate(dp, depVerifys);
     ViewChangeMessage original = new ViewChangeMessage(seqNum, viewNumber, coordinatorId, fpc);
 
     byte[] bytes;

@@ -35,7 +35,7 @@ public class AgreementSlot {
    * v[f_i]: DepVerify for slot s_j from follower f_i This map only contains DepVerify messages
    * received from followers that are defined in the follower quorum F of the depPropose message.
    */
-  private final DepVerifyMap depVerifies;
+  private final DepVerifyMap depVerifys;
 
   // current phase
   private AgreementSlotPhase step;
@@ -99,7 +99,7 @@ public class AgreementSlot {
     this.seqNum = seqNum;
     this.request = request;
     this.depPropose = depPropose;
-    this.depVerifies = new DepVerifyMap();
+    this.depVerifys = new DepVerifyMap();
     this.step = step;
     this.viewChanges = new ViewChangeMap();
     this.viewNumber = viewNumber;
@@ -155,7 +155,7 @@ public class AgreementSlot {
     this.slotLock.lock();
     try {
       this.depPropose = depPropose;
-      this.depVerifies.setFollowerQuroum(depPropose.followerQuorum());
+      this.depVerifys.setFollowerQuroum(depPropose.followerQuorum());
     } finally {
       // We are signaling so that other agreement slots that wait for us can check the wait
       // condition
@@ -164,14 +164,14 @@ public class AgreementSlot {
     }
   }
 
-  public Map<ReplicaId, DepVerifyMessage> getDepVerifies() {
-    return depVerifies.getDepVerifies();
+  public Map<ReplicaId, DepVerifyMessage> getDepVerifys() {
+    return depVerifys.getDepVerifys();
   }
 
   public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify) {
     this.slotLock.lock();
     try {
-      this.depVerifies.setDepVerify(replicaId, depVerify);
+      this.depVerifys.setDepVerify(replicaId, depVerify);
     } finally {
       this.messageCountCondition.signalAll();
       this.slotLock.unlock();
@@ -185,9 +185,9 @@ public class AgreementSlot {
   public void replaceDepVerifys(List<DepVerifyMessage> depVerifys) {
     this.slotLock.lock();
     try {
-      this.depVerifies.clearDepVerifys();
+      this.depVerifys.clearDepVerifys();
       for (var d: depVerifys) {
-        this.depVerifies.setDepVerify(d.followerId(), d);
+        this.depVerifys.setDepVerify(d.followerId(), d);
       }
     } finally {
       this.messageCountCondition.signalAll();
@@ -196,7 +196,7 @@ public class AgreementSlot {
   }
 
   public boolean isFpVerified(int maxFaults) {
-    return this.depVerifies.isFpVerified(maxFaults);
+    return this.depVerifys.isFpVerified(maxFaults);
   }
 
   /**
@@ -205,11 +205,11 @@ public class AgreementSlot {
    * @return
    */
   public String getDepVerifyHashCached() {
-    return this.depVerifies.getdepVerifyHashCached();
+    return this.depVerifys.getdepVerifyHashCached();
   }
 
   public boolean reachedDepVerifyQuorum(int quorumSize) {
-    return this.depVerifies.reachedQuorum(quorumSize);
+    return this.depVerifys.reachedQuorum(quorumSize);
   }
 
   public boolean reachedViewChangeQuorum(ViewNumber viewNumber, int quorumSize) {
