@@ -1054,6 +1054,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.slot.replaceDepVerifys(vecDv);
 
     if (newView.seqNum().replicaId() == ownReplicaId.value() && dp.depPropose() == null) {
+      // TODO Kai: what is permute-fast-quorum() from pseudocode?
       // permute-fast-quorum() (?)
       // Re-propose request in a new slot (?)
       // But if dp is null, where do we get the request from?
