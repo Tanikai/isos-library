@@ -20,7 +20,7 @@ public interface DependencyGraphBuilder {
   /**
    * Calculate the dependency graph for slot v.
    *
-   * <p>Pseudocode line 152-162
+   * <p>Pseudocode line 152-162, function rdeps(v)
    *
    * @param v
    * @return
@@ -33,7 +33,7 @@ public interface DependencyGraphBuilder {
   /**
    * Calculate dependency graph for slot v. Excludes slots outside the execution window.
    *
-   * <p>Pseudocode line 164-174
+   * <p>Pseudocode line 164-174, function rdeps_{exp}(v)
    *
    * @param v
    * @param executionWindowSlots

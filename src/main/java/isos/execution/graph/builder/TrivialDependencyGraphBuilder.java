@@ -24,7 +24,9 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
   /**
    * Pseudocode line 153-162
    *
-   * @param v
+   * @param v The slot for which the Dependency Graph should be calculated
+   * @param deps Mapping of an agreement slots to its dependencies
+   * @param executed The set of agreement slots that are already executed
    * @return
    */
   @Override
