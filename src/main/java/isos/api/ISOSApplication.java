@@ -7,7 +7,7 @@ import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecuteInApplication;
-import isos.execution.ExecuteMessage;
+import isos.execution.CommittedCommand;
 import isos.execution.ExecutionManager;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.message.client.OrderedClientRequest;
@@ -167,7 +167,7 @@ public class ISOSApplication {
    *
    * @param r
    */
-  public void receiveCommittedRequest(ExecuteMessage r) {
+  public void receiveCommittedRequest(CommittedCommand r) {
     if (!this.executionManager.submitCommittedRequest(r)) {
       logger.error("Could not add committed request to executionManager due to maximum capacity.");
     }

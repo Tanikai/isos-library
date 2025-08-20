@@ -3,11 +3,10 @@ package isos.consensus.model;
 import isos.consensus.ViewNumberNotLargerException;
 import isos.consensus.model.viewchange.EmptyCertificate;
 import isos.consensus.model.viewchange.ViewChangeCertificate;
-import isos.execution.ExecuteMessage;
+import isos.execution.CommittedCommand;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepVerifyMessage;
-import isos.message.replica.viewchange.ExecMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
@@ -53,7 +52,7 @@ public class AgreementSlot {
 
   private ViewChangeCertificate viewChangeCertificate;
 
-  private ExecuteMessage exec;
+  private CommittedCommand exec;
 
   // Fields required for waiting / notifying efficiently (not for concurrency control)
 
@@ -291,11 +290,11 @@ public class AgreementSlot {
     this.viewChangeCertificate = viewChangeCertificate;
   }
 
-  public ExecuteMessage getExec() {
+  public CommittedCommand getExec() {
     return exec;
   }
 
-  public void setExec(ExecuteMessage exec) {
+  public void setExec(CommittedCommand exec) {
     this.exec = exec;
   }
 }

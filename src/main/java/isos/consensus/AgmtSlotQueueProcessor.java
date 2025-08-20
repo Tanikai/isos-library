@@ -8,7 +8,7 @@ import isos.consensus.model.viewchange.DepProposeAndDepVerifys;
 import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.consensus.model.viewchange.ReconciliationPathCertificate;
 import isos.execution.ExecutableRequestReceiver;
-import isos.execution.ExecuteMessage;
+import isos.execution.CommittedCommand;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
@@ -591,7 +591,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var depVerifys = this.slot.getDepVerifys().values().stream().toList();
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifys, null);
     var executeMsg =
-        new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+        new CommittedCommand(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
@@ -711,7 +711,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var unionDepsFollowerQuorum =
         DepVerifyMessage.unionOfDependencies(depVerifys, this.slot.getDepPropose());
     var executeMsg =
-        new ExecuteMessage(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+        new CommittedCommand(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
@@ -1097,7 +1097,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     // We have reached quorum
-    var executeMsg = new ExecuteMessage(this.seqNum, exec.clientRequest(), exec.dependencySet());
+    var executeMsg = new CommittedCommand(this.seqNum, exec.clientRequest(), exec.dependencySet());
     this.slot.setExec(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }

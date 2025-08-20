@@ -3,7 +3,7 @@ package isos.consensus;
 import isos.communication.MessageSender;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
-import isos.execution.ExecuteMessage;
+import isos.execution.CommittedCommand;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
@@ -150,7 +150,7 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(depCommit1);
     incomingQueue.add(depCommit2);
 
-    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
@@ -289,7 +289,7 @@ class AgmtSlotQueueProcessorTest {
             new SequenceNumber(otherReplicaIds[1], 0),
             new SequenceNumber(otherReplicaIds[2], 0));
 
-    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
@@ -386,7 +386,7 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(depCommit1);
     incomingQueue.add(depCommit2);
 
-    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
@@ -496,7 +496,7 @@ class AgmtSlotQueueProcessorTest {
 
     var depSetUnion = new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
 
-    var execCaptor = ArgumentCaptor.forClass(ExecuteMessage.class);
+    var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());

@@ -28,7 +28,7 @@ public class ExecutionManager implements Runnable {
 
   private final DependencyGraphBuilder depGraphBuilder;
 
-  private final BlockingQueue<ExecuteMessage> incomingCommittedSlots;
+  private final BlockingQueue<CommittedCommand> incomingCommittedSlots;
 
   private final ExecuteInApplication executor;
 
@@ -51,7 +51,7 @@ public class ExecutionManager implements Runnable {
     this.executor = executor;
   }
 
-  public boolean submitCommittedRequest(ExecuteMessage r) {
+  public boolean submitCommittedRequest(CommittedCommand r) {
     return this.incomingCommittedSlots.offer(r);
   }
 
@@ -166,7 +166,7 @@ public class ExecutionManager implements Runnable {
     logger.info("Start ExecutionManager loop");
     while (!Thread.currentThread().isInterrupted()) {
       // Update slots committed in the meantime
-      ExecuteMessage receivedMessage;
+      CommittedCommand receivedMessage;
       while ((receivedMessage = incomingCommittedSlots.poll()) != null) {
         var seqNum = receivedMessage.seqNum();
         this.committed.add(seqNum);
