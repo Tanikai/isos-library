@@ -55,7 +55,6 @@ public class MessagingExample extends Thread {
           logger.info("Can execute request {}", request);
         };
 
-
     this.replicaId = replicaId;
     this.configManager = new ConfigurationManager(replicaId, configHome, loader);
     this.app = new ISOSApplication(configManager, deserializer, conflictChecker, appExecutor);
@@ -103,6 +102,7 @@ public class MessagingExample extends Thread {
 
     /**
      * When a client request is received
+     *
      * @param msg The request being received from the client
      * @param fromClient Whether the request was received from a client or was part of a forwarded
      *     message. If it was forwarded, it should not be dropped.
@@ -110,13 +110,15 @@ public class MessagingExample extends Thread {
     @Override
     public void requestReceived(ClientMessageWrapper msg, boolean fromClient) {
       var payload = msg.getPayload();
+      OrderedClientRequest r;
       try (ByteArrayInputStream bis = new ByteArrayInputStream(payload);
           ObjectInputStream ois = new ObjectInputStream(bis)) {
-        OrderedClientRequest r = (OrderedClientRequest) ois.readObject();
+        r = (OrderedClientRequest) ois.readObject();
 
         logger.info("Received OrderedClientRequest from client: {}", r);
       } catch (IOException | ClassNotFoundException e) {
         logger.warn("Failed to deserialize OrderedClientRequest from client payload", e);
+        return;
       }
 
       var responseMessage = "Hello back from replica!";
@@ -133,8 +135,7 @@ public class MessagingExample extends Thread {
       }
 
       ClientMessageWrapper response =
-          new ClientMessageWrapper(
-              this.ownReplicaId, msg.getClientSession(), msg.getClientSequence(), responseBytes);
+          new ClientMessageWrapper(this.ownReplicaId, r.clientLocalTimestamp(), responseBytes);
 
       int[] receivers = new int[1];
       receivers[0] = msg.getSender();

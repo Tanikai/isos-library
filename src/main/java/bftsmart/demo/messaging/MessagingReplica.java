@@ -8,9 +8,10 @@ import bftsmart.configuration.ConfigurationManager;
 import bftsmart.message.TestMessage;
 import bftsmart.tom.util.KeyLoader;
 import isos.communication.ClientMessageWrapper;
-import java.util.concurrent.locks.Lock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.locks.Lock;
 
 public class MessagingReplica extends Thread {
 
@@ -108,10 +109,7 @@ public class MessagingReplica extends Thread {
       var responsePayload = ("This is the reply").getBytes();
       var receivers = new int[1];
       receivers[0] = sender;
-      this.scs.sendToClients(
-          receivers,
-          new ClientMessageWrapper(
-              sm.getSender(), sm.getClientSession(), sm.getClientSequence(), responsePayload));
+      this.scs.sendToClients(receivers, new ClientMessageWrapper(sm.getSender(), 0, responsePayload));
     }
   }
 

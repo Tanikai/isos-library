@@ -12,12 +12,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class SingleRequestHandlerTest {
 
   private static final int CLIENT_ID = 1;
-  private static final int SESSION = 1;
-  private static final int SEQ_ID = 1;
+  private static final long SEQ_ID = 1;
   private static final long TIMEOUT_SECONDS = 2;
 
   private static ClientMessageWrapper makeReply(int sender, byte[] payload) {
-    return new ClientMessageWrapper(sender, SESSION, SEQ_ID, payload);
+    return new ClientMessageWrapper(sender, SEQ_ID, payload);
   }
 
   private static Comparator<ClientMessageWrapper> byteArrayComparator() {
@@ -35,7 +34,6 @@ class SingleRequestHandlerTest {
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
-            SESSION,
             SEQ_ID,
             TIMEOUT_SECONDS,
             replicas,
@@ -67,7 +65,6 @@ class SingleRequestHandlerTest {
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
-            SESSION,
             SEQ_ID,
             TIMEOUT_SECONDS,
             replicas,
@@ -106,7 +103,6 @@ class SingleRequestHandlerTest {
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
-            SESSION,
             SEQ_ID,
             TIMEOUT_SECONDS,
             replicas,
@@ -144,7 +140,6 @@ class SingleRequestHandlerTest {
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
-            SESSION,
             SEQ_ID,
             TIMEOUT_SECONDS,
             replicas,

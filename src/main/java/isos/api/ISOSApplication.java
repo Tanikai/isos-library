@@ -18,6 +18,9 @@ import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
@@ -182,11 +185,23 @@ public class ISOSApplication {
   }
 
   public void sendClientReply(OrderedClientRequest originalRequest, OrderedClientReply reply) {
-    // FIXME Kai: There needs to be a system for the replicas to reply to the clients using only the
-    // propagated OrderedClientRequest (by the DepPropose) and
-    // send somehow via ClientsConn? The clientSession and clientSequence have to be returned from somewhere
+    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+      oos.writeObject(reply);
+      oos.flush();
+      var replyBytes = bos.toByteArray();
 
+      // The client is able to connect this sent reply to its original request by using the
+      // clientLocalTimestamp. Because it is contained in the request that is propagated by the
+      // coordinator in the initial DepPropose, every replica knows the clientLocalTimestamp and
+      // use it as the sequenceNumber of the ClientMessageWrapper.
+      this.scs.sendToClients(
+          new int[] {originalRequest.clientId()},
+          new ClientMessageWrapper(
+              originalRequest.clientId(), originalRequest.clientLocalTimestamp(), replyBytes));
 
-    this.scs.sendToClients(new int[] {originalRequest.clientId()}, new ClientMessageWrapper());
+    } catch (IOException e) {
+      logger.warn("Failed to serialize OrderedClientReply for client response", e);
+    }
   }
 }

@@ -22,8 +22,7 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
 
   // Request Handling
   private final int ownClientId;
-  private final int clientSession;
-  private final int clientSequenceId;
+  private final long sequenceNumber;
 
   // Response Handling
   private final long responseTimeout;
@@ -40,8 +39,7 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
 
   public SingleRequestHandler(
       int ownClientId,
-      int clientSession,
-      int clientSequenceId,
+      long sequenceNumber,
       long responseTimeoutSeconds,
       List<ReplicaId> replicas,
       int quorumSize,
@@ -49,14 +47,11 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
       ReplyExtractor<T> replyExtractor) {
     this.logger =
         LoggerFactory.getLogger(
-            String.format(
-                "RequestHandler ID %d SESS %d SEQ %d",
-                ownClientId, clientSession, clientSequenceId));
+            String.format("RequestHandler ID %d SEQ %d", ownClientId, sequenceNumber));
 
     // Request Handling
     this.ownClientId = ownClientId;
-    this.clientSession = clientSession;
-    this.clientSequenceId = clientSequenceId;
+    this.sequenceNumber = sequenceNumber;
 
     // Response Handling
     this.quorumReplyFuture =
@@ -73,12 +68,12 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
 
   @Override
   public ClientMessageWrapper createRequest(byte[] payload) {
-    return new ClientMessageWrapper(ownClientId, clientSession, clientSequenceId, payload);
+    return new ClientMessageWrapper(ownClientId, sequenceNumber, payload);
   }
 
   @Override
-  public int getSequenceId() {
-    return this.clientSequenceId;
+  public long getSequenceId() {
+    return this.sequenceNumber;
   }
 
   @Override
@@ -107,9 +102,8 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
       return Optional.empty();
     }
 
-    if (this.clientSession != reply.getClientSession()
-        || this.clientSequenceId != reply.getClientSequence()) {
-      logger.info("ClientSession and/or ClientSequenceId do not match. Throwing message away");
+    if (this.sequenceNumber != reply.getClientSequence()) {
+      logger.info("Client sequence number does not match. Throwing message away");
       return Optional.empty();
     }
 

@@ -6,7 +6,7 @@ import bftsmart.communication.client.ReplyReceiver;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.core.messages.TOMMessageType;
 import bftsmart.tom.util.KeyLoader;
-import isos.communication.*;
+import isos.communication.ClientMessageWrapper;
 import isos.communication.client.QuorumNotReachedException;
 import isos.communication.client.ReplyExtractor;
 import isos.communication.client.RequestReplyHandler;
@@ -15,17 +15,16 @@ import isos.message.client.ClientReply;
 import isos.message.client.ClientRequest;
 import isos.utils.QuorumUtil;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** This is the ISOS equivalent of the {@link bftsmart.tom.core.TOMSender}. It */
 public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
@@ -35,9 +34,6 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   private final ConfigurationManager configManager;
   private final int ownClientId;
   private final boolean useSignatures; // Should we sign our requests or not?
-  private final int
-      session; // session id, randomly generated each time a new isos client is created
-  private final AtomicInteger requestSequenceCounter = new AtomicInteger(0);
 
   private long requestTimeoutSeconds = 40; // 40 seconds
 
@@ -47,7 +43,6 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   private int currentQuorumSize;
 
   private List<ReplicaId> currentOverallView;
-
 
   public ISOSClient(int processId) {
     this(processId, null, null);
@@ -65,7 +60,6 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
             processId, this.configManager);
     this.ccs.setReplyReceiver(this); // This object itself shall be a reply receiver
     this.useSignatures = this.configManager.getStaticConf().getUseSignatures() == 1;
-    this.session = new Random().nextInt();
     this.currentOverallView =
         Arrays.stream(this.configManager.getCurrentViewIds())
             .mapToObj(ReplicaId::new)
@@ -87,6 +81,9 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   /**
    * This is the equivalent of {@link bftsmart.tom.ServiceProxy#invoke(byte[], TOMMessageType)}. Not
    * thread-safe. Blocks until the result is received.
+   *
+   * <p>Uses the clientLocalTimestamp of the client request for assigning the responses from
+   * replicas to this request.
    *
    * @param r Request that is sent as the payload.
    * @return The reply that is confirmed by a quourm of
@@ -110,11 +107,11 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
             return null;
           }
         };
+
     this.currentRequestContext =
         new SingleRequestHandler<ClientReply>(
             ownClientId,
-            this.session,
-            this.requestSequenceCounter.getAndIncrement(),
+            r.clientLocalTimestamp(),
             this.requestTimeoutSeconds,
             this.currentOverallView,
             this.currentQuorumSize,
@@ -185,7 +182,6 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
       logger.error(e.getMessage());
     } catch (Exception e) {
       logger.error(e.getMessage());
-
     }
   }
 }

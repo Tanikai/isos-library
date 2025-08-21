@@ -13,12 +13,13 @@ import java.io.*;
  * This wrapper class is used to store all metadata that is required to send this message. It is
  * adapted from {@link bftsmart.tom.core.messages.TOMMessage}, but generalized, i.e., without the
  * BFT-SMaRt-specific consensus aspects. It can be sent from Client->Replica or Replica->Client.
+ * In short, it contains cache fields for serialization and retry information.
  *
- * <p>The actual contents are contained in the {@link #payload} field. It is a general class, i.e.
- * the communication system has no information about the semantics of the payload or the used
- * consensus algorithm. It is used both on the client and replica side. In ISOS, the payload is
- * {@link OrderedClientRequest} for C->R messages and {@link
- * OrderedClientReply} for R->C messages.
+ * <p>The actual contents of the request/reply are contained in the {@link #payload} field. It is a
+ * general class, i.e. the communication system has no information about the semantics of the
+ * payload or the used consensus algorithm. It is used both on the client and replica side. In ISOS,
+ * the payload is {@link OrderedClientRequest} for C->R messages and {@link OrderedClientReply} for
+ * R->C messages.
  */
 public class ClientMessageWrapper extends SystemMessage
     implements Externalizable, Comparable<ClientMessageWrapper>, Cloneable {
@@ -26,8 +27,7 @@ public class ClientMessageWrapper extends SystemMessage
   // actual contents of the message
   // sender: in SystemMessage
   private byte[] payload;
-  private int clientSession; // client session, defined by client one during start
-  private int clientSequence; // client sequence number, increases by 1 with each message sent
+  private long sequenceNumber; // client sequence number, increases by 1 with each message sent
 
   // Cache / Temporary fields used for transmitting the message
   // the bytes received from the client and its MAC and signature
@@ -44,26 +44,20 @@ public class ClientMessageWrapper extends SystemMessage
 
   public ClientMessageWrapper() {}
 
-  public ClientMessageWrapper(int sender, int clientSession, int clientSequence, byte[] payload) {
+  public ClientMessageWrapper(int sender, long sequenceNumber, byte[] payload) {
     this.sender = sender;
-    this.clientSession = clientSession;
-    this.clientSequence = clientSequence;
+    this.sequenceNumber = sequenceNumber;
     this.payload = payload;
   }
 
   public ClientMessageWrapper(ReplicaId replicaSender, ClientMessageWrapper clientRequest, byte[] payload) {
     this.sender = replicaSender.value();
-    this.clientSession = clientRequest.getClientSession();
-    this.clientSequence = clientRequest.getClientSequence();
+    this.sequenceNumber = clientRequest.getClientSequence();
     this.payload = payload;
   }
 
-  public int getClientSequence() {
-    return this.clientSequence;
-  }
-
-  public int getClientSession() {
-    return this.clientSession;
+  public long getClientSequence() {
+    return this.sequenceNumber;
   }
 
   public byte[] getPayload() {
@@ -77,7 +71,7 @@ public class ClientMessageWrapper extends SystemMessage
   @Override
   public ClientMessageWrapper clone() {
     ClientMessageWrapper clone =
-        new ClientMessageWrapper(sender, clientSession, clientSequence, payload);
+        new ClientMessageWrapper(sender, sequenceNumber, payload);
 
     clone.signed = this.signed;
     clone.serializedMessage = this.serializedMessage;
@@ -98,8 +92,7 @@ public class ClientMessageWrapper extends SystemMessage
     out.writeInt(sender);
     // viewID -> not relevant for ISOS
     // msgType -> should be in payload
-    out.writeInt(clientSession);
-    out.writeInt(clientSequence);
+    out.writeLong(sequenceNumber);
 
     if (payload == null) {
       out.writeInt(-1);
@@ -111,8 +104,7 @@ public class ClientMessageWrapper extends SystemMessage
 
   public void rExternal(DataInput in) throws IOException {
     this.sender = in.readInt();
-    this.clientSession = in.readInt();
-    this.clientSequence = in.readInt();
+    this.sequenceNumber = in.readLong();
 
     int toRead = in.readInt();
     if (toRead != -1) {

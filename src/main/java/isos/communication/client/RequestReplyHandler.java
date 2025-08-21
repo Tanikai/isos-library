@@ -21,7 +21,7 @@ public interface RequestReplyHandler<T> {
    */
   ClientMessageWrapper createRequest(byte[] payload);
 
-  int getSequenceId();
+  long getSequenceId();
 
   void waitForResponse() throws InterruptedException;
 
