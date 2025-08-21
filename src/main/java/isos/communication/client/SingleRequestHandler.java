@@ -2,11 +2,12 @@ package isos.communication.client;
 
 import isos.communication.ClientMessageWrapper;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class is adapted from {@link bftsmart.tom.client.AbstractRequestHandler} and {@link
@@ -45,7 +46,7 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
       List<ReplicaId> replicas,
       int quorumSize,
       Comparator<ClientMessageWrapper> replyComparator,
-      ReplyExtractor replyExtractor) {
+      ReplyExtractor<T> replyExtractor) {
     this.logger =
         LoggerFactory.getLogger(
             String.format(
@@ -144,7 +145,7 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
     if (sameContent.size() >= quorumSize) {
       // we have reached quorum! we can set the response and return the value
 
-      var finalReply = this.replyExtractor.extractReply(sameContent);
+      T finalReply = this.replyExtractor.extractReply(sameContent);
       this.quorumReplyFuture.complete(finalReply);
       return Optional.of(finalReply);
     }

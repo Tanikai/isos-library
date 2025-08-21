@@ -1,8 +1,10 @@
 package isos.message.client;
 
 import isos.communication.ClientMessageWrapper;
+import isos.execution.graph.ClientPayloadDeserializer;
 import isos.message.replica.fast.DepProposeMessage;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
@@ -14,23 +16,54 @@ import java.util.Objects;
  * This is the main request object that is sent from the client to the replica. Before sending, it
  * is wrapped into the {@link ClientMessageWrapper} as the payload.
  *
- * @param clientId client id
- * @param command command bytes
- * @param clientLocalTimestamp increases for each request, allows ISOS to ignore duplicates
+ * <p>In ISOS, it is also sent from the coordinator to the followers. This class has to contain all
+ * information required to send the reply (after the command was executed) back to the client, and
+ * the client should be able to determine that the response belongs to the command sent beforehand.
  */
-public record OrderedClientRequest(int clientId, byte[] command, long clientLocalTimestamp)
-    implements ClientRequest, Serializable {
+public class OrderedClientRequest implements ClientRequest, Serializable {
+  private final int clientId;
+  private final byte[] command;
+  private final long clientLocalTimestamp;
 
-  public OrderedClientRequest {
-    // Compact constructor
+  private transient Object deserializedCommand = null;
+
+  public OrderedClientRequest(int clientId, byte[] command, long clientLocalTimestamp) {
     Objects.requireNonNull(command);
+    this.clientId = clientId;
+    this.command = command;
+    this.clientLocalTimestamp = clientLocalTimestamp;
+  }
+
+  public int clientId() {
+    return clientId;
+  }
+
+  public byte[] command() {
+    return command;
+  }
+
+  public long clientLocalTimestamp() {
+    return clientLocalTimestamp;
+  }
+
+  public <T> T getDeserializedCommandCache() throws IllegalStateException {
+    if (deserializedCommand == null) {
+      throw new IllegalStateException("Command has not been deserialized yet!");
+    }
+
+    return (T) deserializedCommand;
+  }
+
+  public <T> void updateDeserializedCommandCache(ClientPayloadDeserializer deserializer)
+      throws IOException, ClassNotFoundException {
+    this.deserializedCommand = deserializer.deserializePayload(this.command);
   }
 
   /**
-   * Calculate the hash of the client request. Used in {@link DepProposeMessage}.
-   * Uses SHA-256 hashing, which is enough for this use case.
+   * Calculate the hash of the client request. Used in {@link DepProposeMessage}. Uses SHA-256
+   * hashing, which is enough for this use case.
    *
-   * @return
+   * @return SHA-256 hash of the request as a hex string
    */
   @Override
   public String calculateHash() {
@@ -39,7 +72,6 @@ public record OrderedClientRequest(int clientId, byte[] command, long clientLoca
       digest.update(ByteBuffer.allocate(4).putInt(clientId).array());
       digest.update(command);
       digest.update(ByteBuffer.allocate(8).putLong(clientLocalTimestamp).array());
-
       byte[] hashBytes = digest.digest();
       StringBuilder sb = new StringBuilder();
       for (byte b : hashBytes) {
@@ -67,5 +99,17 @@ public record OrderedClientRequest(int clientId, byte[] command, long clientLoca
     result = 31 * result + Arrays.hashCode(command);
     result = 31 * result + Long.hashCode(clientLocalTimestamp);
     return result;
+  }
+
+  @Override
+  public String toString() {
+    return "OrderedClientRequest{"
+        + "clientId="
+        + clientId
+        + ", command="
+        + Arrays.toString(command)
+        + ", clientLocalTimestamp="
+        + clientLocalTimestamp
+        + '}';
   }
 }

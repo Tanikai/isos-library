@@ -10,6 +10,7 @@ import isos.consensus.model.AgreementSlotSequence;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
+import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
@@ -53,6 +54,9 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   /** Callback when a request was committed and can be executed (with the dependency graph). */
   private final ExecutableRequestReceiver executableRequestReceiver;
 
+  /** Callback to deserialize the client payload when a new client request is received. */
+  private final ClientPayloadDeserializer clientPayloadDeserializer;
+
   /**
    * Callback to get the conflicts of a given request. Has to be definable by the application
    * developer, so we use a callback function
@@ -74,6 +78,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       ReplicaId[] replicaIds,
       RequestConflictChecker conflictChecker,
       ExecutableRequestReceiver executableRequestReceiver,
+      ClientPayloadDeserializer clientPayloadDeserializer,
       int maxFaults,
       int replicaCount) {
     this.ownReplicaId = ownReplicaId;
@@ -89,6 +94,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     }
     this.conflictChecker = conflictChecker;
     this.executableRequestReceiver = executableRequestReceiver;
+    this.clientPayloadDeserializer = clientPayloadDeserializer;
     this.maxFaults = maxFaults;
     this.replicaCount = replicaCount;
   }
@@ -147,7 +153,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
             this::waitForDeps,
             this.executableRequestReceiver,
             this.maxFaults,
-                this.replicaCount);
+            this.replicaCount);
     Thread newQueueProcessorThread =
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
     this.queueProcessorThreads.put(newSlot, newQueueProcessorThread);
@@ -266,8 +272,9 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   public void verifyPending() {}
 
   /**
-   * Request received from Client Requirement: To start the fast path, the coordinator selects its
-   * agreement slot
+   * Request received from Client
+   *
+   * <p>Requirement: To start the fast path, the coordinator selects its agreement slot
    *
    * <p>Pseudocode line 10-19
    *
@@ -278,21 +285,28 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   public void requestReceived(ClientMessageWrapper msg, boolean fromClient) {
     // TODO Kai line 11: assert r correctly signed (-> should be done in networking layer)
 
+    // TODO Kai: Information stored in ClientMessageWrapper that is required to respond to
+
     try (ByteArrayInputStream bis = new ByteArrayInputStream(msg.getPayload());
         ObjectInputStream ois = new ObjectInputStream(bis)) {
       OrderedClientRequest r = (OrderedClientRequest) ois.readObject();
+
+      // Deserialize the payload into an object and cache it, so that it does not have to be
+      // deserialized multiple times (e.g., while determining conflicts between client requests, or
+      // for the command execution)
+      // We are passing in a function that deserializes the command instead of reading the payload
+      // and deserializing it here, so that
+      r.updateDeserializedCommandCache(clientPayloadDeserializer);
+
       // when we receive a new request, we create a new entry in our own sequence
       SequenceNumber newSlot =
           this.replicaAgreementSlots.get(ownReplicaId).createLowestUnusedSequenceNumberEntry(r);
       // then initialize the agreement slot with the thread
       this.initializeEmptyAgreementSlot(newSlot);
 
-    } catch (IOException e) {
-      // FIXME
-      logger.warn("");
-    } catch (ClassNotFoundException e) {
-      // FIXME
-      logger.warn("");
+    } catch (IOException | ClassNotFoundException e) {
+      logger.error(
+          "Error while decoding client request: {}. Throwing client request away", e.getMessage());
     }
   }
 }

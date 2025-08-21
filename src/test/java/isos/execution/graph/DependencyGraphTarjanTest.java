@@ -32,12 +32,19 @@ public class DependencyGraphTarjanTest {
   }
 
   /**
-   * Test data from https://en.wikipedia.org/wiki/File:Tarjan%27s_Algorithm_Animation.gif Node
-   * order:
+   * Test data from https://en.wikipedia.org/wiki/File:Tarjan%27s_Algorithm_Animation.gif. Nodes and
+   * edges:
    *
-   * <p>1 2 3 4
-   *
-   * <p>5 6 7 8
+   * <pre>
+   *   +---+       +---+       +---+ <---- +---+
+   *   | 1 | <---- | 2 | <---- | 3 |       | 4 |
+   *   +---+       +---+       +---+ ----> +---+
+   *     |     ^    ^            ^          ^
+   *     v   /      |            |          |
+   *   +---+       +---+ <---- +---+       +---+ <-+
+   *   | 5 | <---- | 6 |       | 7 | <---- | 8 |   |
+   *   +---+       +---+ ----> +---+       +---+ --+
+   * </pre>
    */
   @Test
   void testTarjansSCCAlgorithm() {

@@ -25,6 +25,9 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import isos.communication.ClientMessageWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -37,8 +40,6 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author Paulo
@@ -219,6 +220,12 @@ public class NettyClientServerCommunicationSystemServerSide
     }
   }
 
+  /**
+   * Is called when a new client request is received.
+   * @param ctx
+   * @param sm
+   * @throws Exception
+   */
   @Override
   protected void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
     if (this.closed) {

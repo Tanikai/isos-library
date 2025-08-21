@@ -4,6 +4,7 @@ import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
+import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.RequestConflictChecker;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
@@ -36,6 +37,7 @@ class AgreementSlotManagerWaitForDepsTest {
             otherReplicaIds,
             mock(RequestConflictChecker.class),
             mock(ExecutableRequestReceiver.class),
+            mock(ClientPayloadDeserializer.class),
             1,
             4);
 

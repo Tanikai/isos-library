@@ -2,6 +2,7 @@ package isos.api;
 
 import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.configuration.ConfigurationManager;
+import isos.communication.ClientMessageWrapper;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
@@ -9,7 +10,9 @@ import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecuteInApplication;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecutionManager;
+import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
+import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
@@ -53,15 +56,19 @@ public class ISOSApplication {
   private final ExecutionManager executionManager;
   private final Thread executionManagerThread;
 
+  private final ClientPayloadDeserializer deserializer;
+
   private final BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
   private BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
 
   public ISOSApplication(
       ConfigurationManager configManager,
+      ClientPayloadDeserializer deserializer,
       BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict,
       ExecuteInApplication executor) {
     this.configManager = configManager;
     this.applicationConflict = applicationConflict;
+    this.deserializer = deserializer;
     this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
 
     // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
@@ -74,6 +81,7 @@ public class ISOSApplication {
             configManager.getStaticConf().getInitialViewAsReplicaId(),
             this::conflicts,
             this::receiveCommittedRequest,
+            deserializer,
             maxFaults,
             replicaCount);
     try {
@@ -167,9 +175,18 @@ public class ISOSApplication {
    *
    * @param r
    */
-  public void receiveCommittedRequest(CommittedCommand r) {
+  private void receiveCommittedRequest(CommittedCommand r) {
     if (!this.executionManager.submitCommittedRequest(r)) {
       logger.error("Could not add committed request to executionManager due to maximum capacity.");
     }
+  }
+
+  public void sendClientReply(OrderedClientRequest originalRequest, OrderedClientReply reply) {
+    // FIXME Kai: There needs to be a system for the replicas to reply to the clients using only the
+    // propagated OrderedClientRequest (by the DepPropose) and
+    // send somehow via ClientsConn? The clientSession and clientSequence have to be returned from somewhere
+
+
+    this.scs.sendToClients(new int[] {originalRequest.clientId()}, new ClientMessageWrapper());
   }
 }

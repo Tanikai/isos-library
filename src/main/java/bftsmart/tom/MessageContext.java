@@ -25,7 +25,7 @@ import java.util.Set;
 
 /**
  * This class represents the whole context of a request ordered in the system.
- * It stores all informations regarding the message sent by the client, as well as
+ * It stores all information regarding the message sent by the client, as well as
  * the consensus instance in which it was ordered.
  * 
  */
