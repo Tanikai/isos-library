@@ -16,11 +16,12 @@ package bftsmart.reconfiguration.util;
 
 import bftsmart.tom.util.KeyLoader;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Arrays;
 import java.util.StringTokenizer;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class TOMConfiguration extends Configuration {
 
@@ -63,7 +64,9 @@ public class TOMConfiguration extends Configuration {
   private boolean sameBatchSize;
   private boolean fairbatch;
   private String bindAddress;
-  private int clientInvokeOrderedTimeout;
+  private int clientInvokeOrderedTimeout; // in seconds
+  private int initialIsosTimeoutDeltaMillis;
+  private int executionWindowSize;
 
   /* Tulio Ribeiro*/
   // private Boolean ssltls=true;
@@ -421,6 +424,20 @@ public class TOMConfiguration extends Configuration {
         clientInvokeOrderedTimeout = Integer.parseInt(s);
       }
 
+      s = (String) configs.remove("system.isos.client.initialIsosTimeoutDeltaMillis");
+      if (s == null) {
+        initialIsosTimeoutDeltaMillis = 1000;
+      } else {
+        initialIsosTimeoutDeltaMillis = Integer.parseInt(s);
+      }
+
+      s = (String) configs.remove("system.isos.client.executionWindowSize");
+      if (s == null) {
+        executionWindowSize = 100;
+      } else {
+        executionWindowSize = Integer.parseInt(s);
+      }
+
     } catch (Exception e) {
       logger.error("Could not parse system configuration file", e);
     }
@@ -621,5 +638,13 @@ public class TOMConfiguration extends Configuration {
 
   public String[] getEnabledCiphers() {
     return enabledCiphers;
+  }
+
+  public int getInitialIsosTimeoutDeltaMillis() {
+    return initialIsosTimeoutDeltaMillis;
+  }
+
+  public int getExecutionWindowSize() {
+    return executionWindowSize;
   }
 }

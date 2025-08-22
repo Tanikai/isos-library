@@ -25,7 +25,6 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
   private final long sequenceNumber;
 
   // Response Handling
-  private final long responseTimeout;
   private final Set<ReplicaId> allowedReplicas;
   private final int quorumSize;
   private final Map<ReplicaId, ClientMessageWrapper> replies;
@@ -35,6 +34,13 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
   private final Comparator<ClientMessageWrapper> replyComparator;
   private final ReplyExtractor<T> replyExtractor;
 
+  /**
+   * Is either completed by {@link #processReply(ClientMessageWrapper)}, or times out after
+   * responseTimeoutSeconds. ProcessReply is called by the thread that receives the message from the
+   * networking stack, and threads waiting for the quorum can await this future in {@link
+   * #waitForResponse()}. Threads that wait for the future include client applications of ISOS that
+   * want to block until the request has a quorum of matching replies.
+   */
   private final CompletableFuture<T> quorumReplyFuture;
 
   public SingleRequestHandler(
@@ -56,7 +62,6 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
     // Response Handling
     this.quorumReplyFuture =
         new CompletableFuture<T>().orTimeout(responseTimeoutSeconds, TimeUnit.SECONDS);
-    this.responseTimeout = responseTimeoutSeconds;
     this.allowedReplicas = new HashSet<>(replicas);
     this.quorumSize = quorumSize;
 

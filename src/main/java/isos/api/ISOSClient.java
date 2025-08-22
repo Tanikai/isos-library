@@ -12,7 +12,7 @@ import isos.communication.client.ReplyExtractor;
 import isos.communication.client.RequestReplyHandler;
 import isos.communication.client.SingleRequestHandler;
 import isos.message.client.ClientReply;
-import isos.message.client.ClientRequest;
+import isos.message.client.OrderedClientRequest;
 import isos.utils.QuorumUtil;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
@@ -34,8 +34,6 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   private final ConfigurationManager configManager;
   private final int ownClientId;
   private final boolean useSignatures; // Should we sign our requests or not?
-
-  private long requestTimeoutSeconds = 40; // 40 seconds
 
   private RequestReplyHandler<ClientReply> currentRequestContext;
 
@@ -111,8 +109,8 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     this.currentRequestContext =
         new SingleRequestHandler<ClientReply>(
             ownClientId,
-            r.clientLocalTimestamp(),
-            this.requestTimeoutSeconds,
+            request.clientLocalTimestamp(),
+            this.configManager.getStaticConf().getClientInvokeOrderedTimeout(), // 40s by default
             this.currentOverallView,
             this.currentQuorumSize,
             comparator,

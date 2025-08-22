@@ -35,8 +35,8 @@ import java.util.stream.Collectors;
 public class ISOSApplication {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
-  // FIXME Kai: Make timeout value configurable
-  private final TimeoutConfiguration timeoutConf = new TimeoutConfiguration(1000);
+  // FIXME Kai: Timeout value should be dynamic, determined by round trip time
+  private final TimeoutConfiguration timeoutConf;
   private final ReplicaId ownReplicaId;
 
   /**
@@ -53,7 +53,7 @@ public class ISOSApplication {
    *   <li>RequestReceiver: Callback for requests from clients.
    * </ul>
    */
-  private ServerCommunicationSystem scs;
+  private final ServerCommunicationSystem scs;
 
   private final ConfigurationManager configManager;
   private final ExecutionManager executionManager;
@@ -62,7 +62,7 @@ public class ISOSApplication {
   private final ClientPayloadDeserializer deserializer;
 
   private final BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
-  private BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
+  private final BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
 
   public ISOSApplication(
       ConfigurationManager configManager,
@@ -70,6 +70,9 @@ public class ISOSApplication {
       BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict,
       ExecuteInApplication executor) {
     this.configManager = configManager;
+    this.timeoutConf =
+        new TimeoutConfiguration(
+            this.configManager.getStaticConf().getInitialIsosTimeoutDeltaMillis());
     this.applicationConflict = applicationConflict;
     this.deserializer = deserializer;
     this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
@@ -91,7 +94,8 @@ public class ISOSApplication {
       this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
       this.scs.setRequestReceiver(this.agrSlotManager);
     } catch (Exception e) {
-      // FIXME Kai: Handle exception (or just remove exception from constructor)
+      throw new RuntimeException(
+          "Could not initialize ServerCommunicationSystem: " + e.getMessage());
     }
     this.agrSlotManager.initialize(scs);
 
@@ -100,8 +104,7 @@ public class ISOSApplication {
 
     this.executionManager =
         new ExecutionManager(
-            50, // TODO Kai: ExecutionWindow should be configurable, and what is a good value for
-            // the window?
+            this.configManager.getStaticConf().getExecutionWindowSize(),
             new TrivialDependencyGraphBuilder(),
             executor);
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
@@ -135,7 +138,7 @@ public class ISOSApplication {
     // Requirement: For the dependency set, the coordinator takes all known requests from both its
     // own and other replicas' agreement slots into account (see paper sec. B).
 
-    // TODO Optimization: Evaluate whether fork/join could be applicable here -> might be good for
+    // Optimization: Evaluate whether fork/join could be applicable here -> might be good for
     // large dependency sets
     // Answer: parallelStream() uses fork/join in background
 
