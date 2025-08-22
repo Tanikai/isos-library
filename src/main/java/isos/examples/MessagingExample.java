@@ -37,13 +37,13 @@ public class MessagingExample extends Thread {
     new MessagingExample(Integer.parseInt(args[0]), "", null).start();
   }
 
-  private int replicaId;
+  private final int replicaId;
   private final ConfigurationManager configManager;
-  private final ClientPayloadDeserializer deserializer;
+  private final ClientPayloadDeserializer<String> deserializer;
   private final BiPredicate<OrderedClientRequest, OrderedClientRequest> conflictChecker;
   private final ExecuteInApplication appExecutor;
 
-  private ISOSApplication app;
+  private final ISOSApplication app;
 
   public MessagingExample(int replicaId, String configHome, KeyLoader loader) {
     super(String.format("ReplicaId %d", replicaId));
@@ -92,8 +92,8 @@ public class MessagingExample extends Thread {
   class ClientRequestHandler implements RequestReceiver {
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    private int ownReplicaId;
-    private ServerCommunicationSystem scs;
+    private final int ownReplicaId;
+    private final ServerCommunicationSystem scs;
 
     public ClientRequestHandler(int ownReplicaId, ServerCommunicationSystem scs) {
       this.ownReplicaId = ownReplicaId;

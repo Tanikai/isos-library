@@ -3,11 +3,11 @@ package isos.examples;
 import isos.api.ISOSClient;
 import isos.communication.client.QuorumNotReachedException;
 import isos.message.client.OrderedClientReply;
-import isos.message.client.OrderedClientRequest;
-import java.io.*;
-import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.concurrent.TimeoutException;
 
 public class MessagingExampleClient {
   private static final Logger logger = LoggerFactory.getLogger("MessagingExampleClient");
@@ -19,9 +19,8 @@ public class MessagingExampleClient {
       logger.info("Try sending message");
 
       byte[] msg = ("Hello from client!").getBytes();
-      var r = new OrderedClientRequest(processId, msg, 123);
       try {
-        var response = (OrderedClientReply) client.sendRequest(r);
+        var response = (OrderedClientReply) client.sendRequest(msg);
         logger.info("Received response: {}", new String(response.response()));
       } catch (TimeoutException e) {
         logger.error("Timeout reached for request");

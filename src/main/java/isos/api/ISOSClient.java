@@ -40,6 +40,7 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   private int currentF;
   private int currentQuorumSize;
 
+  // TODO Kai: ISOS does not really support hotswapping replicas
   private List<ReplicaId> currentOverallView;
 
   public ISOSClient(int processId) {
@@ -83,11 +84,15 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
    * <p>Uses the clientLocalTimestamp of the client request for assigning the responses from
    * replicas to this request.
    *
-   * @param r Request that is sent as the payload.
-   * @return The reply that is confirmed by a quourm of
+   * @param requestPayload Payload that is sent to the replica
+   * @return The reply that is confirmed by a quorum of responses
    */
-  public ClientReply sendRequest(ClientRequest r)
+  public ClientReply sendRequest(byte[] requestPayload)
       throws IOException, TimeoutException, QuorumNotReachedException {
+
+    long clientLocalTimestamp = System.nanoTime(); // monotonic clock
+    var request = new OrderedClientRequest(this.ownClientId, requestPayload, clientLocalTimestamp);
+
     Comparator<ClientMessageWrapper> comparator =
         (o1, o2) -> Arrays.equals(o1.getPayload(), o2.getPayload()) ? 0 : -1;
     ReplyExtractor<ClientReply> extractor =
@@ -120,7 +125,7 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     // create request payload with application-specific data
     try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
         ObjectOutputStream out = new ObjectOutputStream(bos)) {
-      out.writeObject(r);
+      out.writeObject(request);
       out.flush();
       payload = bos.toByteArray();
     } catch (IOException e) {
@@ -130,10 +135,11 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     }
 
     // create request wrapper containing metadata
-    ClientMessageWrapper request = this.currentRequestContext.createRequest(payload);
+    ClientMessageWrapper requestWrapper = this.currentRequestContext.createRequest(payload);
 
     // multicast request
-    this.ccs.send(this.useSignatures, this.currentOverallView, request, this.currentQuorumSize);
+    this.ccs.send(
+        this.useSignatures, this.currentOverallView, requestWrapper, this.currentQuorumSize);
 
     // wait for future
     var replyFuture = this.currentRequestContext.getResponse();

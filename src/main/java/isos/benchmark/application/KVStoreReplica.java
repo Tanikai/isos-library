@@ -29,7 +29,7 @@ public class KVStoreReplica {
 
   public static void main(String[] args) {
     if (args.length < 1) {
-      System.out.println("Use: java MessagingExample <processId>");
+      System.out.println("Use: java KVStoreReplica <processId>");
       System.exit(-1);
     }
     new KVStoreReplica(Integer.parseInt(args[0]), "", null).start();
