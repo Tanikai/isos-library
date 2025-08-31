@@ -1,12 +1,20 @@
 package isos.execution.graph;
 
+import isos.consensus.model.AgreementSlot;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
+import isos.message.client.OrderedClientRequest;
 
+import java.util.Collection;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
-/** */
+/**
+ * The DependencyGraphBuilder interface is used to build a dependency graph from committed and
+ * executed agreement slots, in order to determine the execution order of requests. For the
+ * dependency graph builder that is used to get the direct dependencies of a request (required to
+ * determine the compact dependency set), see {@link isos.consensus.dependency.ConflictChecker}.
+ */
 public interface DependencyGraphBuilder {
   /**
    * ISOS Paper Page 15: They return a graph consisting of slots and edges v1 → v2 between slots in

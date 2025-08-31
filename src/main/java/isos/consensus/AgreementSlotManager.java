@@ -5,26 +5,25 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
 import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
+import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.AgreementSlot;
 import isos.consensus.model.AgreementSlotSequence;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.ClientPayloadDeserializer;
-import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.utils.ReplicaId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class maintains an AgreementSlotSequence for each replica.
@@ -61,7 +60,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    * Callback to get the conflicts of a given request. Has to be definable by the application
    * developer, so we use a callback function
    */
-  private final RequestConflictChecker conflictChecker;
+  private final ConflictChecker conflictChecker;
 
   private final int maxFaults;
   private final int replicaCount;
@@ -76,7 +75,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       ReplicaId ownReplicaId,
       TimeoutConfiguration timeoutConfig,
       ReplicaId[] replicaIds,
-      RequestConflictChecker conflictChecker,
+      ConflictChecker conflictChecker,
       ExecutableRequestReceiver executableRequestReceiver,
       ClientPayloadDeserializer clientPayloadDeserializer,
       int maxFaults,

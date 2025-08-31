@@ -2,14 +2,14 @@ package isos.consensus;
 
 import isos.communication.MessageSender;
 import isos.consensus.buffer.ISOSMessageBuffer;
+import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
 import isos.consensus.model.viewchange.CertificateType;
 import isos.consensus.model.viewchange.DepProposeAndDepVerifys;
 import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.consensus.model.viewchange.ReconciliationPathCertificate;
-import isos.execution.ExecutableRequestReceiver;
 import isos.execution.CommittedCommand;
-import isos.execution.graph.RequestConflictChecker;
+import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
@@ -27,17 +27,16 @@ import isos.message.replica.viewchange.QueryExecMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * This class handles incoming messages and delegates them to subtasks, depending on the current
- * state. In other words, it contains and executes the (core) business logic of ISOS. Additionally,
- * it handles timeouts and their logic if they expire.
+ * The AgreementSlotQueueProcessor handles incoming messages and delegates them to subtasks,
+ * depending on the current state. In other words, it contains and executes the (core) business
+ * logic of ISOS. Additionally, it handles timeouts and their logic if they expire.
  */
 public class AgmtSlotQueueProcessor implements Runnable {
   private final Logger logger;
@@ -85,7 +84,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    *
    * <p>Passed from the outside due to access to other agreement slots.
    */
-  private final RequestConflictChecker conflictChecker;
+  private final ConflictChecker conflictChecker;
 
   /** Passed from the outside due to access to other agreement slots. */
   private final DependencyWaitFunction dependencyWait;
@@ -106,7 +105,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       TimeoutConfiguration timeoutConfig,
       MessageSender msgSender,
       AgreementSlot slot,
-      RequestConflictChecker conflictChecker,
+      ConflictChecker conflictChecker,
       DependencyWaitFunction dependencyWait,
       ExecutableRequestReceiver requestExecutor,
       int maxFaults,
@@ -232,7 +231,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     assert Objects.equals(this.ownReplicaId, this.seqNum.replicaIdRec());
     var r = slot.getRequest();
 
-    DependencySet depSet = this.conflictChecker.conflicts(r);
+    DependencySet depSet = this.conflictChecker.getCompactDependencySet(r);
     Set<ReplicaId> followerSet = msgSender.getLowestPingReplicas(2 * this.maxFaults);
     DepProposeMessage propose =
         new DepProposeMessage(seqNum, ownReplicaId, r.calculateHash(), depSet, followerSet);
@@ -242,6 +241,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     this.slot.setDepPropose(propose);
     this.slot.setRequest(r);
+    this.conflictChecker.addClientRequest(this.seqNum, r);
     this.slot.setStep(AgreementSlotPhase.PROPOSED);
     // we have changed the messages in the slot, so signal all waiting threads
 
@@ -465,8 +465,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Line 29
     if (request != null) {
-      var dependencies = this.conflictChecker.conflicts(request);
+      var dependencies = this.conflictChecker.getCompactDependencySet(request);
       this.slot.setRequest(request);
+      this.conflictChecker.addClientRequest(this.seqNum, request);
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // if we are in the Follower quorum, send a DepPropose message
       if (depPropose.followerQuorum().contains(this.ownReplicaId)) {
@@ -477,6 +478,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
         var wrapper = new ISOSMessageWrapper(depVerify, this.ownReplicaId.value());
         this.msgSender.broadcastToReplicas(true, wrapper);
       }
+    } else {
+      logger.error("Received DepPropose message without request! Is this valid?");
     }
   }
 
@@ -593,6 +596,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var executeMsg =
         new CommittedCommand(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
+    this.conflictChecker.updateCommitedRequest(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
 
@@ -713,6 +717,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var executeMsg =
         new CommittedCommand(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
+    this.conflictChecker.updateCommitedRequest(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
 
@@ -1050,6 +1055,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     this.slot.setDepPropose(dp.depPropose());
     this.slot.setRequest(dp.request());
+    this.conflictChecker.overwriteClientRequest(this.seqNum, dp.request());
     // Line 129: Cleanup DepVerifys
     this.slot.replaceDepVerifys(vecDv);
 
@@ -1100,6 +1106,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // We have reached quorum
     var executeMsg = new CommittedCommand(this.seqNum, exec.clientRequest(), exec.dependencySet());
     this.slot.setExec(executeMsg);
+    this.conflictChecker.updateCommitedRequest(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
   }
 

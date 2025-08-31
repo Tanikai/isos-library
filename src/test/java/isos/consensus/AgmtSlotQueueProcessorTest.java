@@ -1,10 +1,15 @@
 package isos.consensus;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
 import isos.communication.MessageSender;
+import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
-import isos.execution.ExecutableRequestReceiver;
 import isos.execution.CommittedCommand;
-import isos.execution.graph.RequestConflictChecker;
+import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
@@ -16,21 +21,15 @@ import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class AgmtSlotQueueProcessorTest {
 
@@ -66,8 +65,9 @@ class AgmtSlotQueueProcessorTest {
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
     var clientRequestHash = clientRequest.calculateHash();
 
-    RequestConflictChecker conflictChecker =
-        (r) -> new DependencySet(new SequenceNumber(ownReplicaId, 0));
+    ConflictChecker conflictChecker = mock(ConflictChecker.class);
+    when(conflictChecker.getCompactDependencySet(any()))
+        .thenReturn(new DependencySet(new SequenceNumber(ownReplicaId, 0)));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
     // coordinator
@@ -173,10 +173,11 @@ class AgmtSlotQueueProcessorTest {
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
     var clientRequestHash = clientRequest.calculateHash();
 
-    RequestConflictChecker conflictChecker =
-        (r) ->
+    ConflictChecker conflictChecker = mock(ConflictChecker.class);
+    when(conflictChecker.getCompactDependencySet(any()))
+        .thenReturn(
             new DependencySet(
-                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0));
+                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
     // coordinator
@@ -317,8 +318,10 @@ class AgmtSlotQueueProcessorTest {
     var depProposeHash = depPropose.calculateHash();
     var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
 
-    RequestConflictChecker conflictChecker =
-        (r) -> new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
+    ConflictChecker conflictChecker = mock(ConflictChecker.class);
+    when(conflictChecker.getCompactDependencySet(any()))
+        .thenReturn(new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
+
     // We have 1 dependencySet with 0.0 and 2 with 0.0+1.0
 
     var slot = new AgreementSlot(seqNum);
@@ -414,8 +417,9 @@ class AgmtSlotQueueProcessorTest {
     var depProposeHash = depPropose.calculateHash();
     var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
 
-    RequestConflictChecker conflictChecker =
-        (r) -> new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
+    ConflictChecker conflictChecker = mock(ConflictChecker.class);
+    when(conflictChecker.getCompactDependencySet(any()))
+        .thenReturn(new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
 
     var slot = new AgreementSlot(seqNum);
     var queueProcessor =

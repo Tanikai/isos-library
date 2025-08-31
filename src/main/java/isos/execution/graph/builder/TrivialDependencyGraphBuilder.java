@@ -5,12 +5,14 @@ import isos.consensus.model.SequenceNumber;
 import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import isos.message.client.OrderedClientRequest;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiPredicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This dependency graph builder is based on the pseudocode of the ISOS paper. The pseudocode is
@@ -19,7 +21,11 @@ import java.util.concurrent.ConcurrentMap;
 public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  public TrivialDependencyGraphBuilder() {}
+  private final ReentrantLock conflictsLock;
+
+  public TrivialDependencyGraphBuilder(BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict,  BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict) {
+    this.conflictsLock = new ReentrantLock();
+  }
 
   /**
    * Pseudocode line 153-162

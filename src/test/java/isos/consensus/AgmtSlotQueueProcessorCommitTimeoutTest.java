@@ -1,22 +1,21 @@
 package isos.consensus;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
+
 import isos.communication.MessageSender;
+import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
-import isos.execution.graph.RequestConflictChecker;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
-import org.junit.jupiter.api.Test;
-
 import java.util.HashSet;
 import java.util.concurrent.LinkedBlockingDeque;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.Test;
 
 class AgmtSlotQueueProcessorCommitTimeoutTest {
 
@@ -40,7 +39,8 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
     MessageSender msgSender = mock(MessageSender.class);
 
     // Just returns empty conflicts
-    RequestConflictChecker conflictChecker = (ClientRequest) -> new DependencySet();
+    ConflictChecker conflictChecker = mock(ConflictChecker.class);
+    when(conflictChecker.getCompactDependencySet(any())).thenReturn(new DependencySet());
 
     DependencyWaitFunction dependencyWait = mock(DependencyWaitFunction.class);
     doNothing().when(dependencyWait).waitUntilConsensusStarted(any());

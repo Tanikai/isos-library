@@ -4,28 +4,24 @@ import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.configuration.ConfigurationManager;
 import isos.communication.ClientMessageWrapper;
 import isos.consensus.AgreementSlotManager;
-import isos.consensus.model.DependencySet;
+import isos.consensus.dependency.ConflictChecker;
+import isos.consensus.dependency.TrivialConflictChecker;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
-import isos.execution.ExecuteInApplication;
 import isos.execution.CommittedCommand;
+import isos.execution.ExecuteInApplication;
 import isos.execution.ExecutionManager;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.util.Collection;
-import java.util.Objects;
-import java.util.Set;
 import java.util.function.BiPredicate;
-import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * DECISION Kai: Maybe interface instead of class? This class is used as the central manager of the
@@ -56,6 +52,8 @@ public class ISOSApplication {
   private final ServerCommunicationSystem scs;
 
   private final ConfigurationManager configManager;
+  private final TrivialDependencyGraphBuilder dependencyGraphBuilder;
+  private final ConflictChecker conflictChecker;
   private final ExecutionManager executionManager;
   private final Thread executionManagerThread;
 
@@ -73,9 +71,15 @@ public class ISOSApplication {
     this.timeoutConf =
         new TimeoutConfiguration(
             this.configManager.getStaticConf().getInitialIsosTimeoutDeltaMillis());
-    this.applicationConflict = applicationConflict;
     this.deserializer = deserializer;
     this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
+
+    // Conflicts
+    this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
+    this.applicationConflict = applicationConflict;
+    this.dependencyGraphBuilder =
+        new TrivialDependencyGraphBuilder(defaultConflict, applicationConflict);
+    this.conflictChecker = new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
 
     // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
     var maxFaults = configManager.getStaticConf().getF();
@@ -85,7 +89,7 @@ public class ISOSApplication {
             ownReplicaId,
             timeoutConf,
             configManager.getStaticConf().getInitialViewAsReplicaId(),
-            this::conflicts,
+            this.conflictChecker,
             this::receiveCommittedRequest,
             deserializer,
             maxFaults,
@@ -100,12 +104,10 @@ public class ISOSApplication {
     this.agrSlotManager.initialize(scs);
 
     // Request Execution
-    this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
-
     this.executionManager =
         new ExecutionManager(
             this.configManager.getStaticConf().getExecutionWindowSize(),
-            new TrivialDependencyGraphBuilder(),
+            this.dependencyGraphBuilder,
             executor);
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
   }
@@ -121,59 +123,6 @@ public class ISOSApplication {
     return this.scs;
   }
 
-  /**
-   * Requirement: The coordinator [...] computes the dependency set [...] with request r. Method:
-   * Iterate over all requests with r, check with predicate `conflict(a, b)`, add SequenceNumber to
-   * dependency set if true
-   *
-   * <p>Pseudocode line 66, 67
-   *
-   * <p>Trivial Implementation
-   *
-   * <p>This function is in the hot path, so performance is critical here.
-   *
-   * @return All agreement slots that have a DepPropose message (i.e. non-null)
-   */
-  private DependencySet conflicts(OrderedClientRequest r) {
-    // Requirement: For the dependency set, the coordinator takes all known requests from both its
-    // own and other replicas' agreement slots into account (see paper sec. B).
-
-    // Optimization: Evaluate whether fork/join could be applicable here -> might be good for
-    // large dependency sets
-    // Answer: parallelStream() uses fork/join in background
-
-    Set<SequenceNumber> result =
-        agrSlotManager
-            .getUsedAgreementSlots()
-            // value is List<AgreementSlot>
-            .values()
-            // allow for parallelStream() as well, as dependencies can be calculated independently
-            .parallelStream()
-            // turn the Stream<List<AgreementSlot>> into Stream<AgreementSlot>
-            .flatMap(Collection::stream)
-            // if they conflict, return the sequence number, else return null for "no conflict"
-            .map(
-                slot -> {
-                  if (this.defaultConflict
-                      .or(this.applicationConflict)
-                      .test(r, slot.getRequest())) {
-                    return slot.getSeqNum();
-                  } else {
-                    return null;
-                  }
-                })
-            .filter(Objects::nonNull) // filter out the "no conflict"s
-            .collect(Collectors.toSet());
-
-    // Requirement: To limit the size of the set, the coordinator for each replica only includes
-    // the **sequence number** of the latest conflicting request.
-
-    // TODO: How can I get the sequence number of only the last conflicting request?
-    // Approach 1: Get all conflicts, then filter out the redundant conflicts
-    // Approach 2:
-
-    return new DependencySet(result);
-  }
 
   /**
    * Receive a committed request from the {@link AgreementSlotManager} that can be executed by the

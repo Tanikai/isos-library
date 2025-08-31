@@ -1,24 +1,23 @@
 package isos.consensus;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+
+import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.ClientPayloadDeserializer;
-import isos.execution.graph.RequestConflictChecker;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
-import org.junit.jupiter.api.Test;
-
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
+import org.junit.jupiter.api.Test;
 
 class AgreementSlotManagerWaitForDepsTest {
 
@@ -35,7 +34,7 @@ class AgreementSlotManagerWaitForDepsTest {
             ownReplicaId,
             timeoutConfig,
             otherReplicaIds,
-            mock(RequestConflictChecker.class),
+            mock(ConflictChecker.class),
             mock(ExecutableRequestReceiver.class),
             mock(ClientPayloadDeserializer.class),
             1,
