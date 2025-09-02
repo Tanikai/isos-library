@@ -66,7 +66,7 @@ class AgmtSlotQueueProcessorTest {
     var clientRequestHash = clientRequest.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
-    when(conflictChecker.getCompactDependencySet(any()))
+    when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(new SequenceNumber(ownReplicaId, 0)));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
@@ -174,7 +174,7 @@ class AgmtSlotQueueProcessorTest {
     var clientRequestHash = clientRequest.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
-    when(conflictChecker.getCompactDependencySet(any()))
+    when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(
             new DependencySet(
                 new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)));
@@ -319,7 +319,7 @@ class AgmtSlotQueueProcessorTest {
     var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
-    when(conflictChecker.getCompactDependencySet(any()))
+    when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
 
     // We have 1 dependencySet with 0.0 and 2 with 0.0+1.0
@@ -418,7 +418,7 @@ class AgmtSlotQueueProcessorTest {
     var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
-    when(conflictChecker.getCompactDependencySet(any()))
+    when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
 
     var slot = new AgreementSlot(seqNum);

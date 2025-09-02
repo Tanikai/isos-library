@@ -115,13 +115,13 @@ public class ExecutionManager implements Runnable {
           // We have a v where all dependencies are committed
 
           // Now: Find not yet executed SCCs in rdeps(v) in inverse topological order
-          List<List<SequenceNumber>> SCCs =
-              DependencyGraph.TarjanStronglyConnectedComponents(depGraph);
+          List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
 
-          for (List<SequenceNumber> scc : SCCs) {
+          for (Set<SequenceNumber> scc : SCCs) {
             // Line 178: Normal case execution
             // Because the Dependency Graph can contain slots that are already executed, we have to
             // filter out the already executed ones
+            // Ordering of vertices in the SCC for request execution is done in the execute function
             this.execute(scc.stream().filter(element -> !this.executed.contains(element)).toList());
             didExecuteAgreementSlots = true;
           }
@@ -155,8 +155,7 @@ public class ExecutionManager implements Runnable {
           }
           // We have a v where all dependencies are committed
 
-          List<List<SequenceNumber>> SCCs =
-              DependencyGraph.TarjanStronglyConnectedComponents(depGraph);
+          List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
 
           try {
             // Line 186

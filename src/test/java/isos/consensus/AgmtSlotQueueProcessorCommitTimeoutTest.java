@@ -1,8 +1,5 @@
 package isos.consensus;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
-
 import isos.communication.MessageSender;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
@@ -13,9 +10,13 @@ import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashSet;
 import java.util.concurrent.LinkedBlockingDeque;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
 
 class AgmtSlotQueueProcessorCommitTimeoutTest {
 
@@ -40,7 +41,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
 
     // Just returns empty conflicts
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
-    when(conflictChecker.getCompactDependencySet(any())).thenReturn(new DependencySet());
+    when(conflictChecker.getCompactDependencySet(any(), any())).thenReturn(new DependencySet());
 
     DependencyWaitFunction dependencyWait = mock(DependencyWaitFunction.class);
     doNothing().when(dependencyWait).waitUntilConsensusStarted(any());

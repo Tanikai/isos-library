@@ -66,7 +66,7 @@ public class DependencyGraphTarjanTest {
     edges.add(createEdge(0, 8, 8));
 
     DependencyGraph depGraph = new DependencyGraph(nodes, edges);
-    var SCCs = DependencyGraph.TarjanStronglyConnectedComponents(depGraph);
+    var SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
 
     assertEquals(4, SCCs.size());
     assertEquals(Set.copyOf(sequenceNumbersOf(0, List.of(1, 2, 5))), Set.copyOf(SCCs.get(0)));

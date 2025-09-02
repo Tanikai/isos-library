@@ -27,11 +27,12 @@ import isos.message.replica.viewchange.QueryExecMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The AgreementSlotQueueProcessor handles incoming messages and delegates them to subtasks,
@@ -231,7 +232,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     assert Objects.equals(this.ownReplicaId, this.seqNum.replicaIdRec());
     var r = slot.getRequest();
 
-    DependencySet depSet = this.conflictChecker.getCompactDependencySet(r);
+    DependencySet depSet = this.conflictChecker.getCompactDependencySet(this.seqNum, r);
     Set<ReplicaId> followerSet = msgSender.getLowestPingReplicas(2 * this.maxFaults);
     DepProposeMessage propose =
         new DepProposeMessage(seqNum, ownReplicaId, r.calculateHash(), depSet, followerSet);
@@ -241,7 +242,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     this.slot.setDepPropose(propose);
     this.slot.setRequest(r);
-    this.conflictChecker.addClientRequest(this.seqNum, r);
+    this.conflictChecker.addClientRequest(this.seqNum, r, depSet);
     this.slot.setStep(AgreementSlotPhase.PROPOSED);
     // we have changed the messages in the slot, so signal all waiting threads
 
@@ -465,15 +466,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Line 29
     if (request != null) {
-      var dependencies = this.conflictChecker.getCompactDependencySet(request);
+      var depSet = this.conflictChecker.getCompactDependencySet(this.seqNum, request);
       this.slot.setRequest(request);
-      this.conflictChecker.addClientRequest(this.seqNum, request);
+      this.conflictChecker.addClientRequest(this.seqNum, request, depSet);
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // if we are in the Follower quorum, send a DepPropose message
       if (depPropose.followerQuorum().contains(this.ownReplicaId)) {
         var depVerify =
             new DepVerifyMessage(
-                this.slot.getSeqNum(), this.ownReplicaId, depPropose.calculateHash(), dependencies);
+                this.slot.getSeqNum(), this.ownReplicaId, depPropose.calculateHash(), depSet);
 
         var wrapper = new ISOSMessageWrapper(depVerify, this.ownReplicaId.value());
         this.msgSender.broadcastToReplicas(true, wrapper);

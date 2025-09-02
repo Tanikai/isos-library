@@ -16,12 +16,17 @@ public interface ConflictChecker {
    *
    * @param slot
    * @param r
+   * @param deps Dependencies that were calculated with {@link
+   *     #getCompactDependencySet(OrderedClientRequest)}
    */
-  void addClientRequest(SequenceNumber slot, OrderedClientRequest r);
+  void addClientRequest(SequenceNumber slot, OrderedClientRequest r, DependencySet deps);
 
   /**
-   * Required during a view change, when a request is overwritten by another request (or the same
-   * one) in the same agreement slot.
+   * Required during a view change, when a NewView message is received and a request is overwritten
+   * by another request (or the same one) in the same agreement slot.
+   *
+   * <p>The dependencies are updated with {@link #updateCommitedRequest(CommittedCommand)} when the
+   * request is committed after the view change(s).
    *
    * @param slot
    * @param r
@@ -49,7 +54,10 @@ public interface ConflictChecker {
    * <p>This function has to be thread-safe, as it can be called by multiple
    * AgreementSlotQueueProcessors.
    *
+   * <p>When SequenceNumber seqNum and OrderedClientRequest r is passed, it is not persisted in the
+   * ConflictChecker.
+   *
    * @return
    */
-  DependencySet getCompactDependencySet(OrderedClientRequest r);
+  DependencySet getCompactDependencySet(SequenceNumber seqNum, OrderedClientRequest r);
 }
