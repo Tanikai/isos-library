@@ -145,7 +145,7 @@ public class TrivialConflictChecker implements ConflictChecker {
       Map<SequenceNumber, Set<SequenceNumber>> originalGraph,
       SequenceNumber newVertex,
       Set<SequenceNumber> candidateDeps) {
-
+    // Create a copy of the original graph and add the new vertex + outgoing edges
     Map<SequenceNumber, Set<SequenceNumber>> graph = new HashMap<>(originalGraph);
     graph.put(newVertex, candidateDeps);
     Set<SequenceNumber> vertices = graph.keySet();
@@ -160,7 +160,7 @@ public class TrivialConflictChecker implements ConflictChecker {
 
     // After we get the SCCs, we can build a DAG out of the super-vertices, containing multiple
     // SequenceNumbers.
-    Map<SequenceNumber, Integer> sccLookup = DependencyGraph.buildSccLookup(graph, SCCs);
+    Map<SequenceNumber, Integer> sccLookup = DependencyGraph.buildSccLookup(SCCs);
     Integer newVertexSccId = sccLookup.get(newVertex);
 
     Map<Integer, Set<Integer>> sccDag = DependencyGraph.buildSccDAG(graph, sccLookup, SCCs);
@@ -206,16 +206,33 @@ public class TrivialConflictChecker implements ConflictChecker {
   }
 
   /**
-   * DFS approach for reachability
+   * DFS approach for reachability.
+   *
+   * <p>If no from->to edge exists, it is a standard reachability test.
    *
    * @param sccDAG
-   * @param from
-   * @param to
+   * @param from The SCC ID
+   * @param to The SCC ID
    * @return
    */
   public static boolean isSccReachableWithout(Map<Integer, Set<Integer>> sccDAG, int from, int to) {
-    if (!sccDAG.containsKey(from) || !sccDAG.containsKey(to) || !sccDAG.get(from).contains(to)) {
+    if (!sccDAG.containsKey(from)) {
+      throw new IllegalArgumentException(String.format("Source SCC ID %d does not exist!", from));
+    }
+
+    if (!sccDAG.containsKey(to)) {
+      throw new IllegalArgumentException(
+          String.format("Destination SCC ID %d does not exist!", to));
+    }
+
+    if (from == to) {
+      // if the from and to SequenceNumbers are in the same SCC, do not remove the edge
       return false;
+    }
+
+    if (!sccDAG.get(from).contains(to)) {
+      throw new IllegalArgumentException(
+          String.format("Direct edge between SCCs %d-->%d does not exist!", from, to));
     }
 
     Set<Integer> visited = new HashSet<>();

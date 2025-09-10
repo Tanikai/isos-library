@@ -70,11 +70,29 @@ public record DependencyGraph(Set<SequenceNumber> slots, Set<Dependency> edges) 
     return result;
   }
 
+  public static Map<SequenceNumber, Set<SequenceNumber>> toAdjacencyList(DependencyGraph graph)
+      throws MissingSourceVertexException {
+    Map<SequenceNumber, Set<SequenceNumber>> result = new HashMap<>();
+    for (var slot : graph.slots()) {
+      result.put(slot, new HashSet<>());
+    }
+
+    for (var edge : graph.edges()) {
+      if (!result.containsKey(edge.from())) {
+        throw new MissingSourceVertexException(edge);
+      }
+      result.get(edge.from()).add(edge.to());
+    }
+
+    return result;
+  }
+
   /**
    * Builds a DAG with super-vertices
    *
    * @param graph
-   * @param scc
+   * @param sccLookup
+   * @param SCCs
    * @return
    */
   public static Map<Integer, Set<Integer>> buildSccDAG(
@@ -104,12 +122,10 @@ public record DependencyGraph(Set<SequenceNumber> slots, Set<Dependency> edges) 
   /**
    * Builds a SequenceNumber -> SCC ID (Integer) mapping.
    *
-   * @param graph
    * @param SCCs
    * @return
    */
-  public static Map<SequenceNumber, Integer> buildSccLookup(
-      Map<SequenceNumber, Set<SequenceNumber>> graph, List<Set<SequenceNumber>> SCCs) {
+  public static Map<SequenceNumber, Integer> buildSccLookup(List<Set<SequenceNumber>> SCCs) {
     Map<SequenceNumber, Integer> sccLookup = new HashMap<>();
     for (int i = 0; i < SCCs.size(); i++) {
       var scc = SCCs.get(i);
