@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class TrivialConflictCheckerTest {
   public static List<SequenceNumber> generateSequenceNumbers(ReplicaId replicaId, int count) {
@@ -73,9 +72,30 @@ class TrivialConflictCheckerTest {
   @Test
   void TestRemoveRedundantDependencies() {
     Map<SequenceNumber, Set<SequenceNumber>> graph = new HashMap<>();
-    SequenceNumber newVertex = new SequenceNumber(1, 3);
 
-    //    TrivialConflictChecker.removeRedundantDependencies();
+    SequenceNumber v0 = new SequenceNumber(0, 0); // Client 1, K1
+    SequenceNumber v1 = new SequenceNumber(0, 1); // Client 1, K2
+    SequenceNumber v2 = new SequenceNumber(0, 2); // Client 1, K1
+    SequenceNumber v3 = new SequenceNumber(0, 3); // Client 2, K2
+    SequenceNumber v4 = new SequenceNumber(0, 4); // Client 2, K1
+    SequenceNumber v5 = new SequenceNumber(0, 5); // Client 2, K2
+
+    graph.put(v0, Set.of());
+    graph.put(v1, Set.of(v0));
+    graph.put(v2, Set.of(v1));
+    graph.put(v3, Set.of(v1));
+    graph.put(v4, Set.of(v2, v3)); // accesses K1, and is from Client 2 -> both required
+
+    // Node 5 is new command, and accesses K2 -> all K2 commands, and all Client 2 commands in
+    // complete set
+    Set<SequenceNumber> completeDependencySet = Set.of(v1, v3, v4);
+    Set<SequenceNumber> expectedCompactDepSet =
+        Set.of(v4); // v4 (the latest Client 2 command) is the only direct dependency
+
+    Set<SequenceNumber> actualCompactDepSet =
+        TrivialConflictChecker.removeRedundantDependencies(graph, v5, completeDependencySet);
+
+    assertEquals(expectedCompactDepSet, actualCompactDepSet);
   }
 
   /**
