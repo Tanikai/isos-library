@@ -1,4 +1,4 @@
-package isos.benchmark.application.model;
+package isos.benchmark.kvstore.model;
 
 import java.io.Serializable;
 

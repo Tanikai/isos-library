@@ -1,10 +1,10 @@
-package isos.benchmark.application;
+package isos.benchmark.kvstore;
 
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.KeyLoader;
 import isos.api.ISOSApplication;
-import isos.benchmark.application.model.KVCommand;
-import isos.benchmark.application.model.KVCommandType;
+import isos.benchmark.kvstore.model.KVMessage;
+import isos.benchmark.kvstore.model.KVCommandType;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import org.slf4j.Logger;
@@ -13,26 +13,30 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.Serializable;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 /**
  * Server-side application for a simple KV-Store with GET and PUT operations, coordinated via ISOS.
  */
-public class KVStoreReplica {
+public class KVStoreReplica<K extends Serializable, V extends Serializable> {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private final ConfigurationManager configManager;
   private final ISOSApplication app;
 
-  private final Map<String, String> kvState;
+  private final Map<K, V> kvState;
 
   public static void main(String[] args) {
     if (args.length < 1) {
-      System.out.println("Use: java KVStoreReplica <processId>");
+      System.out.println("Use: java isos.benchmark.kvstore.KVStoreReplica <processId>");
       System.exit(-1);
     }
-    new KVStoreReplica(Integer.parseInt(args[0]), "", null).start();
+
+    var replica = new KVStoreReplica<String, String>(Integer.parseInt(args[0]), "", null);
+    replica.start();
   }
 
   public KVStoreReplica(int replicaId, String configHome, KeyLoader loader) {
@@ -56,12 +60,12 @@ public class KVStoreReplica {
    * @throws IOException
    * @throws ClassNotFoundException
    */
-  private KVCommand deserializeCommand(byte[] commandBytes)
+  @SuppressWarnings("unchecked")
+  private KVMessage<K, V> deserializeCommand(byte[] commandBytes)
       throws IOException, ClassNotFoundException {
     try (ByteArrayInputStream bis = new ByteArrayInputStream(commandBytes);
         ObjectInputStream ois = new ObjectInputStream(bis)) {
-
-      return (KVCommand) ois.readObject();
+      return (KVMessage<K, V>) ois.readObject();
     }
   }
 
@@ -73,8 +77,10 @@ public class KVStoreReplica {
    * @return
    */
   private boolean doesCommandConflict(OrderedClientRequest r1, OrderedClientRequest r2) {
-    KVCommand cmd1 = r1.getDeserializedCommandCache();
-    KVCommand cmd2 = r2.getDeserializedCommandCache();
+    KVMessage<K, V> cmd1 = r1.getDeserializedCommandCache();
+    KVMessage<K, V> cmd2 = r2.getDeserializedCommandCache();
+
+    // TODO Kai: conflict rules for keySet, size? Do they conflict with all requests?
 
     // If two commands access different keys, they do not conflict
     if (!cmd1.key().equals(cmd2.key())) {
@@ -96,29 +102,46 @@ public class KVStoreReplica {
   }
 
   /**
-   *
    * @param r
    */
   private void executeClientRequest(OrderedClientRequest r) {
-    KVCommand cmd = r.getDeserializedCommandCache();
+    KVMessage<K, V> cmd = r.getDeserializedCommandCache();
 
     OrderedClientReply response;
+    try {
+      switch (cmd.commandType()) {
+        case GET -> {
+          KVMessage<K, V> payload =
+              new KVMessage<>(
+                  KVCommandType.GET, cmd.key(), this.kvState.getOrDefault(cmd.key(), null));
+          response = new OrderedClientReply(KVMessage.toBytes(payload));
+        }
+        case PUT -> {
+          this.kvState.put(cmd.key(), cmd.data());
 
-    switch (cmd.commandType()) {
-      case GET -> {
-        var data = this.kvState.getOrDefault(cmd.key(), "");
-        response = new OrderedClientReply(data.getBytes());
+          KVMessage<K, V> payload =
+              new KVMessage<>(
+                  KVCommandType.GET, cmd.key(), this.kvState.getOrDefault(cmd.key(), null));
+          response = new OrderedClientReply(KVMessage.toBytes(payload));
+        }
+        case GET_SIZE -> {
+          KVMessage<K, V> payload = new KVMessage<>(KVCommandType.GET_SIZE, this.kvState.size());
+          response = new OrderedClientReply(KVMessage.toBytes(payload));
+        }
+        case GET_KEYSET -> {
+          KVMessage<K, V> payload =
+              new KVMessage<>(KVCommandType.GET_KEYSET, new HashSet<>(this.kvState.keySet()));
+          response = new OrderedClientReply(KVMessage.toBytes(payload));
+        }
+        default -> {
+          logger.error("Unknown command type. Cannot execute client request");
+          return;
+        }
       }
-      case PUT -> {
-        this.kvState.put(cmd.key(), cmd.data());
-        response = new OrderedClientReply("ok".getBytes());
-      }
-      default -> {
-        logger.error("Unknown command type. Cannot execute client request");
-        return;
-      }
+
+      this.app.sendClientReply(r, response);
+    } catch (Exception e) {
+      logger.error("Exception while sending client reply: {}", e.getMessage());
     }
-
-    this.app.sendClientReply(r, response);
   }
 }
