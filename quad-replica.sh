@@ -1,5 +1,11 @@
 #!/bin/bash
 
+if [ -z "$1" ]; then
+  echo "Usage: $0 <classpath>"
+  echo "Example: $0 bftsmart.demo.messaging.MessagingReplica"
+  exit 1
+fi
+
 # Name of the tmux session
 SESSION_NAME="quad-setup"
 
@@ -16,7 +22,7 @@ DIR_2="$BASE_DIR/$REP_2"
 DIR_3="$BASE_DIR/$REP_3"
 
 SCRIPTNAME="smartrun.sh"
-CLASSNAME="bftsmart.demo.messaging.MessagingReplica"
+CLASSNAME="$1"
 
 CMD_0="./$SCRIPTNAME $CLASSNAME $REP_0"
 CMD_1="./$SCRIPTNAME $CLASSNAME $REP_1"
