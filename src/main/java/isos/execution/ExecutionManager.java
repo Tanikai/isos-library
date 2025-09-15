@@ -10,10 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public class ExecutionManager implements Runnable {
@@ -23,6 +20,9 @@ public class ExecutionManager implements Runnable {
   // Variables at each replica
   /** Size of execution window, k in pseudocode */
   private final int executionWindowSize;
+
+  /** How many new committed commands should be processed (and executed) at the same time */
+  private final int batchProcessingMaxSize;
 
   // Sets containing all slots which have been committed or executed so far
   private final Set<SequenceNumber> committed;
@@ -42,7 +42,8 @@ public class ExecutionManager implements Runnable {
   public ExecutionManager(
       int executionWindowSize,
       DependencyGraphBuilder dependencyGraphBuilder,
-      ExecuteInApplication executor) {
+      ExecuteInApplication executor,
+      int batchProcessingMaxSize) {
     this.committed = new HashSet<>();
     this.executed = new HashSet<>();
     this.executionWindowSize = executionWindowSize;
@@ -51,6 +52,7 @@ public class ExecutionManager implements Runnable {
     this.deps = new ConcurrentHashMap<>();
     this.requests = new ConcurrentHashMap<>();
     this.executor = executor;
+    this.batchProcessingMaxSize = batchProcessingMaxSize;
   }
 
   /**
@@ -61,18 +63,30 @@ public class ExecutionManager implements Runnable {
   @Override
   public void run() {
     logger.info("Start ExecutionManager loop");
+    List<CommittedCommand> batchCommittedSlots = new ArrayList<>(this.batchProcessingMaxSize);
     while (!Thread.currentThread().isInterrupted()) {
       // Update slots committed in the meantime
-      CommittedCommand receivedMessage;
 
       // TODO Kai: this should be delegated to somewhere else, so that we can use the
-      // DependencyGraph optimizations (
-      while ((receivedMessage = incomingCommittedSlots.poll()) != null) {
-        var seqNum = receivedMessage.seqNum();
-        this.committed.add(seqNum);
-        this.deps.put(seqNum, receivedMessage.depSet());
-        this.requests.put(seqNum, receivedMessage.clientRequest());
+      // DependencyGraph optimizations
+      try {
+        CommittedCommand first = incomingCommittedSlots.take();
+        batchCommittedSlots.add(first);
+      } catch (InterruptedException e) {
+        logger.info("ExecutionManager interrupted while waiting for committed command, exiting");
+        break;
       }
+
+      incomingCommittedSlots.drainTo(batchCommittedSlots, this.batchProcessingMaxSize - 1);
+
+      logger.info("Process {} new committed slots", batchCommittedSlots.size());
+      for (var committedCommand : batchCommittedSlots) {
+        var seqNum = committedCommand.seqNum();
+        this.committed.add(seqNum);
+        this.deps.put(seqNum, committedCommand.depSet());
+        this.requests.put(seqNum, committedCommand.clientRequest());
+      }
+      batchCommittedSlots.clear();
 
       // Line 178: Repeat loop until no further suitable v exists
 

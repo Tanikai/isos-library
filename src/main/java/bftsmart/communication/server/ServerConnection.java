@@ -18,6 +18,13 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.net.ssl.*;
 import java.io.*;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -31,12 +38,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
-import javax.net.ssl.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class represents a connection with other server and manages sending and receiving messages.
@@ -480,7 +481,7 @@ public class ServerConnection {
                 long newEwma = (long) ((ALPHA * roundTripMillis) + ((1.0 - ALPHA) * currentEwma));
                 ewmaMillis.set(newEwma);
 
-                logger.info("Updated ewma fron {} ms to {} ms", currentEwma, newEwma);
+                logger.debug("Updated ewma fron {} ms to {} ms", currentEwma, newEwma);
               }
 
             } else {

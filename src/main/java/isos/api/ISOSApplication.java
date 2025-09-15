@@ -6,7 +6,6 @@ import isos.communication.ClientMessageWrapper;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.dependency.TrivialConflictChecker;
-import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecuteInApplication;
@@ -16,12 +15,13 @@ import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.function.BiPredicate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * DECISION Kai: Maybe interface instead of class? This class is used as the central manager of the
@@ -79,7 +79,8 @@ public class ISOSApplication {
     this.applicationConflict = applicationConflict;
     this.dependencyGraphBuilder =
         new TrivialDependencyGraphBuilder(defaultConflict, applicationConflict);
-    this.conflictChecker = new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
+    this.conflictChecker =
+        new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
 
     // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
     var maxFaults = configManager.getStaticConf().getF();
@@ -108,7 +109,8 @@ public class ISOSApplication {
         new ExecutionManager(
             this.configManager.getStaticConf().getExecutionWindowSize(),
             this.dependencyGraphBuilder,
-            executor);
+            executor,
+            this.configManager.getStaticConf().getMaxBatchSize());
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
   }
 
@@ -122,7 +124,6 @@ public class ISOSApplication {
   public ServerCommunicationSystem debug_getSCS() {
     return this.scs;
   }
-
 
   /**
    * Receive a committed request from the {@link AgreementSlotManager} that can be executed by the

@@ -500,6 +500,10 @@ public class TOMConfiguration extends Configuration {
     return timeoutHighMark;
   }
 
+  /**
+   * Used in BFT SMaRt and ISOS.
+   * @return
+   */
   public int getMaxBatchSize() {
     return maxBatchSize;
   }
