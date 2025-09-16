@@ -15,15 +15,17 @@ import isos.execution.graph.ClientPayloadDeserializer;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
+import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class maintains an AgreementSlotSequence for each replica.
@@ -255,6 +257,19 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       // Guarantee that the respective AgreementSlot is initialized (Processor thread, input queue,
       // agreementSlot data structure)
       createSequenceNumberEntry(seqNum);
+
+      // If the received request from a replica is a depPropose with a request, deserialize the
+      // payload / update the cache before
+      if (payload instanceof DepProposeWithRequest depPropose) {
+        try {
+          depPropose.request().updateDeserializedCommandCache(clientPayloadDeserializer);
+        } catch (IOException | ClassNotFoundException e) {
+          logger.error(
+              "Error while decoding client request: {}. Throwing received DepProposeWithRequest away.",
+              e.getMessage());
+          return;
+        }
+      }
 
       var queue = this.queueProcessorInputQueue.get(seqNum);
       try {

@@ -46,6 +46,7 @@ public class OrderedClientRequest implements ClientRequest, Serializable {
     return clientLocalTimestamp;
   }
 
+  @SuppressWarnings("unchecked")
   public <T> T getDeserializedCommandCache() throws IllegalStateException {
     if (deserializedCommand == null) {
       throw new IllegalStateException("Command has not been deserialized yet!");
@@ -54,7 +55,7 @@ public class OrderedClientRequest implements ClientRequest, Serializable {
     return (T) deserializedCommand;
   }
 
-  public <T> void updateDeserializedCommandCache(ClientPayloadDeserializer deserializer)
+  public <T> void updateDeserializedCommandCache(ClientPayloadDeserializer<T> deserializer)
       throws IOException, ClassNotFoundException {
     this.deserializedCommand = deserializer.deserializePayload(this.command);
   }
