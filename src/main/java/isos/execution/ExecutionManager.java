@@ -96,8 +96,11 @@ public class ExecutionManager implements Runnable {
       // - all of its dependencies are committed and inside the execution window
 
       // Normal execution case
-      boolean didExecuteAgreementSlots = false;
+      boolean didExecuteAgreementSlots;
       do {
+        // Reset loop condition
+        didExecuteAgreementSlots = false;
+
         // The execution window should be recalculated after SCCs are executed, because the "first
         // not executed request" might change after SCC execution.
         Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
@@ -149,8 +152,10 @@ public class ExecutionManager implements Runnable {
       } while (didExecuteAgreementSlots);
 
       // Line 183: Unblock execution case
-      didExecuteAgreementSlots = false;
       do {
+        // Reset loop condition
+        didExecuteAgreementSlots = false;
+
         Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
         Set<SequenceNumber> slotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
         slotsInWindowWithoutExecuted.removeAll(this.executed);
@@ -263,15 +268,14 @@ public class ExecutionManager implements Runnable {
     return null;
   }
 
-  // Execution window:
-  // Oldest agreement slot of the coordinator with a not yet executed request.
-  // Dependencies to requests beyond expansion limit are treated as missing, and block execution of
-  // a request
-
   /**
-   * @param committed
-   * @param executed
-   * @param executionWindowSize
+   * Execution window: Oldest agreement slot of the coordinator with a not yet executed request.
+   * Dependencies to requests beyond expansion limit are treated as missing, and block execution of
+   * a request
+   *
+   * @param committed Committed sequence numbers / agreement slots
+   * @param executed Executed sequence numbers / agreement slots
+   * @param executionWindowSize The size of the execution windows
    * @return
    */
   public static Set<SequenceNumber> slotsInExecutionWindow(
@@ -324,7 +328,7 @@ public class ExecutionManager implements Runnable {
    * @param scc
    */
   private void execute(List<SequenceNumber> scc) {
-    for (var seqNum : ExecutionManager.sortSCC(scc)) {
+    for (var seqNum : ExecutionManager.sortSCCVertices(scc)) {
       var request = this.requests.get(seqNum);
       if (request == null) {
         logger.error(
@@ -347,7 +351,7 @@ public class ExecutionManager implements Runnable {
    * @param scc The strongly connected components of the dependency graph.
    * @return A sorted copy of scc.
    */
-  public static List<SequenceNumber> sortSCC(List<SequenceNumber> scc) {
+  public static List<SequenceNumber> sortSCCVertices(List<SequenceNumber> scc) {
     var result = new ArrayList<>(scc);
     result.sort(
         Comparator.comparingInt(SequenceNumber::sequenceCounter)
