@@ -22,6 +22,7 @@ import java.io.*;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -112,7 +113,7 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
         };
 
     this.currentRequestContext =
-        new SingleRequestHandler<ClientReply>(
+        new SingleRequestHandler<>(
             ownClientId,
             request.clientLocalTimestamp(),
             this.configManager.getStaticConf().getClientInvokeOrderedTimeout(), // 40s by default
@@ -137,9 +138,15 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     // create request wrapper containing metadata
     ClientMessageWrapper requestWrapper = this.currentRequestContext.createRequest(payload);
 
-    // multicast request
+    // TODO Kai: Should the user choose the replica, or should it be automatically determined via
+    // lowest latency?
+    Random rand = new Random();
+    // Send the request to a single random replica
     this.ccs.send(
-        this.useSignatures, this.currentOverallView, requestWrapper, this.currentQuorumSize);
+        this.useSignatures,
+        List.of(this.currentOverallView.get(rand.nextInt(this.currentOverallView.size()))),
+        requestWrapper,
+        this.currentQuorumSize);
 
     // wait for future
     var replyFuture = this.currentRequestContext.getResponse();
