@@ -11,6 +11,7 @@ import isos.execution.CommittedCommand;
 import isos.execution.ExecuteInApplication;
 import isos.execution.ExecutionManager;
 import isos.execution.graph.ClientPayloadDeserializer;
+import isos.execution.graph.DependencyGraphBuilder;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
@@ -52,8 +53,19 @@ public class ISOSApplication {
   private final ServerCommunicationSystem scs;
 
   private final ConfigurationManager configManager;
-  private final TrivialDependencyGraphBuilder dependencyGraphBuilder;
+
+  /**
+   * The conflict checker uses a dependency graph as well to determine the direct dependencies for
+   * the compact dependency set.
+   */
   private final ConflictChecker conflictChecker;
+
+  /**
+   * Used to generate the dependency set and determine the strongly connected components for
+   * execution.
+   */
+  private final DependencyGraphBuilder dependencyGraphBuilder;
+
   private final ExecutionManager executionManager;
   private final Thread executionManagerThread;
 
@@ -77,8 +89,7 @@ public class ISOSApplication {
     // Conflicts
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
     this.applicationConflict = applicationConflict;
-    this.dependencyGraphBuilder =
-        new TrivialDependencyGraphBuilder(defaultConflict, applicationConflict);
+    this.dependencyGraphBuilder = new TrivialDependencyGraphBuilder();
     this.conflictChecker =
         new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
 
