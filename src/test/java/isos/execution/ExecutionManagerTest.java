@@ -18,11 +18,21 @@ class ExecutionManagerTest {
 
   @Test
   void testSlotsInExecutionWindow() {
-    Set<SequenceNumber> committed = new HashSet<>(Set.of(new SequenceNumber(0, 0)));
-    Set<SequenceNumber> executed = new HashSet<>();
-    int executionWindowSize = 10;
+    Set<SequenceNumber> committed =
+        new HashSet<>(
+            Set.of(new SequenceNumber(0, 1), new SequenceNumber(1, 0), new SequenceNumber(2, 1)));
+    Set<SequenceNumber> executed = Set.of(new SequenceNumber(2, 1));
+    int executionWindowSize = 3;
 
-    Set<SequenceNumber> expectedSlotsInExecutionWindow = Set.of(new SequenceNumber(0, 0));
+    Set<SequenceNumber> expectedSlotsInExecutionWindow =
+        Set.of(
+            new SequenceNumber(0, 0),
+            new SequenceNumber(0, 1),
+            new SequenceNumber(0, 2),
+            new SequenceNumber(0, 3),
+            new SequenceNumber(1, 0),
+            new SequenceNumber(1, 1),
+            new SequenceNumber(1, 2));
 
     var actualSlots =
         ExecutionManager.slotsInExecutionWindow(committed, executed, executionWindowSize);
@@ -31,7 +41,7 @@ class ExecutionManagerTest {
   }
 
   @Test
-  void testExecutionManagerThread() {
+  void testExecutionManagerThread() throws InterruptedException {
     var executor = mock(ExecuteInApplication.class);
     var batchProcessingMaxSize = 10;
     var manager =
@@ -43,22 +53,40 @@ class ExecutionManagerTest {
     byte[] clientCommand = "Hello World!".getBytes();
     long clientTimestamp = 1000;
 
-    var seqNum = new SequenceNumber(0, 25);
-    OrderedClientRequest clientRequest =
+    var seqNum = new SequenceNumber(0, 0);
+    OrderedClientRequest firstRequest =
         new OrderedClientRequest(clientId, clientCommand, clientTimestamp);
 
     var depSet = new DependencySet(Set.of());
 
-    CommittedCommand committed = new CommittedCommand(seqNum, clientRequest, depSet);
+    CommittedCommand committed = new CommittedCommand(seqNum, firstRequest, depSet);
 
     manager.submitCommittedRequest(committed);
 
-    // After a single command has been submitted, it should be executed.
+    OrderedClientRequest secondRequest = new OrderedClientRequest(1, clientCommand, 2000);
+
+    var dependencySeqNum = new SequenceNumber(0, 1);
+    OrderedClientRequest secondRequestDependency = new OrderedClientRequest(2, clientCommand, 1500);
+
+    // Submit the command and dependency out of order to test
+    manager.submitCommittedRequest(
+        new CommittedCommand(
+            new SequenceNumber(0, 2), secondRequest, new DependencySet(Set.of(dependencySeqNum))));
+
+    Thread.sleep(1000);
+
+    manager.submitCommittedRequest(
+        new CommittedCommand(
+            dependencySeqNum, secondRequestDependency, new DependencySet(Set.of())));
+
     var execCaptor = ArgumentCaptor.forClass(OrderedClientRequest.class);
-    verify(executor, timeout(500)).execute(execCaptor.capture());
-    verify(executor, calls(1));
-    OrderedClientRequest actualRequest = execCaptor.getValue();
-    assertEquals(clientRequest, actualRequest);
+    verify(executor, timeout(500).times(3)).execute(execCaptor.capture());
+
+    var actualValueList = execCaptor.getAllValues();
+
+    assertEquals(firstRequest, actualValueList.getFirst());
+    assertEquals(secondRequestDependency, actualValueList.get(1));
+    assertEquals(secondRequest, actualValueList.get(2));
 
     // Stop the thread and wait for join
     managerThread.interrupt();

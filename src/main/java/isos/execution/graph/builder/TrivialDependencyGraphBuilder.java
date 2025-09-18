@@ -44,28 +44,33 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       // Pseudocode line 156: D := D'
       D.clear();
       D.addAll(DPrime);
+      logger.info("Current D: {}", D);
       for (var seqNum : D) {
         if (!executed.contains(seqNum)) {
+          logger.info("Add dependencies of seq num {}", seqNum);
           // D' = D' UNION (UNION for all d in deps(v): (v -> d) UNION {d})
           // i.e., the dependency graph is a set of present nodes, and directed relationships of two
           // nodes.
           var slotDeps = deps.get(seqNum);
           if (slotDeps == null) {
-            logger.error(
-                "Sequence Number {} does not have a entry in the DependencySet map.", seqNum);
+            logger.info("seq num {} has no dependencies", seqNum);
             continue;
           }
+          logger.info("deps of seq num {}: {}", seqNum, slotDeps.dependencies());
 
           // Add every dependency
           for (var d : slotDeps.dependencies()) {
             DPrime.add(d);
             edges.add(new Dependency(seqNum, d));
+            logger.info("new edges: {}", edges);
           }
+          logger.info("Added dependencies {}", slotDeps.dependencies());
         }
         // else branch: Ignore rhist in the implementation
-
+        logger.info("current dependencies: {}", edges);
       }
     }
+    logger.info("Returned dependencies: {}, Dprime: {}, edges: {}", D, DPrime, edges);
     return new DependencyGraph(D, edges);
   }
 
@@ -112,15 +117,16 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       D.addAll(DPrime);
       for (var seqNum : D) {
         if (!executed.contains(seqNum)) {
+          logger.info("Add dependencies of seq num {}", seqNum);
           // D' = D' UNION (UNION for all d in deps(v), where d IN execWindow: (v -> d) UNION {d})
           // i.e., the dependency graph is a set of present nodes, and directed relationships of two
           // nodes.
           var slotDeps = deps.get(seqNum);
           if (slotDeps == null) {
-            logger.error(
-                "Sequence Number {} does not have a entry in the DependencySet map.", seqNum);
+            logger.info("SeqNum {} has no dependencies / not committed", seqNum);
             continue;
           }
+          logger.info("Dependencies of SeqNum {}: {}", seqNum, slotDeps.dependencies());
 
           // Add every dependency if it is in the execution window
           for (var d : slotDeps.dependencies()) {
@@ -130,10 +136,14 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
             DPrime.add(d);
             edges.add(new Dependency(seqNum, d));
           }
+          logger.info("Added dependencies {}", slotDeps.dependencies());
         }
         // else branch: Ignore rhist in the implementation
       }
+      logger.info("current dependencies: {}", edges);
     }
+
+    logger.info("Returned dependencies: {}, Dprime: {}, edges: {}", D, DPrime, edges);
     return new DependencyGraph(D, edges);
   }
 }
