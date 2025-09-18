@@ -61,6 +61,37 @@ public class ExecutionManager implements Runnable {
   }
 
   /**
+   * Thread-safe
+   *
+   * @param r
+   * @return
+   */
+  public boolean submitCommittedRequest(CommittedCommand r) {
+    return this.incomingCommittedSlots.offer(r);
+  }
+
+  /**
+   * Pseudocode line 188-191
+   *
+   * @param scc
+   */
+  private void execute(List<SequenceNumber> scc) {
+    for (var seqNum : ExecutionManager.sortSCCVertices(scc)) {
+      var request = this.requests.get(seqNum);
+      if (request == null) {
+        throw new RuntimeException(
+            String.format(
+                "Cannot execute request with SeqNum %s, not present in requests. This is a bug.",
+                seqNum));
+      }
+      logger.info("Execute request {}", request);
+      this.executor.execute(request);
+      this.executed.add(seqNum);
+      // rhist variable is ignored
+    }
+  }
+
+  /**
    * !! Hot path !!
    *
    * <p>Pseudocode line 175-188
@@ -118,11 +149,12 @@ public class ExecutionManager implements Runnable {
 
         // This has to be recalculated every time the SCCs are executed, because we do not want to
         // select agreement slots that were already executed (waste of CPU cycles)
-        Set<SequenceNumber> slotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
-        slotsInWindowWithoutExecuted.removeAll(this.executed);
+        Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
+        committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
+        committedSlotsInWindowWithoutExecuted.retainAll(this.committed); // Only committed sequence numbers!
 
-        if (slotsInWindowWithoutExecuted.isEmpty()) {
-          logger.info("No more unexecuted slots. Wait for new commits");
+        if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
+          logger.info("Normal Case: No slots available for execution.");
           break;
         }
 
@@ -135,7 +167,7 @@ public class ExecutionManager implements Runnable {
         // Pick agreement slot, build its dependency graph, and check whether all dependencies are
         // in the execution window and committed
         logger.info("Normal Case: Complete Dependency Graph");
-        for (SequenceNumber v : slotsInWindowWithoutExecuted) {
+        for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
           // Build dependency graph
           DependencyGraph depGraph =
               this.depGraphBuilder.buildDependencyGraph(v, this.deps, this.executed);
@@ -187,16 +219,17 @@ public class ExecutionManager implements Runnable {
 
         Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
         logger.info("Unblock Slots in execution window: {}", slotsInWindow);
-        Set<SequenceNumber> slotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
-        slotsInWindowWithoutExecuted.removeAll(this.executed);
+        Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
+        committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
+        committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
 
-        if (slotsInWindowWithoutExecuted.isEmpty()) {
-          logger.info("Unblock case: no slots for execution.");
+        if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
+          logger.info("Unblock case: No slots available for execution.");
           break;
         }
 
         logger.info("Unblock Case: Dependency Graph with execution window limit");
-        for (SequenceNumber v : slotsInWindowWithoutExecuted) {
+        for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
           // Build dependency graph, but excludes slots outside the execution window
           DependencyGraph depGraph =
               this.depGraphBuilder.buildDependencyGraphExp(
@@ -237,34 +270,9 @@ public class ExecutionManager implements Runnable {
   }
 
   /**
-   * Thread-safe
-   *
-   * @param r
-   * @return
-   */
-  public boolean submitCommittedRequest(CommittedCommand r) {
-    return this.incomingCommittedSlots.offer(r);
-  }
-
-  /**
    * Pseudocode name: exp(r_i)
    *
    * <p>First not executed request for replica r_i. Defines the lower bound of the execution window.
-   *
-   * @param replicaId
-   * @return The sequence number of the smallest not yet executed agreement slot of replicaId.
-   * @throws NoSuchElementException If the smallest sequence number could not be found. This can be
-   *     the case if there are no
-   */
-  private SequenceNumber firstNotExecutedRequestForReplica(ReplicaId replicaId)
-      throws NoSuchElementException {
-    return ExecutionManager.firstNotExecutedRequestForReplica(
-            replicaId, this.committed, this.executed)
-        .orElseThrow();
-  }
-
-  /**
-   * Pseudocode name: exp(r_i)
    *
    * @param replicaId
    * @param committed
@@ -297,17 +305,6 @@ public class ExecutionManager implements Runnable {
   private Set<SequenceNumber> slotsInExecutionWindow() {
     return ExecutionManager.slotsInExecutionWindow(
         this.committed, this.executed, this.executionWindowSize);
-  }
-
-  /**
-   * Returns executed slots and slots in execution window.
-   *
-   * <p>Used in pseudocode 178 and 184.
-   *
-   * @return
-   */
-  private Set<SequenceNumber> slotsInExecutionWindowWithoutExecuted() {
-    return null;
   }
 
   /**
@@ -357,27 +354,6 @@ public class ExecutionManager implements Runnable {
                   .mapToObj(seqCounter -> new SequenceNumber(entry.getKey(), seqCounter));
             })
         .collect(Collectors.toSet());
-  }
-
-  /**
-   * Pseudocode line 188-191
-   *
-   * @param scc
-   */
-  private void execute(List<SequenceNumber> scc) {
-    for (var seqNum : ExecutionManager.sortSCCVertices(scc)) {
-      var request = this.requests.get(seqNum);
-      if (request == null) {
-        throw new RuntimeException(
-            String.format(
-                "Cannot execute request with SeqNum %s, not present in requests. This is a bug.",
-                seqNum));
-      }
-      logger.info("Execute request {}", request);
-      this.executor.execute(request);
-      this.executed.add(seqNum);
-      // rhist variable is ignored
-    }
   }
 
   /**
