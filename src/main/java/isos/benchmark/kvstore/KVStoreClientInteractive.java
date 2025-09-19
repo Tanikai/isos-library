@@ -14,7 +14,6 @@ public class KVStoreClientInteractive {
    * @see bftsmart.demo.map.MapInteractiveClient
    */
   public static void main(String[] args) {
-
     if (args.length < 1) {
       System.out.println("Usage: isos.benchmark.kvstore.KVStoreClientInteractive <client id>");
       return;
@@ -36,32 +35,27 @@ public class KVStoreClientInteractive {
       int cmd = Integer.parseInt(console.readLine("Option:"));
       try {
         switch (cmd) {
-          case 1:
-            {
-              System.out.println("Selected: Put value");
-              key = console.readLine("Enter key:");
-              value = console.readLine("Enter value:");
-              client.put(key, value);
-              System.out.println("Success");
+          case 1 -> {
+            System.out.println("Selected: Put value");
+            key = console.readLine("Enter key:");
+            value = console.readLine("Enter value:");
+            client.put(key, value);
+            System.out.println("Success");
+          }
+          case 2 -> {
+            System.out.println("Selected: Get value");
+            key = console.readLine("Enter key:");
+            result = client.get(key);
+            if (result == null) {
+              System.out.println("No value present");
+            } else {
+              System.out.println("Value: " + result);
             }
-            break;
-          case 2:
-            {
-              System.out.println("Selected: Get value");
-              key = console.readLine("Enter key:");
-              result = client.get(key);
-              if (result == null) {
-                System.out.println("No value present");
-              } else {
-                System.out.println("Value: " + result);
-              }
-            }
-          case 9:
-            {
-              client.close();
-              exit = true;
-            }
-            break;
+          }
+          case 9 -> {
+            client.close();
+            exit = true;
+          }
         }
       } catch (IOException e) {
         System.out.println("IOException:" + e);
@@ -76,5 +70,7 @@ public class KVStoreClientInteractive {
         System.out.println("Exception: " + e);
       }
     }
+
+    System.out.println("Exited");
   }
 }
