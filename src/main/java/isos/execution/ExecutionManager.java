@@ -84,7 +84,7 @@ public class ExecutionManager implements Runnable {
                 "Cannot execute request with SeqNum %s, not present in requests. This is a bug.",
                 seqNum));
       }
-      logger.info("Execute request {}", request);
+      logger.info("Execute request {}", seqNum);
       this.executor.execute(request);
       this.executed.add(seqNum);
       // rhist variable is ignored
@@ -99,174 +99,187 @@ public class ExecutionManager implements Runnable {
   @Override
   public void run() {
     logger.info("Start ExecutionManager loop");
-    List<CommittedCommand> batchCommittedSlots = new ArrayList<>(this.batchProcessingMaxSize);
     while (!Thread.currentThread().isInterrupted()) {
-      // Update slots committed in the meantime
-
-      // TODO Kai: this should be delegated to somewhere else, so that we can use the
-      // DependencyGraph optimizations
-
-      // Line 176
       try {
-        CommittedCommand first = incomingCommittedSlots.take();
-        batchCommittedSlots.add(first);
+        updateCommittedSlots();
       } catch (InterruptedException e) {
         logger.info("ExecutionManager interrupted while waiting for committed command, exiting");
+        Thread.currentThread().interrupt(); // re-set interrupted flag
         break;
       }
 
-      incomingCommittedSlots.drainTo(batchCommittedSlots, this.batchProcessingMaxSize - 1);
+      doNormalExecution();
 
-      logger.info("Process {} new committed slots", batchCommittedSlots.size());
-      for (var committedCommand : batchCommittedSlots) {
-        var seqNum = committedCommand.seqNum();
-        this.committed.add(seqNum);
-        this.deps.put(seqNum, committedCommand.depSet());
-        this.requests.put(seqNum, committedCommand.clientRequest());
-      }
-      batchCommittedSlots.clear();
-
-      // Line 178: Repeat loop until no further suitable v exists
-
-      // We need to pick a v that:
-      // - is in the execution window,
-      // - has not been executed yet, and
-      // - all of its dependencies are committed and inside the execution window
-
-      // Normal execution case
-      boolean didExecuteAgreementSlots;
-      do {
-        // Reset loop condition
-        didExecuteAgreementSlots = false;
-
-        // Line 178
-
-        // The execution window should be recalculated after SCCs are executed, because the "first
-        // not executed request" might change after SCC execution.
-        Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
-
-        logger.info("Slots in execution window: {}", slotsInWindow);
-
-        // This has to be recalculated every time the SCCs are executed, because we do not want to
-        // select agreement slots that were already executed (waste of CPU cycles)
-        Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
-        committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
-        committedSlotsInWindowWithoutExecuted.retainAll(this.committed); // Only committed sequence numbers!
-
-        if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
-          logger.info("Normal Case: No slots available for execution.");
-          break;
-        }
-
-        // We pick a v out of the slots in window that are not executed. It has to fulfill the
-        // condition that all of its dependencies are already committed and inside of the execution
-        // window.
-        Set<SequenceNumber> committedInExecutionWindow = new HashSet<>(slotsInWindow);
-        committedInExecutionWindow.retainAll(this.committed);
-
-        // Pick agreement slot, build its dependency graph, and check whether all dependencies are
-        // in the execution window and committed
-        logger.info("Normal Case: Complete Dependency Graph");
-        for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
-          // Build dependency graph
-          DependencyGraph depGraph =
-              this.depGraphBuilder.buildDependencyGraph(v, this.deps, this.executed);
-
-          // Checking whether all dependencies are contained in the vertices is wrong. Instead, we
-          // have to check whether all **edge destinations** are contained in the execution window.
-          // If any dependencies are not committed, we cannot proceed.
-          // Edge Structure: Sequence Number -> Dependency
-          var slotDependencies =
-              depGraph.edges().stream().map(Dependency::to).collect(Collectors.toSet());
-
-          if (!committedInExecutionWindow.containsAll(slotDependencies)) {
-            // Dependency Graph of v contains agreement slots that have not yet been committed
-            // -> we have to skip this v and choose next one
-            continue;
-          }
-          logger.info("Committed in execution window: {}", committedInExecutionWindow);
-          logger.info(
-              "All dependencies {} of sequence number {} are committed and in execution window.",
-              slotDependencies,
-              v);
-
-          // We have a v where all dependencies are committed
-
-          // Now: Find not yet executed SCCs in rdeps(v) in inverse topological order
-          List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
-
-          for (Set<SequenceNumber> scc : SCCs) {
-            // Line 178: Normal case execution
-            // Because the Dependency Graph can contain slots that are already executed, we have to
-            // filter out the already executed ones
-            // Ordering of vertices in the SCC for request execution is done in the execute function
-            this.execute(scc.stream().filter(element -> !this.executed.contains(element)).toList());
-            didExecuteAgreementSlots = true;
-          }
-
-          // We have executed some slots. Now we have to recalculate the execution window
-          break;
-        }
-        // We want to repeat this loop until no further suitable v exists, i.e., we iterate over all
-        // committed sequence numbers v, but we didn't execute any slot, because the dependencies of
-        // each v is not fully contained in the execution window.
-      } while (didExecuteAgreementSlots);
-
-      // Line 183: Unblock execution case
-      do {
-        // Reset loop condition
-        didExecuteAgreementSlots = false;
-
-        Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
-        logger.info("Unblock Slots in execution window: {}", slotsInWindow);
-        Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
-        committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
-        committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
-
-        if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
-          logger.info("Unblock case: No slots available for execution.");
-          break;
-        }
-
-        logger.info("Unblock Case: Dependency Graph with execution window limit");
-        for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
-          // Build dependency graph, but excludes slots outside the execution window
-          DependencyGraph depGraph =
-              this.depGraphBuilder.buildDependencyGraphExp(
-                  v, slotsInWindow, this.deps, this.executed);
-          var slotDependencies =
-              depGraph.edges().stream().map(Dependency::to).collect(Collectors.toSet());
-
-          // We don't use the intersection set of committed and the execution window here
-          if (!committed.containsAll(slotDependencies)) {
-            // Dependency Graph of v contains agreement slots that have not yet been committed
-            // -> we have to skip this v and choose next one
-            continue;
-          }
-          logger.info(
-              "All dependencies {} of sequence number {} are committed and in execution window.",
-              slotDependencies,
-              v);
-          // We have a v where all dependencies are committed
-
-          List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
-
-          try {
-            // Line 186
-            var firstSCC = SCCs.getFirst();
-            this.execute(
-                firstSCC.stream().filter(element -> !this.executed.contains(element)).toList());
-            didExecuteAgreementSlots = true;
-            // We have executed some slots. Now we have to recalculate the execution window
-            break;
-          } catch (NoSuchElementException e) {
-            //
-          }
-        }
-
-      } while (didExecuteAgreementSlots);
+      doUnblockExecution();
     } // end while loop
     logger.info("ExecutionManager was interrupted, stopping.");
+  }
+
+  /**
+   * ISOS Pseudocode: Update slots committed in the meantime (Line 176)
+   *
+   * @throws InterruptedException
+   */
+  private void updateCommittedSlots() throws InterruptedException {
+    // Line 176
+    List<CommittedCommand> batchCommittedSlots = new ArrayList<>(this.batchProcessingMaxSize);
+    CommittedCommand first = incomingCommittedSlots.take();
+    batchCommittedSlots.add(first);
+
+    incomingCommittedSlots.drainTo(batchCommittedSlots, this.batchProcessingMaxSize - 1);
+
+    logger.info("Process {} new committed slots", batchCommittedSlots.size());
+    for (var committedCommand : batchCommittedSlots) {
+      var seqNum = committedCommand.seqNum();
+      this.committed.add(seqNum);
+      this.deps.put(seqNum, committedCommand.depSet());
+      this.requests.put(seqNum, committedCommand.clientRequest());
+    }
+    batchCommittedSlots.clear();
+  }
+
+  private void doNormalExecution() {
+    // Line 178: Repeat loop until no further suitable v exists
+
+    // We need to pick a v that:
+    // - is in the execution window,
+    // - has not been executed yet, and
+    // - all of its dependencies are committed and inside the execution window
+
+    // Normal execution case
+    boolean didExecuteAgreementSlots;
+    do {
+      // Reset loop condition
+      didExecuteAgreementSlots = false;
+
+      // Line 178
+
+      // The execution window should be recalculated after SCCs are executed, because the "first
+      // not executed request" might change after SCC execution.
+      Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
+
+      // This has to be recalculated every time the SCCs are executed, because we do not want to
+      // select agreement slots that were already executed (waste of CPU cycles)
+      Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
+      committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
+      committedSlotsInWindowWithoutExecuted.retainAll(
+          this.committed); // Only committed sequence numbers!
+
+      if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
+        logger.info("Normal Case: No slots available for execution.");
+        break;
+      }
+
+      // We pick a v out of the slots in window that are not executed. It has to fulfill the
+      // condition that all of its dependencies are already committed and inside of the execution
+      // window.
+      Set<SequenceNumber> committedInExecutionWindow = new HashSet<>(slotsInWindow);
+      committedInExecutionWindow.retainAll(this.committed);
+
+      // Pick agreement slot, build its dependency graph, and check whether all dependencies are
+      // in the execution window and committed
+      logger.info("Normal Case: Complete Dependency Graph");
+      for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
+        // Build dependency graph
+        DependencyGraph depGraph =
+            this.depGraphBuilder.buildDependencyGraph(v, this.deps, this.executed);
+
+        // Checking whether all dependencies are contained in the vertices is wrong. Instead, we
+        // have to check whether all **edge destinations** are contained in the execution window.
+        // If any dependencies are not committed, we cannot proceed.
+        // Edge Structure: Sequence Number -> Dependency
+        var slotDependencies =
+            depGraph.edges().stream().map(Dependency::to).collect(Collectors.toSet());
+
+        if (!committedInExecutionWindow.containsAll(slotDependencies)) {
+          // Dependency Graph of v contains agreement slots that have not yet been committed
+          // -> we have to skip this v and choose next one
+          continue;
+        }
+        logger.info("Committed in execution window: {}", committedInExecutionWindow);
+        logger.info(
+            "All dependencies {} of sequence number {} are committed and in execution window.",
+            slotDependencies,
+            v);
+
+        // We have a v where all dependencies are committed
+
+        // Now: Find not yet executed SCCs in rdeps(v) in inverse topological order
+        List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
+
+        for (Set<SequenceNumber> scc : SCCs) {
+          // Line 178: Normal case execution
+          // Because the Dependency Graph can contain slots that are already executed, we have to
+          // filter out the already executed ones
+          // Ordering of vertices in the SCC for request execution is done in the execute function
+          this.execute(scc.stream().filter(element -> !this.executed.contains(element)).toList());
+          didExecuteAgreementSlots = true;
+        }
+
+        // We have executed some slots. Now we have to recalculate the execution window
+        break;
+      }
+      // We want to repeat this loop until no further suitable v exists, i.e., we iterate over all
+      // committed sequence numbers v, but we didn't execute any slot, because the dependencies of
+      // each v is not fully contained in the execution window.
+    } while (didExecuteAgreementSlots);
+  }
+
+  private void doUnblockExecution() {
+    // Line 183: Unblock execution case
+
+    boolean didExecuteAgreementSlots;
+    do {
+      // Reset loop condition
+      didExecuteAgreementSlots = false;
+
+      Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
+      Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
+      committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
+      committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
+
+      if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
+        logger.info("Unblock case: No slots available for execution.");
+        break;
+      }
+
+      logger.info("Unblock Case: Dependency Graph with execution window limit");
+      for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
+        // Build dependency graph, but excludes slots outside the execution window
+        DependencyGraph depGraph =
+            this.depGraphBuilder.buildDependencyGraphExp(
+                v, slotsInWindow, this.deps, this.executed);
+        var slotDependencies =
+            depGraph.edges().stream().map(Dependency::to).collect(Collectors.toSet());
+
+        // We don't use the intersection set of committed and the execution window here
+        if (!committed.containsAll(slotDependencies)) {
+          // Dependency Graph of v contains agreement slots that have not yet been committed
+          // -> we have to skip this v and choose next one
+          continue;
+        }
+        logger.info(
+            "All dependencies {} of sequence number {} are committed and in execution window.",
+            slotDependencies,
+            v);
+        // We have a v where all dependencies are committed
+
+        List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
+
+        try {
+          // Line 186
+          var firstSCC = SCCs.getFirst();
+          this.execute(
+              firstSCC.stream().filter(element -> !this.executed.contains(element)).toList());
+          didExecuteAgreementSlots = true;
+          // We have executed some slots. Now we have to recalculate the execution window
+          break;
+        } catch (NoSuchElementException e) {
+          //
+        }
+      }
+
+    } while (didExecuteAgreementSlots);
   }
 
   /**

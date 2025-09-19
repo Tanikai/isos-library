@@ -262,6 +262,12 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       // payload / update the cache before
       if (payload instanceof DepProposeWithRequest depPropose) {
         try {
+          if (depPropose.request() == null) {
+            logger.warn(
+                "Request of received DepProposeWithRequest is null. Throwing message away.");
+            return;
+          }
+
           depPropose.request().updateDeserializedCommandCache(clientPayloadDeserializer);
         } catch (IOException | ClassNotFoundException e) {
           logger.error(
@@ -304,6 +310,11 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     try (ByteArrayInputStream bis = new ByteArrayInputStream(msg.getPayload());
         ObjectInputStream ois = new ObjectInputStream(bis)) {
       OrderedClientRequest r = (OrderedClientRequest) ois.readObject();
+
+      if (r == null) {
+        logger.warn("Received command from client without ClientRequest. Throwing message away");
+        return;
+      }
 
       // Deserialize the payload into an object and cache it, so that it does not have to be
       // deserialized multiple times (e.g., while determining conflicts between client requests, or

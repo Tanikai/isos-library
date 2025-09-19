@@ -1,23 +1,25 @@
 package isos.consensus;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.ClientPayloadDeserializer;
+import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
+import org.junit.jupiter.api.Test;
+
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class AgreementSlotManagerWaitForDepsTest {
 
@@ -65,12 +67,14 @@ class AgreementSlotManagerWaitForDepsTest {
     Thread.sleep(1000); // ensure waiter is blocking
     assertTrue(waiter.isAlive(), "waitForDeps should be blocking before deps complete");
 
+    OrderedClientRequest request = mock(OrderedClientRequest.class);
+
     // Complete each dependency by passing a DepProposeMessage with matching SequenceNumber
     for (SequenceNumber seq : waitDepSet) {
       DepProposeMessage msg =
           new DepProposeMessage(
               seq, seq.replicaIdRec(), "hash123", new DependencySet(), new HashSet<>());
-      var wrapper = new ISOSMessageWrapper(new DepProposeWithRequest(msg, null), seq.replicaId());
+      var wrapper = new ISOSMessageWrapper(new DepProposeWithRequest(msg, request), seq.replicaId());
       manager.processData(wrapper);
     }
 

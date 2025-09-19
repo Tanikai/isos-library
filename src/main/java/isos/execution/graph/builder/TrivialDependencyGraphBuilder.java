@@ -47,7 +47,6 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       logger.info("Current D: {}", D);
       for (var seqNum : D) {
         if (!executed.contains(seqNum)) {
-          logger.info("Add dependencies of seq num {}", seqNum);
           // D' = D' UNION (UNION for all d in deps(v): (v -> d) UNION {d})
           // i.e., the dependency graph is a set of present nodes, and directed relationships of two
           // nodes.
@@ -117,7 +116,6 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       D.addAll(DPrime);
       for (var seqNum : D) {
         if (!executed.contains(seqNum)) {
-          logger.info("Add dependencies of seq num {}", seqNum);
           // D' = D' UNION (UNION for all d in deps(v), where d IN execWindow: (v -> d) UNION {d})
           // i.e., the dependency graph is a set of present nodes, and directed relationships of two
           // nodes.
