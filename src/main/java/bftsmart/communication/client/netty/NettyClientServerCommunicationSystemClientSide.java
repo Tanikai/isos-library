@@ -384,7 +384,6 @@ public class NettyClientServerCommunicationSystemClientSide
   @Override
   public void send(boolean sign, List<ReplicaId> targets, SystemMessage sm, int quorumSize) {
     if (sm instanceof ClientMessageWrapper wrapperMsg) {
-      logger.info("Send ClientMessageWrapper");
       List<ReplicaId> shuffledTargets = new ArrayList<>(targets);
       Collections.shuffle(shuffledTargets, new Random());
 

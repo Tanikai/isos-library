@@ -345,7 +345,7 @@ public class NettyClientServerCommunicationSystemServerSide
 
         rl.readLock().lock();
         if (sessionReplicaToClient.containsKey(target)) {
-          logger.info("Send message to client {}", target);
+          logger.info("Send command response to client {}", target);
           wrapperMsg.destination = target;
           sessionReplicaToClient.get(target).getChannel().writeAndFlush(wrapperMsg);
 
@@ -393,7 +393,6 @@ public class NettyClientServerCommunicationSystemServerSide
       for (int target : targets) {
         rl.readLock().lock();
         if (sessionReplicaToClient.containsKey(target)) {
-          logger.info("Send message to client {}", target);
           sessionReplicaToClient.get(target).getChannel().writeAndFlush(pingMsg);
         }
       }
@@ -404,7 +403,6 @@ public class NettyClientServerCommunicationSystemServerSide
 
   @Override
   public int[] getClients() {
-
     rl.readLock().lock();
     Set<Integer> s = sessionReplicaToClient.keySet();
     int[] clients = new int[s.size()];

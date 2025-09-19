@@ -163,7 +163,7 @@ public class ISOSApplication {
       this.scs.sendToClients(
           new int[] {originalRequest.clientId()},
           new ClientMessageWrapper(
-              originalRequest.clientId(), originalRequest.clientLocalTimestamp(), replyBytes));
+              this.ownReplicaId.value(), originalRequest.clientLocalTimestamp(), replyBytes));
 
     } catch (IOException e) {
       logger.warn("Failed to serialize OrderedClientReply for client response", e);

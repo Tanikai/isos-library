@@ -49,7 +49,6 @@ public class NettyClientMessageEncoder extends MessageToByteEncoder<SystemMessag
     byte[] signatureData = null;
 
     if (sm instanceof ClientMessageWrapper wrapper) {
-      logger.info("Encode ClientMessageWrapper");
       msgData = wrapper.serializedMessage;
       if (wrapper.signed) {
         // signature was already produced before

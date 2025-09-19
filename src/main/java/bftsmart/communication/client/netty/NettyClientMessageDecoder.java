@@ -69,7 +69,8 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
   }
 
   @Override
-  protected void decode(ChannelHandlerContext context, ByteBuf buffer, List<Object> list) throws Exception {
+  protected void decode(ChannelHandlerContext context, ByteBuf buffer, List<Object> list)
+      throws Exception {
     // Skip bytes if necessary.
     if (bytesToSkip != 0) {
       int readable = buffer.readableBytes();
@@ -134,7 +135,6 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
 
     try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
         ObjectInputStream ois = new ObjectInputStream(bais); ) {
-
       SystemMessage sm = (SystemMessage) ois.readObject();
 
       if (sm instanceof ClientMessageWrapper wrapper) {
