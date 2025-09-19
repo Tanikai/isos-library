@@ -14,8 +14,10 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.CommunicationSystemServerSide;
 import bftsmart.communication.client.RequestReceiver;
+import bftsmart.communication.server.PingMessage;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
 import io.netty.bootstrap.ServerBootstrap;
@@ -25,6 +27,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import isos.communication.ClientMessageWrapper;
+import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,14 +49,21 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 @Sharable
 public class NettyClientServerCommunicationSystemServerSide
-    extends SimpleChannelInboundHandler<ClientMessageWrapper> implements CommunicationSystemServerSide {
+    extends SimpleChannelInboundHandler<SystemMessage> implements CommunicationSystemServerSide {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   /** RequestReceiver is the class that receives messages from clients */
   private RequestReceiver requestReceiver;
 
+  /**
+   * This is the session table of active client sessions, mapping the client id to a netty client
+   * session.
+   */
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionReplicaToClient;
+
+  private ReplicaId ownReplicaId;
+
   private ReentrantReadWriteLock rl;
   private ConfigurationManager configManager;
   private boolean closed = false;
@@ -75,6 +85,7 @@ public class NettyClientServerCommunicationSystemServerSide
   public NettyClientServerCommunicationSystemServerSide(ConfigurationManager configManager) {
     try {
       this.configManager = configManager;
+      this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
       /* Tulio Ribeiro */
       privKey = configManager.getStaticConf().getPrivateKey();
 
@@ -221,25 +232,40 @@ public class NettyClientServerCommunicationSystemServerSide
   }
 
   /**
-   * Is called when a new client request is received.
+   * Called when a new client request is received.
+   *
    * @param ctx
    * @param sm
-   * @throws Exception
    */
   @Override
-  protected void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
+  protected void channelRead0(ChannelHandlerContext ctx, SystemMessage sm) {
     if (this.closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
     }
 
     // delivers message to RequestReceiver
-    if (requestReceiver == null) logger.warn("Request receiver is still null!");
-    else requestReceiver.requestReceived(sm, true);
+    if (sm instanceof ClientMessageWrapper wrapperMsg) {
+      logger.info("Received wrapperMsg");
+      if (requestReceiver == null) {
+        logger.warn("Request receiver is still null!");
+        return;
+      }
+      requestReceiver.requestReceived(wrapperMsg, true);
+    } else if (sm instanceof PingMessage pingMsg) {
+      this.handlePingMessage(sm.getSender(), pingMsg);
+    }
+  }
+
+  private void handlePingMessage(int sender, PingMessage pingMsg) {
+    logger.info("Received ping message from client {}, sending reply", sender);
+    var response = new PingMessage(this.ownReplicaId.value(), pingMsg.getNonce(), true);
+    this.send(new int[] {sender}, response, false);
   }
 
   /**
    * Is called one when the network channel is active.
+   *
    * @param ctx
    */
   @Override
@@ -253,7 +279,6 @@ public class NettyClientServerCommunicationSystemServerSide
 
   @Override
   public void channelInactive(ChannelHandlerContext ctx) {
-    logger.debug("Channel Inactive");
     if (this.closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
@@ -267,17 +292,17 @@ public class NettyClientServerCommunicationSystemServerSide
       NettyClientServerSession value = m.getValue();
       if (ctx.channel().equals(value.getChannel())) {
         int key = m.getKey();
+        logger.info("Close session of replica {}", key);
         toRemove(key);
         break;
       }
     }
     rl.writeLock().unlock();
 
-    logger.debug("Session Closed, active clients=" + sessionReplicaToClient.size());
+    logger.info("Session Closed, active clients={}", sessionReplicaToClient.size());
   }
 
   public synchronized void toRemove(Integer key) {
-
     for (Integer cli : sessionReplicaToClient.keySet()) {
       logger.debug(
           "SessionReplicaToClient: Key:{}, Value:{}", cli, sessionReplicaToClient.get(cli));
@@ -296,75 +321,97 @@ public class NettyClientServerCommunicationSystemServerSide
     send(targets, sm, serializeClassHeaders);
   }
 
+  /**
+   * Sends a message from the replica to the client
+   *
+   * @param targets
+   * @param sm
+   * @param serializeClassHeaders
+   */
   @Override
-  public void send(int[] targets, ClientMessageWrapper sm, boolean serializeClassHeaders) {
+  public void send(int[] targets, SystemMessage sm, boolean serializeClassHeaders) {
+    if (sm instanceof ClientMessageWrapper wrapperMsg) {
+      // serialize message
+      DataOutputStream dos = null;
 
-    // serialize message
-    DataOutputStream dos = null;
+      byte[] data = null;
+      try {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        dos = new DataOutputStream(baos);
+        wrapperMsg.wExternal(dos);
+        dos.flush();
+        data = baos.toByteArray();
+        wrapperMsg.serializedMessage = data;
+      } catch (IOException ex) {
+        logger.error("Failed to serialize message.", ex);
+      }
 
-    byte[] data = null;
-    try {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      dos = new DataOutputStream(baos);
-      sm.wExternal(dos);
-      dos.flush();
-      data = baos.toByteArray();
-      sm.serializedMessage = data;
-    } catch (IOException ex) {
-      logger.error("Failed to serialize message.", ex);
-    }
+      // replies are not signed in the current JBP version
+      wrapperMsg.signed = false;
+      // produce signature if necessary (never in the current version)
+      if (wrapperMsg.signed) {
+        wrapperMsg.serializedMessageSignature = TOMUtil.signMessage(privKey, data);
+      }
 
-    // replies are not signed in the current JBP version
-    sm.signed = false;
-    // produce signature if necessary (never in the current version)
-    if (sm.signed) {
-      sm.serializedMessageSignature = TOMUtil.signMessage(privKey, data);
-    }
+      for (int target : targets) {
+        wrapperMsg = wrapperMsg.clone();
 
-    for (int target : targets) {
-      sm = sm.clone();
+        rl.readLock().lock();
+        if (sessionReplicaToClient.containsKey(target)) {
+          logger.info("Send message to client {}", target);
+          wrapperMsg.destination = target;
+          sessionReplicaToClient.get(target).getChannel().writeAndFlush(wrapperMsg);
 
-      rl.readLock().lock();
-      if (sessionReplicaToClient.containsKey(target)) {
-        sm.destination = target;
-        sessionReplicaToClient.get(target).getChannel().writeAndFlush(sm);
-      } else {
-        logger.debug(
-            "Client not into sessionReplicaToClient({}):{}, waiting and retrying.",
-            target,
-            sessionReplicaToClient.containsKey(target));
-        /*
-         * ClientSession clientSession = new ClientSession(target, sm); new
-         * Thread(clientSession).start();
-         */
-        // should I wait for the client?
-        // cb: the below code fixes an issue that occurs if a replica tries to send a reply back to
-        // some client *before* the connection to that client is successfully established. The
-        // client may then fail to gather enough responses and run in a timeout. In this fix we
-        // periodically retry to send that response
+        } else {
+          logger.info(
+              "Client not in sessionReplicaToClient({}):{}, waiting and retrying.",
+              target,
+              sessionReplicaToClient.containsKey(target));
+          /*
+           * ClientSession clientSession = new ClientSession(target, sm); new
+           * Thread(clientSession).start();
+           */
+          // should I wait for the client?
+          // cb: the below code fixes an issue that occurs if a replica tries to send a reply back
+          // to
+          // some client *before* the connection to that client is successfully established. The
+          // client may then fail to gather enough responses and run in a timeout. In this fix we
+          // periodically retry to send that response
 
-        if (sm.retry > 0) {
-          int retryAfterMillis =
-              (int)
-                  (1000
-                      * // Double retry-timeout every time while approaching client's invokeOrdered
-                      // timeout
-                      ((double) configManager.getStaticConf().getClientInvokeOrderedTimeout()
-                          * Math.pow(2, -1 * sm.retry)));
-          sm.retry = sm.retry - 1;
-          ClientMessageWrapper finalSm = sm;
-          TimerTask timertask =
-              new TimerTask() {
-                @Override
-                public void run() {
-                  retrySend(targets, finalSm, serializeClassHeaders);
-                }
-              };
-          Timer timer = new Timer("retry");
-          timer.schedule(timertask, retryAfterMillis);
+          if (wrapperMsg.retry > 0) {
+            int retryAfterMillis =
+                (int)
+                    (1000
+                        * // Double retry-timeout every time while approaching client's
+                        // invokeOrdered
+                        // timeout
+                        ((double) configManager.getStaticConf().getClientInvokeOrderedTimeout()
+                            * Math.pow(2, -1 * wrapperMsg.retry)));
+            wrapperMsg.retry = wrapperMsg.retry - 1;
+            ClientMessageWrapper finalSm = wrapperMsg;
+            TimerTask timertask =
+                new TimerTask() {
+                  @Override
+                  public void run() {
+                    retrySend(targets, finalSm, serializeClassHeaders);
+                  }
+                };
+            Timer timer = new Timer("retry");
+            timer.schedule(timertask, retryAfterMillis);
+          }
+        }
+        rl.readLock().unlock();
+      }
+    } else if (sm instanceof PingMessage pingMsg) {
+      for (int target : targets) {
+        rl.readLock().lock();
+        if (sessionReplicaToClient.containsKey(target)) {
+          logger.info("Send message to client {}", target);
+          sessionReplicaToClient.get(target).getChannel().writeAndFlush(pingMsg);
         }
       }
-      rl.readLock().unlock();
+    } else {
+      logger.error("Unknown message type, cannot send");
     }
   }
 

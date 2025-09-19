@@ -14,20 +14,16 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.CommunicationSystemClientSide;
 import bftsmart.communication.client.ReplyReceiver;
+import bftsmart.communication.server.PingMessage;
+import bftsmart.communication.server.ServerConnection;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
+import io.netty.channel.*;
 import io.netty.channel.ChannelHandler.Sharable;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoop;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
@@ -35,6 +31,12 @@ import io.netty.util.concurrent.GenericFutureListener;
 import isos.communication.ClientMessageWrapper;
 import isos.utils.NotImplementedException;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -46,17 +48,11 @@ import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.InvalidKeySpecException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class is an implementation of the ServerCommunicationSystemClientSide
@@ -65,7 +61,7 @@ import org.slf4j.LoggerFactory;
  */
 @Sharable
 public class NettyClientServerCommunicationSystemClientSide
-    extends SimpleChannelInboundHandler<ClientMessageWrapper>
+    extends SimpleChannelInboundHandler<SystemMessage>
     implements CommunicationSystemClientSide {
 
   private Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -81,6 +77,18 @@ public class NettyClientServerCommunicationSystemClientSide
 
   private EventLoopGroup workerGroup;
   private SyncListener listener;
+
+  // Ping
+  private ScheduledExecutorService scheduledExecutor;
+  private ScheduledFuture<?> pingTask;
+  private List<ReplicaId> pingTargets;
+  // Compared to the ping implementation in ServerConnection, we have only a single
+  // NettyClientServerSystem that communicates with all replicas.
+  // It is not
+  private ConcurrentHashMap<ReplicaId, byte[]> lastPingNonces;
+  private ConcurrentHashMap<ReplicaId, Long> lastPingNanos;
+  private ConcurrentHashMap<ReplicaId, Long> replicaPingMillis;
+  private int PING_PERIOD_MS = 10000;
 
   private SecretKeyFactory secretKeyFactory;
 
@@ -101,6 +109,10 @@ public class NettyClientServerCommunicationSystemClientSide
 
     this.clientId = clientId;
     this.workerGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors());
+    this.scheduledExecutor = new ScheduledThreadPoolExecutor(2);
+    this.lastPingNonces = new ConcurrentHashMap<>();
+    this.lastPingNanos = new ConcurrentHashMap<>();
+    this.replicaPingMillis = new ConcurrentHashMap<>();
     try {
 
       this.secretKeyFactory = TOMUtil.getSecretFactory();
@@ -198,13 +210,57 @@ public class NettyClientServerCommunicationSystemClientSide
     }
   }
 
+  /**
+   * Called when a channel to a replica receives a new message from the replica.
+   * @param ctx
+   * @param sm
+   * @throws Exception
+   */
   @Override
-  public void channelRead0(ChannelHandlerContext ctx, ClientMessageWrapper sm) throws Exception {
+  public void channelRead0(ChannelHandlerContext ctx, SystemMessage sm) throws Exception {
     if (closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
     }
-    trr.replyReceived(sm);
+
+    // TODO Kai: Somehow check whether this is a PingMessage or not
+    if (sm instanceof ClientMessageWrapper wrapperMsg) {
+      trr.replyReceived(wrapperMsg);
+    } else if (sm instanceof PingMessage pingMsg) {
+       this.handlePingMessage(new ReplicaId(sm.getSender()), pingMsg);
+    } else {
+      logger.warn("Received unsupported SystemMessage, throwing away");
+    }
+  }
+
+  private void handlePingMessage(ReplicaId sender, PingMessage pingMsg) {
+    if (!pingMsg.isResponse()) {
+      logger.warn("Received ping message that is not response, throwing away");
+      return;
+    }
+
+    var lastPingNonce = this.lastPingNonces.get(sender);
+    var lastPingNanos = this.lastPingNanos.get(sender);
+
+    if (lastPingNonce == null) {
+      logger.error("LastPingNonce of Replica {} does not exist", sender);
+      return;
+    }
+
+    if (lastPingNanos == null) {
+      logger.error("LastPingNanos of Replica {} does not exist", sender);
+      return;
+    }
+
+    if (!Arrays.equals(lastPingNonce, pingMsg.getNonce())) {
+      logger.error("Nonce mismatch with sent ping and received pong from {}", sender);
+    }
+
+    long roundTripNanos = System.nanoTime() - lastPingNanos;
+    long roundTripMillis = TimeUnit.MILLISECONDS.convert(roundTripNanos, TimeUnit.NANOSECONDS);
+
+    this.replicaPingMillis.put(sender, roundTripMillis);
+    logger.info("Set ping of replica {} to {}", sender, roundTripMillis);
   }
 
   @Override
@@ -216,12 +272,58 @@ public class NettyClientServerCommunicationSystemClientSide
     logger.debug("Channel active");
   }
 
-  public void reconnect(final ChannelHandlerContext ctx) {
+  private void startPingTask() {
+    logger.info("Try to start ping task");
+    if (this.pingTask != null && !this.pingTask.isCancelled()) {
+      logger.info("Ping task is already started");
+      return;
+    }
 
+    if (this.pingTargets == null) {
+      logger.warn("Ping targets is null, cannot start ping task");
+      return;
+    }
+
+    this.pingTask =
+        this.scheduledExecutor.scheduleAtFixedRate(
+            () -> {
+              if (this.pingTargets == null) {
+                return;
+              }
+              var pingNonce = ServerConnection.generateSecureNonce(16);
+              var pingNanos = System.nanoTime();
+              var msg = new PingMessage(this.clientId, pingNonce, false);
+              this.send(false, this.pingTargets, msg, pingTargets.size());
+
+              for (var target : this.pingTargets) {
+                this.lastPingNanos.put(target, pingNanos);
+                this.lastPingNonces.put(target, pingNonce);
+              }
+            },
+            500,
+            PING_PERIOD_MS,
+            TimeUnit.MILLISECONDS);
+    logger.info("Scheduled ping task");
+  }
+
+  private void stopPingTask() {
+    this.pingTask.cancel(true);
+    this.lastPingNonces.clear();
+    this.lastPingNanos.clear();
+  }
+
+  @Override
+  public void channelInactive(final ChannelHandlerContext ctx) {
+    // Stop ping loop
+    this.pingTask.cancel(false);
+
+    scheduleReconnect(ctx, 10);
+  }
+
+  public void reconnect(final ChannelHandlerContext ctx) {
     rl.writeLock().lock();
 
-    ArrayList<NettyClientServerSession> sessions =
-        new ArrayList<NettyClientServerSession>(sessionClientToReplica.values());
+    ArrayList<NettyClientServerSession> sessions = new ArrayList<>(sessionClientToReplica.values());
     for (NettyClientServerSession ncss : sessions) {
       if (ncss.getChannel() == ctx.channel()) {
         int replicaId = ncss.getReplicaId();
@@ -268,6 +370,13 @@ public class NettyClientServerCommunicationSystemClientSide
     this.trr = trr;
   }
 
+  @Override
+  public void setPingTargets(List<ReplicaId> targets) {
+    this.pingTargets = targets;
+
+    this.startPingTask();
+  }
+
   /**
    * Send a message from the client to a replica.
    *
@@ -276,68 +385,82 @@ public class NettyClientServerCommunicationSystemClientSide
    * @param sm Message to be sent.
    */
   @Override
-  public void send(boolean sign, List<ReplicaId> targets, ClientMessageWrapper sm, int quorumSize) {
-    int quorum = quorumSize;
+  public void send(boolean sign, List<ReplicaId> targets, SystemMessage sm, int quorumSize) {
+    if (sm instanceof ClientMessageWrapper wrapperMsg) {
+      logger.info("Send ClientMessageWrapper");
+      List<ReplicaId> shuffledTargets = new ArrayList<>(targets);
+      Collections.shuffle(shuffledTargets, new Random());
 
-    List<ReplicaId> shuffledTargets = new ArrayList<>(targets);
-    Collections.shuffle(shuffledTargets, new Random());
+      listener.waitForChannels(quorumSize); // wait for the previous transmission to complete
 
-    listener.waitForChannels(quorum); // wait for the previous transmission to complete
+      logger.debug(
+              "Sending request from {} with sequence number {} to {}",
+              wrapperMsg.getSender(),
+              wrapperMsg.getClientSequence(),
+              shuffledTargets);
 
-    logger.debug(
-        "Sending request from {} with sequence number {} to {}",
-        sm.getSender(),
-        sm.getClientSequence(),
-        shuffledTargets);
+      this.pendingRequest = wrapperMsg;
+      this.pendingRequestSign = sign;
 
-    this.pendingRequest = sm;
-    this.pendingRequestSign = sign;
-
-    if (sm.serializedMessage == null) {
-      serializeMessage(sm);
-    }
-
-    // Logger.println("Sending message with "+sm.serializedMessage.length+" bytes of
-    // content.");
-
-    // produce signature
-    if (sign && sm.serializedMessageSignature == null) {
-      sm.serializedMessageSignature = signMessage(privKey, sm.serializedMessage);
-    }
-
-    int sent = 0;
-
-    for (ReplicaId target : shuffledTargets) {
-      // This is done to avoid a race condition with the writeAndFlush method. Since the method
-      // is asynchronous, each iteration of this loop could overwrite the destination of the
-      // previous one
-      sm = sm.clone();
-
-      sm.destination = target.value();
-
-      rl.readLock().lock();
-      Channel channel = sessionClientToReplica.get(target.value()).getChannel();
-      rl.readLock().unlock();
-      if (channel.isActive()) {
-        sm.signed = sign;
-        ChannelFuture f = channel.writeAndFlush(sm);
-
-        f.addListener(listener);
-
-        sent++;
-      } else {
-        logger.debug("Channel to {} is not connected", target);
+      if (wrapperMsg.serializedMessage == null) {
+        serializeMessage(wrapperMsg);
       }
+
+      // Logger.println("Sending message with "+sm.serializedMessage.length+" bytes of
+      // content.");
+
+      // produce signature
+      if (sign && wrapperMsg.serializedMessageSignature == null) {
+        wrapperMsg.serializedMessageSignature = signMessage(privKey, wrapperMsg.serializedMessage);
+      }
+
+      int sent = 0;
+
+      for (ReplicaId target : shuffledTargets) {
+        // This is done to avoid a race condition with the writeAndFlush method. Since the method
+        // is asynchronous, each iteration of this loop could overwrite the destination of the
+        // previous one
+        wrapperMsg = wrapperMsg.clone();
+
+        // TODO Kai: Why is the destination set here?
+        wrapperMsg.destination = target.value();
+
+        rl.readLock().lock();
+        Channel channel = sessionClientToReplica.get(target.value()).getChannel();
+        rl.readLock().unlock();
+        if (channel.isActive()) {
+          wrapperMsg.signed = sign;
+          ChannelFuture f = channel.writeAndFlush(sm);
+          f.addListener(listener);
+          sent++;
+        } else {
+          logger.debug("Channel to {} is not connected", target);
+        }
+      }
+
+      // FIXME Kai: get F from somewhere else than controller
+      //    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF() +
+      // 1) {
+      //      // if less than f+1 servers are connected send an exception to the client
+      //      throw new RuntimeException("Impossible to connect to servers!");
+      //    }
+      if (targets.size() == 1 && sent == 0) throw new RuntimeException("Server not connected");
+    } else if (sm instanceof PingMessage pingMsg) {
+      logger.info("Send ping message");
+      for (ReplicaId target : targets) {
+        rl.readLock().lock();
+        Channel channel = sessionClientToReplica.get(target.value()).getChannel();
+        rl.readLock().unlock();
+        if (channel.isActive()) {
+          ChannelFuture f = channel.writeAndFlush(pingMsg);
+          f.addListener(listener);
+        } else {
+          logger.debug("Channel to {} is not connected", target);
+        }
+      }
+    } else {
+      logger.warn("Unsupported SystemMessage");
     }
-
-    // FIXME Kai: get F from somewhere else than controller
-
-    //    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF() +
-    // 1) {
-    //      // if less than f+1 servers are connected send an exception to the client
-    //      throw new RuntimeException("Impossible to connect to servers!");
-    //    }
-    if (targets.size() == 1 && sent == 0) throw new RuntimeException("Server not connected");
   }
 
   /**
@@ -409,6 +532,7 @@ public class NettyClientServerCommunicationSystemClientSide
 
   @Override
   public void close() {
+    this.stopPingTask();
     this.closed = true;
     // Iterator sessions = sessionClientToReplica.values().iterator();
     rl.readLock().lock();
@@ -441,11 +565,6 @@ public class NettyClientServerCommunicationSystemClientSide
     scheduleReconnect(ctx, 10);
   }
 
-  @Override
-  public void channelInactive(final ChannelHandlerContext ctx) {
-    scheduleReconnect(ctx, 10);
-  }
-
   private void closeChannelAndEventLoop(Channel c) {
     // once having an event in your handler (EchoServerHandler)
     // Close the current channel
@@ -455,6 +574,7 @@ public class NettyClientServerCommunicationSystemClientSide
       c.parent().close();
     }
     workerGroup.shutdownGracefully();
+    scheduledExecutor.shutdown();
   }
 
   private void scheduleReconnect(final ChannelHandlerContext ctx, int time) {
@@ -464,15 +584,7 @@ public class NettyClientServerCommunicationSystemClientSide
     }
 
     final EventLoop loop = ctx.channel().eventLoop();
-    loop.schedule(
-        new Runnable() {
-          @Override
-          public void run() {
-            reconnect(ctx);
-          }
-        },
-        time,
-        TimeUnit.SECONDS);
+    loop.schedule(() -> reconnect(ctx), time, TimeUnit.SECONDS);
   }
 
   private class SyncListener implements GenericFutureListener<ChannelFuture> {
@@ -492,7 +604,6 @@ public class NettyClientServerCommunicationSystemClientSide
 
     @Override
     public void operationComplete(ChannelFuture f) {
-
       this.futureLock.lock();
 
       this.remainingFutures--;
@@ -502,7 +613,7 @@ public class NettyClientServerCommunicationSystemClientSide
         this.enoughCompleted.signalAll();
       }
 
-      logger.debug(this.remainingFutures + " channel operations remaining to complete");
+      logger.debug("{} channel operations remaining to complete", this.remainingFutures);
 
       this.futureLock.unlock();
     }
@@ -516,11 +627,11 @@ public class NettyClientServerCommunicationSystemClientSide
     public void waitForChannels(int n) {
       this.futureLock.lock();
       if (this.remainingFutures > 0) {
-        logger.debug(
+        logger.info(
             "There are still {} channel operations pending, waiting to complete",
             this.remainingFutures);
         try {
-          // timeout if a malicous replica refuses to acknowledge the operation as completed
+          // timeout if a malicious replica refuses to acknowledge the operation as completed
           this.enoughCompleted.await(1000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
           logger.error("Interruption while waiting on condition", ex);

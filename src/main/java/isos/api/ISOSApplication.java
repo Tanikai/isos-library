@@ -159,6 +159,7 @@ public class ISOSApplication {
       // clientLocalTimestamp. Because it is contained in the request that is propagated by the
       // coordinator in the initial DepPropose, every replica knows the clientLocalTimestamp and
       // use it as the sequenceNumber of the ClientMessageWrapper.
+      logger.info("Send reply {} to client {}", reply, originalRequest.clientId());
       this.scs.sendToClients(
           new int[] {originalRequest.clientId()},
           new ClientMessageWrapper(

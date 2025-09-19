@@ -5,6 +5,8 @@ import isos.benchmark.kvstore.model.KVCommandType;
 import isos.benchmark.kvstore.model.KVMessage;
 import isos.communication.client.QuorumNotReachedException;
 import isos.message.client.OrderedClientReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -12,11 +14,13 @@ import java.util.HashSet;
 import java.util.concurrent.TimeoutException;
 
 public class KVStoreClient<K extends Serializable, V extends Serializable> {
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private final ISOSClient client;
 
   public KVStoreClient(int clientId) {
     this.client = new ISOSClient(clientId);
+    logger.info("Initialize KVStoreClient");
   }
 
   public V get(K key)

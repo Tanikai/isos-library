@@ -14,18 +14,21 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.communication.SystemMessage;
+import bftsmart.communication.server.PingMessage;
 import bftsmart.configuration.ConfigurationManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import isos.communication.ClientMessageWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
+import java.io.ObjectInputStream;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author Paulo Sousa
@@ -66,8 +69,7 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
   }
 
   @Override
-  protected void decode(ChannelHandlerContext context, ByteBuf buffer, List<Object> list)
-      throws Exception {
+  protected void decode(ChannelHandlerContext context, ByteBuf buffer, List<Object> list) throws Exception {
     // Skip bytes if necessary.
     if (bytesToSkip != 0) {
       int readable = buffer.readableBytes();
@@ -117,30 +119,43 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
     // Skip the length field because we know it already.
     buffer.skipBytes(Integer.BYTES);
 
+    // SystemMessage
     int size = buffer.readInt();
     byte[] data = new byte[size];
     buffer.readBytes(data);
 
+    // Signature
     byte[] signature = null;
     size = buffer.readInt();
-
     if (size > 0) {
       signature = new byte[size];
       buffer.readBytes(signature);
     }
 
     try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
-        DataInputStream dis = new DataInputStream(bais); ) {
-      var sm = new ClientMessageWrapper();
-      sm.rExternal(dis);
+        ObjectInputStream ois = new ObjectInputStream(bais); ) {
 
-      sm.serializedMessage = data;
+      SystemMessage sm = (SystemMessage) ois.readObject();
 
-      if (signature != null) {
-        sm.serializedMessageSignature = signature;
-        sm.signed = true;
+      if (sm instanceof ClientMessageWrapper wrapper) {
+        wrapper.serializedMessage = data;
+        if (signature != null) {
+          wrapper.serializedMessageSignature = signature;
+          wrapper.signed = true;
+        }
+
+        logger.debug(
+            "Decoded reply from "
+                + wrapper.getSender()
+                + " with sequence number "
+                + wrapper.getClientSequence());
+      } else if (sm instanceof PingMessage) {
+        // do we need to do something special here?
+      } else {
+        logger.warn("Received unknown class");
       }
 
+      // TODO Kai: should this channel handling really be in the decoder?
       if (!isClient) {
         rl.readLock().lock();
         if (!sessionTable.containsKey(sm.getSender())) {
@@ -158,11 +173,7 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
           rl.readLock().unlock();
         }
       }
-      logger.debug(
-          "Decoded reply from "
-              + sm.getSender()
-              + " with sequence number "
-              + sm.getClientSequence());
+
       list.add(sm);
     } catch (Exception ex) {
       logger.error("Failed to decode ClientMessageWrapper", ex);

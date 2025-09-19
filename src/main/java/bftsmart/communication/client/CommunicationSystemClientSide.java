@@ -14,6 +14,7 @@
  */
 package bftsmart.communication.client;
 
+import bftsmart.communication.SystemMessage;
 import isos.communication.ClientMessageWrapper;
 import isos.utils.ReplicaId;
 
@@ -25,9 +26,11 @@ import java.util.List;
  * @author Paulo
  */
 public interface CommunicationSystemClientSide {
-  void send(boolean sign, List<ReplicaId> targets, ClientMessageWrapper sm, int quorumSize);
+  void send(boolean sign, List<ReplicaId> targets, SystemMessage sm, int quorumSize);
 
   void setReplyReceiver(ReplyReceiver trr);
+
+  void setPingTargets(List<ReplicaId> targets);
 
   void sign(ClientMessageWrapper sm);
 

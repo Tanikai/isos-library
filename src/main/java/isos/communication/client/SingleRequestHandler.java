@@ -94,13 +94,16 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
    */
   @Override
   public Optional<T> processReply(ClientMessageWrapper reply) throws QuorumNotReachedException {
+
     if (this.quorumResponse != null) {
       // response was already made, so we can throw away the reply and just use the already
       // calculated response
+      logger.info("Received reply, but already set response. Return previously determined value");
       return Optional.of(this.quorumResponse);
     }
 
     var senderId = new ReplicaId(reply.getSender());
+    logger.info("Received reply from replica {}", senderId);
 
     if (!this.allowedReplicas.contains(senderId)) {
       logger.info("Received replica from not allowed replica {}, throwing message away", senderId);

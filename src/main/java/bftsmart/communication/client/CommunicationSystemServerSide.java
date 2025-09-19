@@ -14,7 +14,7 @@
  */
 package bftsmart.communication.client;
 
-import isos.communication.ClientMessageWrapper;
+import bftsmart.communication.SystemMessage;
 
 /**
  * Methods that should be implemented by the server side of the client-server communication system
@@ -22,7 +22,7 @@ import isos.communication.ClientMessageWrapper;
  * @author Paulo
  */
 public interface CommunicationSystemServerSide {
-  void send(int[] targets, ClientMessageWrapper sm, boolean serializeClassHeaders);
+  void send(int[] targets, SystemMessage sm, boolean serializeClassHeaders);
 
   int[] getClients();
 

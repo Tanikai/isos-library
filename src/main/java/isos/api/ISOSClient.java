@@ -68,6 +68,8 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     this.currentF = this.configManager.getStaticConf().getF();
     this.currentQuorumSize =
         QuorumUtil.getReplyQuorum(this.currentOverallView.size(), this.currentF, true);
+
+    this.ccs.setPingTargets(this.currentOverallView);
   }
 
   public void close() {

@@ -14,16 +14,19 @@
  */
 package bftsmart.communication.client.netty;
 
+import bftsmart.communication.SystemMessage;
+import bftsmart.communication.server.PingMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
 import isos.communication.ClientMessageWrapper;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class NettyClientMessageEncoder extends MessageToByteEncoder<ClientMessageWrapper> {
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+public class NettyClientMessageEncoder extends MessageToByteEncoder<SystemMessage> {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private boolean isClient;
@@ -40,15 +43,24 @@ public class NettyClientMessageEncoder extends MessageToByteEncoder<ClientMessag
   }
 
   @Override
-  protected void encode(ChannelHandlerContext context, ClientMessageWrapper sm, ByteBuf buffer)
+  protected void encode(ChannelHandlerContext context, SystemMessage sm, ByteBuf buffer)
       throws Exception {
     byte[] msgData;
     byte[] signatureData = null;
 
-    msgData = sm.serializedMessage;
-    if (sm.signed) {
-      // signature was already produced before
-      signatureData = sm.serializedMessageSignature;
+    if (sm instanceof ClientMessageWrapper wrapper) {
+      logger.info("Encode ClientMessageWrapper");
+      msgData = wrapper.serializedMessage;
+      if (wrapper.signed) {
+        // signature was already produced before
+        signatureData = wrapper.serializedMessageSignature;
+      }
+    } else if (sm instanceof PingMessage pingMsg) {
+      msgData = PingMessage.toByteArray(pingMsg);
+      // pingmessage without signature
+    } else {
+      logger.warn("Cannot encode SystemMessage that is not ClientMessageWrapper / PingMessage");
+      return;
     }
 
     int dataLength =

@@ -28,5 +28,5 @@ public interface ReplyReceiver {
    *
    * @param reply The reply delivered by the client side communication system
    */
-  public void replyReceived(ClientMessageWrapper reply);
+  void replyReceived(ClientMessageWrapper reply);
 }
