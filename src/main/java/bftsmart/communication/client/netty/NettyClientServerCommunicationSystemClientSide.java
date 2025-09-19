@@ -68,7 +68,7 @@ public class NettyClientServerCommunicationSystemClientSide
   private ConfigurationManager configManager;
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionClientToReplica =
       new ConcurrentHashMap<>();
-  private ReentrantReadWriteLock rl;
+  private ReentrantReadWriteLock replicaIdToSessionMapLock;
   private Signature signatureEngine;
   private boolean closed = false;
 
@@ -120,7 +120,7 @@ public class NettyClientServerCommunicationSystemClientSide
       privKey = configManager.getStaticConf().getPrivateKey();
 
       this.listener = new SyncListener();
-      this.rl = new ReentrantReadWriteLock();
+      this.replicaIdToSessionMapLock = new ReentrantReadWriteLock();
 
       // FIXME Kai: what about replicas not from the initial view?
       int[] currV = configManager.getStaticConf().getInitialView();
@@ -318,7 +318,7 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   public void reconnect(final ChannelHandlerContext ctx) {
-    rl.writeLock().lock();
+    replicaIdToSessionMapLock.writeLock().lock();
 
     ArrayList<NettyClientServerSession> sessions = new ArrayList<>(sessionClientToReplica.values());
     for (NettyClientServerSession ncss : sessions) {
@@ -359,7 +359,7 @@ public class NettyClientServerCommunicationSystemClientSide
       }
     }
 
-    rl.writeLock().unlock();
+    replicaIdToSessionMapLock.writeLock().unlock();
   }
 
   @Override
@@ -426,9 +426,9 @@ public class NettyClientServerCommunicationSystemClientSide
         // TODO Kai: Why is the destination set here?
         wrapperMsg.destination = target.value();
 
-        rl.readLock().lock();
+        replicaIdToSessionMapLock.readLock().lock();
         Channel channel = sessionClientToReplica.get(target.value()).getChannel();
-        rl.readLock().unlock();
+        replicaIdToSessionMapLock.readLock().unlock();
         if (channel.isActive()) {
           wrapperMsg.signed = sign;
           ChannelFuture f = channel.writeAndFlush(sm);
@@ -450,9 +450,9 @@ public class NettyClientServerCommunicationSystemClientSide
     } else if (sm instanceof PingMessage pingMsg) {
       logger.info("Send ping message (Current pings: {})", this.replicaPingMillis.entrySet());
       for (ReplicaId target : targets) {
-        rl.readLock().lock();
+        replicaIdToSessionMapLock.readLock().lock();
         Channel channel = sessionClientToReplica.get(target.value()).getChannel();
-        rl.readLock().unlock();
+        replicaIdToSessionMapLock.readLock().unlock();
         if (channel.isActive()) {
           ChannelFuture f = channel.writeAndFlush(pingMsg);
           f.addListener(listener);
@@ -509,9 +509,9 @@ public class NettyClientServerCommunicationSystemClientSide
     this.stopPingTask();
     this.closed = true;
     // Iterator sessions = sessionClientToReplica.values().iterator();
-    rl.readLock().lock();
+    replicaIdToSessionMapLock.readLock().lock();
     ArrayList<NettyClientServerSession> sessions = new ArrayList<>(sessionClientToReplica.values());
-    rl.readLock().unlock();
+    replicaIdToSessionMapLock.readLock().unlock();
     for (NettyClientServerSession ncss : sessions) {
       Channel c = ncss.getChannel();
       closeChannelAndEventLoop(c);
@@ -522,7 +522,7 @@ public class NettyClientServerCommunicationSystemClientSide
       throws NoSuchAlgorithmException {
 
     final NettyClientPipelineFactory nettyClientPipelineFactory =
-        new NettyClientPipelineFactory(this, sessionClientToReplica, configManager, rl);
+        new NettyClientPipelineFactory(this, sessionClientToReplica, configManager, replicaIdToSessionMapLock);
 
     return new ChannelInitializer<>() {
       @Override
@@ -694,9 +694,9 @@ public class NettyClientServerCommunicationSystemClientSide
     }
     sm = sm.clone();
     sm.destination = replicaId;
-    rl.readLock().lock();
+    replicaIdToSessionMapLock.readLock().lock();
     Channel channel = sessionClientToReplica.get(replicaId).getChannel();
-    rl.readLock().unlock();
+    replicaIdToSessionMapLock.readLock().unlock();
     if (channel.isActive()) {
       sm.signed = sign;
       ChannelFuture f = channel.writeAndFlush(sm);

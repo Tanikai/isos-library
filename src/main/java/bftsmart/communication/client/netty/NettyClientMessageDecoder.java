@@ -44,19 +44,19 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable;
   private ConfigurationManager configManager;
   private boolean firstTime;
-  private ReentrantReadWriteLock rl;
+  private ReentrantReadWriteLock sessionMapLock;
   private int bytesToSkip;
 
   public NettyClientMessageDecoder(
       boolean isClient,
       ConcurrentHashMap<Integer, NettyClientServerSession> sessionTable,
       ConfigurationManager configManager,
-      ReentrantReadWriteLock rl) {
+      ReentrantReadWriteLock sessionMapLock) {
     this.isClient = isClient;
     this.sessionTable = sessionTable;
     this.firstTime = true;
     this.configManager = configManager;
-    this.rl = rl;
+    this.sessionMapLock = sessionMapLock;
     this.bytesToSkip = 0;
     logger.trace(
         "\n\t isClient: {};"
@@ -65,7 +65,7 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
             + "\n\t firstTime: {};"
             + "\n\t rl: {};"
             + "\n\t signatureSize: {};",
-        new Object[] {isClient, sessionTable.toString(), firstTime, rl});
+        new Object[] {isClient, sessionTable.toString(), firstTime, sessionMapLock});
   }
 
   @Override
@@ -157,20 +157,18 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
 
       // TODO Kai: should this channel handling really be in the decoder?
       if (!isClient) {
-        rl.readLock().lock();
+        sessionMapLock.readLock().lock();
         if (!sessionTable.containsKey(sm.getSender())) {
-          rl.readLock().unlock();
+          sessionMapLock.readLock().unlock();
 
           NettyClientServerSession cs =
               new NettyClientServerSession(context.channel(), sm.getSender());
 
-          rl.writeLock().lock();
+          sessionMapLock.writeLock().lock();
           sessionTable.put(sm.getSender(), cs);
-          logger.debug("Active clients: " + sessionTable.size());
-          rl.writeLock().unlock();
-
+          sessionMapLock.writeLock().unlock();
         } else {
-          rl.readLock().unlock();
+          sessionMapLock.readLock().unlock();
         }
       }
 

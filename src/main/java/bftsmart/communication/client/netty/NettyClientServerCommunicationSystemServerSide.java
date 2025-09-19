@@ -58,10 +58,10 @@ public class NettyClientServerCommunicationSystemServerSide
    * session.
    */
   private ConcurrentHashMap<Integer, NettyClientServerSession> sessionReplicaToClient;
+  private ReentrantReadWriteLock clientIdToSessionMapLock;
 
   private ReplicaId ownReplicaId;
 
-  private ReentrantReadWriteLock rl;
   private ConfigurationManager configManager;
   private boolean closed = false;
   private Channel mainChannel;
@@ -87,11 +87,12 @@ public class NettyClientServerCommunicationSystemServerSide
       privKey = configManager.getStaticConf().getPrivateKey();
 
       sessionReplicaToClient = new ConcurrentHashMap<>();
-      rl = new ReentrantReadWriteLock();
+      clientIdToSessionMapLock = new ReentrantReadWriteLock();
 
       // Configure the server.
       serverPipelineFactory =
-          new NettyServerPipelineFactory(this, sessionReplicaToClient, this.configManager, rl);
+          new NettyServerPipelineFactory(
+              this, sessionReplicaToClient, this.configManager, clientIdToSessionMapLock);
 
       EventLoopGroup bossGroup = new NioEventLoopGroup(bossThreads);
       EventLoopGroup workerGroup =
@@ -201,9 +202,9 @@ public class NettyClientServerCommunicationSystemServerSide
 
     closeChannelAndEventLoop(mainChannel);
 
-    rl.readLock().lock();
+    clientIdToSessionMapLock.readLock().lock();
     ArrayList<NettyClientServerSession> sessions = new ArrayList<>(sessionReplicaToClient.values());
-    rl.readLock().unlock();
+    clientIdToSessionMapLock.readLock().unlock();
     for (NettyClientServerSession ncss : sessions) {
 
       closeChannelAndEventLoop(ncss.getChannel());
@@ -269,7 +270,7 @@ public class NettyClientServerCommunicationSystemServerSide
       closeChannelAndEventLoop(ctx.channel());
       return;
     }
-    logger.info("Session Created, active clients={}", sessionReplicaToClient.size());
+    logger.info("Session created, active clients={}", sessionReplicaToClient.size());
   }
 
   @Override
@@ -281,18 +282,21 @@ public class NettyClientServerCommunicationSystemServerSide
 
     // debugSessions();
 
-    rl.writeLock().lock();
-    Set<Entry<Integer, NettyClientServerSession>> s = sessionReplicaToClient.entrySet();
-    for (Entry<Integer, NettyClientServerSession> m : s) {
-      NettyClientServerSession value = m.getValue();
-      if (ctx.channel().equals(value.getChannel())) {
-        int key = m.getKey();
-        logger.info("Close session of replica {}", key);
-        toRemove(key);
-        break;
+    clientIdToSessionMapLock.writeLock().lock();
+    try {
+      Set<Entry<Integer, NettyClientServerSession>> s = sessionReplicaToClient.entrySet();
+      for (Entry<Integer, NettyClientServerSession> m : s) {
+        NettyClientServerSession value = m.getValue();
+        if (ctx.channel().equals(value.getChannel())) {
+          int key = m.getKey();
+          logger.info("Close session of replica {}", key);
+          toRemove(key);
+          break;
+        }
       }
+    } finally {
+      clientIdToSessionMapLock.writeLock().unlock();
     }
-    rl.writeLock().unlock();
 
     logger.info("Session Closed, active clients={}", sessionReplicaToClient.size());
   }
@@ -303,7 +307,7 @@ public class NettyClientServerCommunicationSystemServerSide
           "SessionReplicaToClient: Key:{}, Value:{}", cli, sessionReplicaToClient.get(cli));
     }
 
-    logger.debug("Removing client channel with ID = " + key);
+    logger.info("Removing client channel with ID = " + key);
     sessionReplicaToClient.remove(key);
   }
 
@@ -343,7 +347,7 @@ public class NettyClientServerCommunicationSystemServerSide
       for (int target : targets) {
         wrapperMsg = wrapperMsg.clone();
 
-        rl.readLock().lock();
+        clientIdToSessionMapLock.readLock().lock();
         if (sessionReplicaToClient.containsKey(target)) {
           logger.info("Send command response to client {}", target);
           wrapperMsg.destination = target;
@@ -387,15 +391,16 @@ public class NettyClientServerCommunicationSystemServerSide
             timer.schedule(timertask, retryAfterMillis);
           }
         }
-        rl.readLock().unlock();
+        clientIdToSessionMapLock.readLock().unlock();
       }
     } else if (sm instanceof PingMessage pingMsg) {
+      clientIdToSessionMapLock.readLock().lock();
       for (int target : targets) {
-        rl.readLock().lock();
         if (sessionReplicaToClient.containsKey(target)) {
           sessionReplicaToClient.get(target).getChannel().writeAndFlush(pingMsg);
         }
       }
+      clientIdToSessionMapLock.readLock().unlock();
     } else {
       logger.error("Unknown message type, cannot send");
     }
@@ -403,7 +408,7 @@ public class NettyClientServerCommunicationSystemServerSide
 
   @Override
   public int[] getClients() {
-    rl.readLock().lock();
+    clientIdToSessionMapLock.readLock().lock();
     Set<Integer> s = sessionReplicaToClient.keySet();
     int[] clients = new int[s.size()];
     Iterator<Integer> it = s.iterator();
@@ -412,8 +417,7 @@ public class NettyClientServerCommunicationSystemServerSide
       clients[i] = it.next();
       i++;
     }
-
-    rl.readLock().unlock();
+    clientIdToSessionMapLock.readLock().unlock();
 
     return clients;
   }
