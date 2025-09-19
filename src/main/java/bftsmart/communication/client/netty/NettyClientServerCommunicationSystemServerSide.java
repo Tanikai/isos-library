@@ -19,7 +19,6 @@ import bftsmart.communication.client.CommunicationSystemServerSide;
 import bftsmart.communication.client.RequestReceiver;
 import bftsmart.communication.server.PingMessage;
 import bftsmart.configuration.ConfigurationManager;
-import bftsmart.tom.util.TOMUtil;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.ChannelHandler.Sharable;
@@ -31,8 +30,6 @@ import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -246,7 +243,6 @@ public class NettyClientServerCommunicationSystemServerSide
 
     // delivers message to RequestReceiver
     if (sm instanceof ClientMessageWrapper wrapperMsg) {
-      logger.info("Received wrapperMsg");
       if (requestReceiver == null) {
         logger.warn("Request receiver is still null!");
         return;
@@ -258,7 +254,6 @@ public class NettyClientServerCommunicationSystemServerSide
   }
 
   private void handlePingMessage(int sender, PingMessage pingMsg) {
-    logger.info("Received ping message from client {}, sending reply", sender);
     var response = new PingMessage(this.ownReplicaId.value(), pingMsg.getNonce(), true);
     this.send(new int[] {sender}, response, false);
   }
@@ -317,7 +312,7 @@ public class NettyClientServerCommunicationSystemServerSide
     this.requestReceiver = tl;
   }
 
-  private void retrySend(int[] targets, ClientMessageWrapper sm, boolean serializeClassHeaders) {
+  private void retrySend(int[] targets, SystemMessage sm, boolean serializeClassHeaders) {
     send(targets, sm, serializeClassHeaders);
   }
 
@@ -331,27 +326,19 @@ public class NettyClientServerCommunicationSystemServerSide
   @Override
   public void send(int[] targets, SystemMessage sm, boolean serializeClassHeaders) {
     if (sm instanceof ClientMessageWrapper wrapperMsg) {
-      // serialize message
-      DataOutputStream dos = null;
-
-      byte[] data = null;
       try {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        dos = new DataOutputStream(baos);
-        wrapperMsg.wExternal(dos);
-        dos.flush();
-        data = baos.toByteArray();
-        wrapperMsg.serializedMessage = data;
+        ClientMessageWrapper.serializeMessage(wrapperMsg);
       } catch (IOException ex) {
         logger.error("Failed to serialize message.", ex);
       }
 
       // replies are not signed in the current JBP version
-      wrapperMsg.signed = false;
-      // produce signature if necessary (never in the current version)
-      if (wrapperMsg.signed) {
-        wrapperMsg.serializedMessageSignature = TOMUtil.signMessage(privKey, data);
-      }
+      //      wrapperMsg.signed = false;
+      //      // produce signature if necessary (never in the current version)
+      //      if (wrapperMsg.signed) {
+      //        wrapperMsg.serializedMessageSignature = TOMUtil.signMessage(privKey,
+      // wrapperMsg.serializedMessage);
+      //      }
 
       for (int target : targets) {
         wrapperMsg = wrapperMsg.clone();

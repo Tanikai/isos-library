@@ -37,8 +37,6 @@ import org.slf4j.LoggerFactory;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.nio.channels.ClosedChannelException;
@@ -61,8 +59,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 @Sharable
 public class NettyClientServerCommunicationSystemClientSide
-    extends SimpleChannelInboundHandler<SystemMessage>
-    implements CommunicationSystemClientSide {
+    extends SimpleChannelInboundHandler<SystemMessage> implements CommunicationSystemClientSide {
 
   private Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -212,6 +209,7 @@ public class NettyClientServerCommunicationSystemClientSide
 
   /**
    * Called when a channel to a replica receives a new message from the replica.
+   *
    * @param ctx
    * @param sm
    * @throws Exception
@@ -227,7 +225,7 @@ public class NettyClientServerCommunicationSystemClientSide
     if (sm instanceof ClientMessageWrapper wrapperMsg) {
       trr.replyReceived(wrapperMsg);
     } else if (sm instanceof PingMessage pingMsg) {
-       this.handlePingMessage(new ReplicaId(sm.getSender()), pingMsg);
+      this.handlePingMessage(new ReplicaId(sm.getSender()), pingMsg);
     } else {
       logger.warn("Received unsupported SystemMessage, throwing away");
     }
@@ -260,7 +258,6 @@ public class NettyClientServerCommunicationSystemClientSide
     long roundTripMillis = TimeUnit.MILLISECONDS.convert(roundTripNanos, TimeUnit.NANOSECONDS);
 
     this.replicaPingMillis.put(sender, roundTripMillis);
-    logger.info("Set ping of replica {} to {}", sender, roundTripMillis);
   }
 
   @Override
@@ -394,16 +391,21 @@ public class NettyClientServerCommunicationSystemClientSide
       listener.waitForChannels(quorumSize); // wait for the previous transmission to complete
 
       logger.debug(
-              "Sending request from {} with sequence number {} to {}",
-              wrapperMsg.getSender(),
-              wrapperMsg.getClientSequence(),
-              shuffledTargets);
+          "Sending request from {} with sequence number {} to {}",
+          wrapperMsg.getSender(),
+          wrapperMsg.getClientSequence(),
+          shuffledTargets);
 
       this.pendingRequest = wrapperMsg;
       this.pendingRequestSign = sign;
 
       if (wrapperMsg.serializedMessage == null) {
-        serializeMessage(wrapperMsg);
+        try {
+          ClientMessageWrapper.serializeMessage(wrapperMsg);
+        } catch (IOException e) {
+          logger.error("Could not serialize ClientMessageWrapper. Do not send message");
+          return;
+        }
       }
 
       // Logger.println("Sending message with "+sm.serializedMessage.length+" bytes of
@@ -439,14 +441,15 @@ public class NettyClientServerCommunicationSystemClientSide
       }
 
       // FIXME Kai: get F from somewhere else than controller
-      //    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF() +
+      //    if (targets.length > controller.getCurrentViewF() && sent < controller.getCurrentViewF()
+      // +
       // 1) {
       //      // if less than f+1 servers are connected send an exception to the client
       //      throw new RuntimeException("Impossible to connect to servers!");
       //    }
       if (targets.size() == 1 && sent == 0) throw new RuntimeException("Server not connected");
     } else if (sm instanceof PingMessage pingMsg) {
-      logger.info("Send ping message");
+      logger.info("Send ping message (Current pings: {})", this.replicaPingMillis.entrySet());
       for (ReplicaId target : targets) {
         rl.readLock().lock();
         Channel channel = sessionClientToReplica.get(target.value()).getChannel();
@@ -464,50 +467,22 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   /**
-   * Serializes the message to the serializedMessage field of the passed ClientMessageWrapper
-   * object.
-   *
-   * @param sm ClientMessageWrapper to be serialized
-   */
-  private void serializeMessage(ClientMessageWrapper sm) {
-    // serialize message
-    DataOutputStream dos = null;
-    try {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      dos = new DataOutputStream(baos);
-      sm.wExternal(dos);
-      dos.flush();
-      sm.serializedMessage = baos.toByteArray();
-    } catch (IOException ex) {
-      logger.error("Impossible to serialize message: " + sm);
-    }
-  }
-
-  /**
    * Serializes the message, signs the serialized message, and then stores the signature in the
    * field serializedMessageSignature.
+   *
+   * <p>TODO Kai: a sign method should not be responsible to serialize the message as well
    *
    * @param sm
    */
   public void sign(ClientMessageWrapper sm) {
     // serialize message
-    DataOutputStream dos = null;
-    byte[] data = null;
     try {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      dos = new DataOutputStream(baos);
-      sm.wExternal(dos);
-      dos.flush();
-      data = baos.toByteArray();
-      sm.serializedMessage = data;
+      ClientMessageWrapper.serializeMessage(sm);
     } catch (IOException ex) {
-
       logger.error("Failed to sign ClientMessageWrapper", ex);
     }
-
     // produce signature
-    byte[] signature = signMessage(privKey, data);
-    sm.serializedMessageSignature = signature;
+    sm.serializedMessageSignature = signMessage(privKey, sm.serializedMessage);
   }
 
   public byte[] signMessage(PrivateKey key, byte[] message) {
@@ -706,9 +681,14 @@ public class NettyClientServerCommunicationSystemClientSide
         sm.getClientSequence(),
         replicaId);
 
-    // if message was not yet serialized, serialize it and cache it in the
+    // if message was not yet serialized, serialize it and cache it
     if (sm.serializedMessage == null) {
-      serializeMessage(sm);
+      try {
+        ClientMessageWrapper.serializeMessage(sm);
+      } catch (IOException e) {
+        logger.error("Could not serialize ClientMessageWrapper. Do not send message");
+        return;
+      }
     }
     if (sign && sm.serializedMessageSignature == null) {
       sm.serializedMessageSignature = signMessage(privKey, sm.serializedMessage);

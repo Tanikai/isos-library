@@ -29,7 +29,7 @@ public class ClientMessageWrapper extends SystemMessage
   private byte[] payload;
   private long sequenceNumber; // client sequence number, increases by 1 with each message sent
 
-  // Cache / Temporary fields used for transmitting the message
+  // Cache / Temporary fields used for transmitting the message -> will not be persisted by ObjectOutputStream etc.
   // the bytes received from the client and its MAC and signature
   public transient boolean signed = false; // is this message signed?
   public transient byte[] serializedMessage = null;
@@ -166,5 +166,18 @@ public class ClientMessageWrapper extends SystemMessage
     // FIXME: add payload comparison as well
 
     return EQUAL;
+  }
+
+  /**
+   * Serializes a ClientMessageWrapper object and sets the result in the serializedMessage field.
+   * @param wrapper
+   * @throws IOException
+   */
+  public static void serializeMessage(ClientMessageWrapper wrapper) throws IOException {
+    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+         ObjectOutputStream oos = new ObjectOutputStream(bos)) {
+      oos.writeObject(wrapper);
+      wrapper.serializedMessage = bos.toByteArray();
+    }
   }
 }
