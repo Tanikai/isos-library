@@ -268,11 +268,12 @@ public class ExecutionManager implements Runnable {
         try {
           // Line 186
           var firstSCC = SCCs.getFirst();
+          logger.info("Unblock case: execute only first SCC with sequence numbers {}", firstSCC.toArray());
           this.execute(
               firstSCC.stream().filter(element -> !this.executed.contains(element)).toList());
-          didExecuteAgreementSlots = true;
-          // We have executed some slots. Now we have to recalculate the execution window
-          break;
+
+          // After we have executed a single case for the unblock, we can return
+          return;
         } catch (NoSuchElementException e) {
           //
         }
