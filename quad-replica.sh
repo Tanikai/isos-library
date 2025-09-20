@@ -1,8 +1,12 @@
 #!/bin/bash
 
-if [ -z "$1" ]; then
-  echo "Usage: $0 <classpath>"
-  echo "Example: $0 bftsmart.demo.messaging.MessagingReplica"
+# Runs four replica instances with IDs 0-3 in their own respective directories.
+
+
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 <scriptname> <classpath>"
+  echo "Example: $0 smartrun.sh isos.benchmark.kvstore.KVStoreReplica"
+  echo "YCSB Benchmark: $0 replica_ycsb_isos.sh "
   exit 1
 fi
 
@@ -21,8 +25,8 @@ DIR_1="$BASE_DIR/$REP_1"
 DIR_2="$BASE_DIR/$REP_2"
 DIR_3="$BASE_DIR/$REP_3"
 
-SCRIPTNAME="smartrun.sh"
-CLASSNAME="$1"
+SCRIPTNAME="$1"
+CLASSNAME="$2"
 
 CMD_0="./$SCRIPTNAME $CLASSNAME $REP_0"
 CMD_1="./$SCRIPTNAME $CLASSNAME $REP_1"

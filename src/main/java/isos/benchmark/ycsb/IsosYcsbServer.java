@@ -13,20 +13,23 @@ import java.io.ObjectInputStream;
 import java.util.TreeMap;
 
 /**
+ * YCSB server for ISOS benchmarks, adapted from {@link bftsmart.demo.ycsb.YCSBClient}.
+ *
  * @author Marcel Santos
  * @author Kai Anter
  */
 public class IsosYcsbServer {
 
-  private TreeMap<String, YCSBTable> mTables;
-  private ISOSApplication app;
+  private final TreeMap<String, YCSBTable> mTables;
+  private final ISOSApplication app;
   private final ConfigurationManager configManager;
 
   public static void main(String[] args) throws Exception {
     if (args.length == 1) {
-      new IsosYcsbServer(Integer.parseInt(args[0]));
+      var dbServer = new IsosYcsbServer(Integer.parseInt(args[0]));
+      dbServer.start();
     } else {
-      System.out.println("Usage: java isos.benchmark.ycsb.IsosYcsbServer");
+      System.out.println("Usage: java isos.benchmark.ycsb.IsosYcsbServer <replica id>");
     }
   }
 
@@ -40,6 +43,10 @@ public class IsosYcsbServer {
             this::deserializeYCSBMessage,
             this::conflict,
             this::executeClientRequest);
+  }
+
+  public void start() {
+    this.app.start();
   }
 
   private YCSBMessage deserializeYCSBMessage(byte[] payload)

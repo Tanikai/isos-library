@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-java -Djava.security.properties="./config/java.security" \
+#/bin/bash
+
+java  -Djava.security.properties="./config/java.security" \
   -Dlogback.configurationFile="./config/logback.xml" \
-  -cp "lib/*" $@
+  -cp bin/:lib/* $@

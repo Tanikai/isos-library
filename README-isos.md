@@ -20,7 +20,7 @@ First, compile the project and copy it into four separate directories with the
 ```shell
 ./copy-library.sh
 
-./quad-replica.sh bftsmart.demo.messaging.MessagingReplica
+./quad-replica.sh smartrun.sh isos.benchmark.kvstore.KVStoreReplica
 ```
 
 To exit, press Ctrl+C multiple times, or `tmux action key` + `&`, then confirm
@@ -30,16 +30,33 @@ The client can then be run with the `client.sh` script together with the Java
 class name:
 
 ```shell
-./client.sh isos.examples.MessagingExampleClient
+./client.sh isos.benchmark.kvstore.KVStoreClientInteractive
 ```
 
 ## Configuration
 
+TODO: configuration values for ISOS
 
-## Debugging
+## Benchmarking
 
-```bash
- ./gradlew build && ./copy_library.sh && ./quad-replica.sh
+### YCSB
+
+First, build and copy files into directories with:
+
+```shell
+./copy-library
+```
+
+Then, run the YCSB database replicas with:
+
+```shell
+./quad-replica.sh replica_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbServer
+```
+
+Run the YCSB client with:
+
+```shell
+./ycsb_client.sh isos.benchmark.ycsb.IsosYcsbClient isos_1
 ```
 
 ## Documentation of Thread Names
