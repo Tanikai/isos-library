@@ -321,7 +321,7 @@ public class ExecutionManager implements Runnable {
   }
 
   /**
-   * Returns the executed slots and slots in execution window.
+   * Returns all executed slots and the slots contained in the execution window.
    *
    * <p>Note: The execution window contains sequence numbers that are not committed / proposed yet.
    *
@@ -357,16 +357,22 @@ public class ExecutionManager implements Runnable {
             .map(Optional::get)
             .collect(Collectors.toMap(SequenceNumber::replicaId, SequenceNumber::sequenceCounter));
 
-    return firstNotExecutedByReplica.entrySet().parallelStream()
-        .flatMap(
-            // For each replica, we generate the sequence numbers from the minimum sequence number,
-            // up to the execution window (excluding)
-            entry -> {
-              // value of entry is the lower bound -> First not executed request
-              return IntStream.range(0, entry.getValue() + executionWindowSize)
-                  .mapToObj(seqCounter -> new SequenceNumber(entry.getKey(), seqCounter));
-            })
-        .collect(Collectors.toSet());
+    var executionWindow =
+        firstNotExecutedByReplica.entrySet().parallelStream()
+            .flatMap(
+                // For each replica, we generate the sequence numbers from the minimum sequence
+                // number,
+                // up to the execution window (excluding)
+                entry -> {
+                  // value of entry is the lower bound -> First not executed request
+                  return IntStream.range(entry.getValue(), entry.getValue() + executionWindowSize)
+                      .mapToObj(seqCounter -> new SequenceNumber(entry.getKey(), seqCounter));
+                })
+            .collect(Collectors.toSet());
+
+    executionWindow.addAll(executed);
+
+    return executionWindow;
   }
 
   /**
