@@ -166,7 +166,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @param msg
    */
   private void handleMessage(ISOSMessage msg) {
-    logger.info(
+    logger.debug(
         "Queue received message of type {} from sender {}", msg.msgType(), msg.logicalSender());
 
     // Use different handlers depending on the received message
@@ -214,6 +214,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // View Change
       case VC_VIEWCHANGE -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
       case VC_NEWVIEW -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
+      case VC_QUERYEXEC -> true;
+      case VC_EXEC -> true;
       // Invalid cases
       case DEP_PROPOSE -> throw new IllegalArgumentException();
       case TIMEOUT -> throw new IllegalArgumentException("Timeout message does not have precond");
@@ -370,7 +372,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void cancelTimeout(ISOSTimeoutType timeoutType) throws IllegalStateException {
     this.timeoutStates.put(timeoutType, TimeoutState.CANCELED);
-    logger.info("Cancel timeout {}", timeoutType);
+    logger.debug("Cancel timeout {}", timeoutType);
 
     var timeout = this.currentTimeouts.get(timeoutType);
     if (timeout == null) {

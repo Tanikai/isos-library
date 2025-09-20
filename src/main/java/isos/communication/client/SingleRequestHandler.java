@@ -103,7 +103,7 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
     }
 
     var senderId = new ReplicaId(reply.getSender());
-    logger.info("Received reply from replica {}", senderId);
+    logger.debug("Received reply from replica {}", senderId);
 
     if (!this.allowedReplicas.contains(senderId)) {
       logger.info("Received replica from not allowed replica {}, throwing message away", senderId);

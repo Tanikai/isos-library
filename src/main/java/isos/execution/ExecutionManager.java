@@ -128,7 +128,7 @@ public class ExecutionManager implements Runnable {
 
     incomingCommittedSlots.drainTo(batchCommittedSlots, this.batchProcessingMaxSize - 1);
 
-    logger.info("Process {} new committed slots", batchCommittedSlots.size());
+    logger.debug("Process {} new committed slots", batchCommittedSlots.size());
     for (var committedCommand : batchCommittedSlots) {
       var seqNum = committedCommand.seqNum();
       this.committed.add(seqNum);
@@ -196,8 +196,7 @@ public class ExecutionManager implements Runnable {
           // -> we have to skip this v and choose next one
           continue;
         }
-        logger.info("Committed in execution window: {}", committedInExecutionWindow);
-        logger.info(
+        logger.debug(
             "All dependencies {} of sequence number {} are committed and in execution window.",
             slotDependencies,
             v);
@@ -258,10 +257,10 @@ public class ExecutionManager implements Runnable {
           // -> we have to skip this v and choose next one
           continue;
         }
-        logger.info(
-            "All dependencies {} of sequence number {} are committed and in execution window.",
-            slotDependencies,
-            v);
+//        logger.info(
+//            "All dependencies {} of sequence number {} are committed and in execution window.",
+//            slotDependencies,
+//            v);
         // We have a v where all dependencies are committed
 
         List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);

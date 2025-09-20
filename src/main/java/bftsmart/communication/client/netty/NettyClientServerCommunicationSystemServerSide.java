@@ -349,7 +349,7 @@ public class NettyClientServerCommunicationSystemServerSide
 
         clientIdToSessionMapLock.readLock().lock();
         if (sessionReplicaToClient.containsKey(target)) {
-          logger.info("Send command response to client {}", target);
+          logger.debug("Send command response to client {}", target);
           wrapperMsg.destination = target;
           sessionReplicaToClient.get(target).getChannel().writeAndFlush(wrapperMsg);
 

@@ -448,7 +448,7 @@ public class NettyClientServerCommunicationSystemClientSide
       //    }
       if (targets.size() == 1 && sent == 0) throw new RuntimeException("Server not connected");
     } else if (sm instanceof PingMessage pingMsg) {
-      logger.info("Send ping message (Current pings: {})", this.replicaPingMillis.entrySet());
+      logger.debug("Send ping message (Current pings: {})", this.replicaPingMillis.entrySet());
       for (ReplicaId target : targets) {
         replicaIdToSessionMapLock.readLock().lock();
         Channel channel = sessionClientToReplica.get(target.value()).getChannel();
