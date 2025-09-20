@@ -387,7 +387,8 @@ public class NettyClientServerCommunicationSystemClientSide
       List<ReplicaId> shuffledTargets = new ArrayList<>(targets);
       Collections.shuffle(shuffledTargets, new Random());
 
-      listener.waitForChannels(quorumSize); // wait for the previous transmission to complete
+      //      listener.waitForChannels(quorumSize); // wait for the previous transmission to
+      // complete
 
       logger.debug(
           "Sending request from {} with sequence number {} to {}",
@@ -432,7 +433,7 @@ public class NettyClientServerCommunicationSystemClientSide
         if (channel.isActive()) {
           wrapperMsg.signed = sign;
           ChannelFuture f = channel.writeAndFlush(sm);
-          f.addListener(listener);
+          //          f.addListener(listener);
           sent++;
         } else {
           logger.debug("Channel to {} is not connected", target);
@@ -455,7 +456,7 @@ public class NettyClientServerCommunicationSystemClientSide
         replicaIdToSessionMapLock.readLock().unlock();
         if (channel.isActive()) {
           ChannelFuture f = channel.writeAndFlush(pingMsg);
-          f.addListener(listener);
+          //          f.addListener(listener);
         } else {
           logger.debug("Channel to {} is not connected", target);
         }
@@ -522,7 +523,8 @@ public class NettyClientServerCommunicationSystemClientSide
       throws NoSuchAlgorithmException {
 
     final NettyClientPipelineFactory nettyClientPipelineFactory =
-        new NettyClientPipelineFactory(this, sessionClientToReplica, configManager, replicaIdToSessionMapLock);
+        new NettyClientPipelineFactory(
+            this, sessionClientToReplica, configManager, replicaIdToSessionMapLock);
 
     return new ChannelInitializer<>() {
       @Override
@@ -561,6 +563,10 @@ public class NettyClientServerCommunicationSystemClientSide
     loop.schedule(() -> reconnect(ctx), time, TimeUnit.SECONDS);
   }
 
+  /**
+   * TODO Kai: is the SyncListener even required? Why do we have to wait for the previous operation
+   * to complete?
+   */
   private class SyncListener implements GenericFutureListener<ChannelFuture> {
 
     private int remainingFutures;
@@ -583,7 +589,6 @@ public class NettyClientServerCommunicationSystemClientSide
       this.remainingFutures--;
 
       if (this.remainingFutures <= 0) {
-
         this.enoughCompleted.signalAll();
       }
 
@@ -700,7 +705,7 @@ public class NettyClientServerCommunicationSystemClientSide
     if (channel.isActive()) {
       sm.signed = sign;
       ChannelFuture f = channel.writeAndFlush(sm);
-      f.addListener(listener);
+      //      f.addListener(listener);
     } else {
       logger.info("Channel to {} is not connected", replicaId);
     }
