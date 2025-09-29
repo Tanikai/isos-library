@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 /** This is the ISOS equivalent of the {@link bftsmart.tom.core.TOMSender}. It */
 public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
-  private final Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger;
 
   private final CommunicationSystemClientSide ccs;
   private final ConfigurationManager configManager;
@@ -49,15 +49,16 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   }
 
   public ISOSClient(int processId, String configHome, KeyLoader loader) {
+    this.ownClientId = processId;
+    this.logger  = LoggerFactory.getLogger(String.format("%s-%d", this.getClass(), this.ownClientId));
     if (configHome == null) {
-      this.configManager = new ConfigurationManager(processId, loader);
+      this.configManager = new ConfigurationManager(ownClientId, loader);
     } else {
-      this.configManager = new ConfigurationManager(processId, configHome, loader);
+      this.configManager = new ConfigurationManager(ownClientId, configHome, loader);
     }
-    this.ownClientId = this.configManager.getStaticConf().getProcessId();
     this.ccs =
         CommunicationSystemClientSideFactory.getCommunicationSystemClientSide(
-            processId, this.configManager);
+            ownClientId, this.configManager);
     this.ccs.setReplyReceiver(this); // This object itself shall be a reply receiver
     this.useSignatures = this.configManager.getStaticConf().getUseSignatures() == 1;
     this.currentOverallView =

@@ -270,9 +270,9 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   private void startPingTask() {
-    logger.info("Try to start ping task");
+    logger.debug("Try to start ping task");
     if (this.pingTask != null && !this.pingTask.isCancelled()) {
-      logger.info("Ping task is already started");
+      logger.debug("Ping task is already started");
       return;
     }
 
@@ -300,7 +300,7 @@ public class NettyClientServerCommunicationSystemClientSide
             500,
             PING_PERIOD_MS,
             TimeUnit.MILLISECONDS);
-    logger.info("Scheduled ping task");
+    logger.debug("Scheduled ping task");
   }
 
   private void stopPingTask() {

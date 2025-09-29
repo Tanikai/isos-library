@@ -297,7 +297,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void handleTimeoutMessage(TimeoutMessage timeoutMessage) {
     // We have to check whether the timeout was already canceled by a previous message or not
-    logger.info("Handle {} timeout", timeoutMessage.timeoutType());
+    logger.debug("Handle {} timeout", timeoutMessage.timeoutType());
     var timeoutType = timeoutMessage.timeoutType();
     var currentState = this.timeoutStates.get(timeoutType);
     if (currentState.equals(TimeoutState.CANCELED)) {
@@ -376,7 +376,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     var timeout = this.currentTimeouts.get(timeoutType);
     if (timeout == null) {
-      logger.warn("Tried to cancel timeout of type {}, but doesn't exist", timeoutType);
+      logger.debug("Tried to cancel timeout of type {}, but doesn't exist", timeoutType);
       return;
     }
     timeout.cancel(false);
@@ -533,7 +533,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.slot.setDepVerify(depVerify.followerId(), depVerify);
 
     if (!this.slot.reachedDepVerifyQuorum(2 * this.maxFaults)) {
-      logger.info("Did not reach quorum of DepVerify messages yet.");
+      logger.debug("Did not reach quorum of DepVerify messages yet in slot {}", this.seqNum);
       return;
     }
 
@@ -1094,7 +1094,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // We have to reach a f+1 quorum
     if (this.slot.getExec() == null) {
       logger.info(
-          "Received QueryExec, but did already forward message to execution. Throwing message away");
+          "Received Exec, but did already forward message to execution. Throwing message away");
       return;
     }
 

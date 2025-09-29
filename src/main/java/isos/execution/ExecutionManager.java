@@ -84,7 +84,8 @@ public class ExecutionManager implements Runnable {
                 "Cannot execute request with SeqNum %s, not present in requests. This is a bug.",
                 seqNum));
       }
-      logger.info("Execute request {}", seqNum);
+      logger.info(
+          "Execute request {} with dependencies {}", seqNum, this.deps.get(seqNum).dependencies());
       this.executor.execute(request);
       this.executed.add(seqNum);
       // rhist variable is ignored
@@ -178,7 +179,7 @@ public class ExecutionManager implements Runnable {
 
       // Pick agreement slot, build its dependency graph, and check whether all dependencies are
       // in the execution window and committed
-      logger.info("Normal Case: Complete Dependency Graph");
+      logger.debug("Normal Case: Complete Dependency Graph");
       for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
         // Build dependency graph
         DependencyGraph depGraph =
@@ -211,6 +212,7 @@ public class ExecutionManager implements Runnable {
           // Because the Dependency Graph can contain slots that are already executed, we have to
           // filter out the already executed ones
           // Ordering of vertices in the SCC for request execution is done in the execute function
+          logger.info("Normal case: execute SCC with sequence numbers {}", scc);
           this.execute(scc.stream().filter(element -> !this.executed.contains(element)).toList());
           didExecuteAgreementSlots = true;
         }
@@ -238,11 +240,11 @@ public class ExecutionManager implements Runnable {
       committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
 
       if (committedSlotsInWindowWithoutExecuted.isEmpty()) {
-        logger.info("Unblock case: No slots available for execution.");
+        logger.debug("Unblock case: No slots available for execution.");
         break;
       }
 
-      logger.info("Unblock Case: Dependency Graph with execution window limit");
+      logger.debug("Unblock Case: Dependency Graph with execution window limit");
       for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
         // Build dependency graph, but excludes slots outside the execution window
         DependencyGraph depGraph =
@@ -257,10 +259,11 @@ public class ExecutionManager implements Runnable {
           // -> we have to skip this v and choose next one
           continue;
         }
-//        logger.info(
-//            "All dependencies {} of sequence number {} are committed and in execution window.",
-//            slotDependencies,
-//            v);
+        //        logger.info(
+        //            "All dependencies {} of sequence number {} are committed and in execution
+        // window.",
+        //            slotDependencies,
+        //            v);
         // We have a v where all dependencies are committed
 
         List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
@@ -268,7 +271,8 @@ public class ExecutionManager implements Runnable {
         try {
           // Line 186
           var firstSCC = SCCs.getFirst();
-          logger.info("Unblock case: execute only first SCC with sequence numbers {}", firstSCC.toArray());
+          logger.info(
+              "Unblock case: execute only first SCC with sequence numbers {}", firstSCC);
           this.execute(
               firstSCC.stream().filter(element -> !this.executed.contains(element)).toList());
 

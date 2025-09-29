@@ -125,8 +125,6 @@ public class TrivialConflictChecker implements ConflictChecker {
       // -> Not of the whole graph, but rather only the edges of the new request
       // Is
 
-      // TODO Kai: Determine compact dependency set via dependency graph
-
       return new DependencySet(
           TrivialConflictChecker.removeRedundantDependencies(
               this.currentDependencyGraph, seqNum, candidateDependencies));

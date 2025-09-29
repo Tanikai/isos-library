@@ -22,6 +22,10 @@ import bftsmart.configuration.ConfigurationManager;
 import isos.communication.ClientMessageWrapper;
 import isos.communication.MessageSender;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.crypto.SecretKey;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -30,9 +34,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import javax.crypto.SecretKey;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Top-level thread that manages Replica-Replica and Replica-Client communication. Client Comms:
@@ -177,7 +178,7 @@ public class ServerCommunicationSystem extends Thread implements MessageSender {
   public void send(int[] targets, SystemMessage sm) {
     if (sm instanceof ClientMessageWrapper) {
       // FIXME
-//      clientsConn.send(targets, sm, false);
+      //      clientsConn.send(targets, sm, false);
     } else {
       logger.debug("--> sending message from: {} -> {}", sm.getSender(), targets);
       serversConn.send(targets, sm, true);

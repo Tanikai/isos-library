@@ -354,7 +354,7 @@ public class NettyClientServerCommunicationSystemServerSide
           sessionReplicaToClient.get(target).getChannel().writeAndFlush(wrapperMsg);
 
         } else {
-          logger.info(
+          logger.warn(
               "Client not in sessionReplicaToClient({}):{}, waiting and retrying.",
               target,
               sessionReplicaToClient.containsKey(target));
