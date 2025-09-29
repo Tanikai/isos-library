@@ -59,6 +59,33 @@ Run the YCSB client with:
 ./ycsb_client.sh isos.benchmark.ycsb.IsosYcsbClient isos_1
 ```
 
+### Benchmarking deployment
+
+Create a `inventory.yml` file that contains the IP addresses of the replicas:
+
+```yaml
+replicas:
+  hosts:
+    replica1:
+      ansible_user: ubuntu
+      ansible_host: 192.168.178.10
+    replica2:
+      ansible_user: ubuntu
+      ansible_host: 192.168.178.11
+    replica3:
+      ansible_user: ubuntu
+      ansible_host: 192.168.178.12
+    replica4:
+      ansible_user: ubuntu
+      ansible_host: 192.168.178.13
+```
+
+Run the ansible playbook with the following commands:
+
+```shell
+ansible-playbook -i inventory.yaml benchmark-playbook.yml --private-key ~/.ssh/my_custom_key
+```
+
 ## Documentation of Thread Names
 
 - `SCommS`: ServerCommunicationSystem

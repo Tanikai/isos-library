@@ -1,0 +1,35 @@
+---
+- name: Deploy ISOS to servers
+  hosts: all
+  become: yes
+
+  vars:
+    app_src_dir: build/install/library
+    app_dst_dir: /home/ubuntu/isos
+
+  tasks:
+    - name: Update and upgrade apt packages
+      become: true
+      apt:
+        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 86400
+
+    - name: Install Java LTS runtime
+      package:
+        name: "openjdk-21-jdk"
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dst_dir }}"
+        state: directory
+        owner: "{{ ansible_user | default('root') }}"
+        mode: "0755"
+
+    - name: Copy consensus build directory to replicas
+      synchronize: # copy is slow, synchronize uses rsync
+        src: "{{ app_src_dir }}/"
+        dest: "{{ app_dst_dir }}/"
+        recursive: yes
+        delete: yes

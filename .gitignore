@@ -9,3 +9,6 @@ clients/
 build
 
 /gradle.properties
+
+# Ansible
+inventory.yml
