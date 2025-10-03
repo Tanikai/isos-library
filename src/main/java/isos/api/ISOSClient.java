@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -38,6 +39,9 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
 
   private RequestReplyHandler<ClientReply> currentRequestContext;
 
+  /** Store previously received responses. */
+  private final ConcurrentHashMap<Long, ClientReply> completedSequenceNumbers;
+
   private int currentF;
   private int currentQuorumSize;
 
@@ -50,7 +54,8 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
 
   public ISOSClient(int processId, String configHome, KeyLoader loader) {
     this.ownClientId = processId;
-    this.logger  = LoggerFactory.getLogger(String.format("%s-%d", this.getClass(), this.ownClientId));
+    this.logger =
+        LoggerFactory.getLogger(String.format("%s-%d", this.getClass(), this.ownClientId));
     if (configHome == null) {
       this.configManager = new ConfigurationManager(ownClientId, loader);
     } else {
@@ -69,6 +74,8 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     this.currentF = this.configManager.getStaticConf().getF();
     this.currentQuorumSize =
         QuorumUtil.getReplyQuorum(this.currentOverallView.size(), this.currentF, true);
+
+    this.completedSequenceNumbers = new ConcurrentHashMap<>();
 
     this.ccs.setPingTargets(this.currentOverallView);
   }
@@ -93,6 +100,12 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
    */
   public ClientReply sendRequest(byte[] requestPayload)
       throws IOException, TimeoutException, QuorumNotReachedException {
+
+    if (this.currentRequestContext != null) {
+      // For debugging
+      throw new RuntimeException(
+          "Tried to send new request before the current request is handled. This is currently not supported");
+    }
 
     long clientLocalTimestamp = System.nanoTime(); // monotonic clock
     var request = new OrderedClientRequest(this.ownClientId, requestPayload, clientLocalTimestamp);
@@ -160,12 +173,18 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
         response = replyFuture.get();
         // when we are here, the future was completed.
       }
-
+      if (response != null) {
+        this.completedSequenceNumbers.put(this.currentRequestContext.getSequenceId(), response);
+      } else {
+        logger.warn("Quorum of responses is null. This might not be intended.");
+      }
+      this.currentRequestContext = null;
       return response;
 
     } catch (InterruptedException e) {
       // While we were waiting for the response with .get(), we were interrupted.
       // In the future, we might need to check whether to abort the whole ISOSClient or not.
+      logger.error("Interrupted while waiting for request.");
     } catch (ExecutionException e) {
       // When we throw an exception with .completeExceptionally(Throwable cause), we will get here.
       Throwable cause = e.getCause();
@@ -189,6 +208,13 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
 
   @Override
   public void replyReceived(ClientMessageWrapper reply) {
+    if (this.completedSequenceNumbers.containsKey(reply.getClientSequence())) {
+      logger.debug(
+          "Request with sequence number {} already completed with quorum. Ignore received replica reply.",
+          reply.getClientSequence());
+      return;
+    }
+
     try {
       this.currentRequestContext.processReply(reply);
     } catch (QuorumNotReachedException e) {

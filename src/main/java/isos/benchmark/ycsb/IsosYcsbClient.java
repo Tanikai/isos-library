@@ -5,9 +5,12 @@ import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
 import isos.api.ISOSClient;
 import isos.message.client.OrderedClientReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Client for the Yahoo Cloud Serving Benchmark. From the DB.java comment:
@@ -32,9 +35,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Kai Anter
  */
 public class IsosYcsbClient extends DB {
+  private final static AtomicLong requestCounter = new AtomicLong(0);
 
+  private Logger logger;
   private static AtomicInteger counter = new AtomicInteger();
-  private int ownClientId;
+  private int ownClientId = -1;
   private ISOSClient client;
 
   public IsosYcsbClient() {}
@@ -47,10 +52,14 @@ public class IsosYcsbClient extends DB {
   public void init() {
     Properties props = getProperties();
     int initId = Integer.parseInt((String) props.get("smart-initkey"));
+    if (this.ownClientId != -1) {
+      throw new RuntimeException("double initialized");
+    }
     this.ownClientId = initId + counter.addAndGet(1);
     this.client = new ISOSClient(this.ownClientId);
-    System.out.println("YCSBKVClient. Initiated client id: " + this.ownClientId);
-    // TODO Kai: when we init, do we have to store the client in a map, or just
+    this.logger = LoggerFactory.getLogger(String.format("IsosYcsbClient %d", this.ownClientId));
+    logger.info("YCSBKVClient. Initiated client id {}", this.ownClientId);
+    // TODO Kai: when we init, do we have to store the client in a map?
   }
 
   /** Called once per DB instance; there is one DB instance per client thread. */
@@ -76,9 +85,11 @@ public class IsosYcsbClient extends DB {
       OrderedClientReply reply = (OrderedClientReply) this.client.sendRequest(insertCmd.getBytes());
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
+      var completedRequests = IsosYcsbClient.counter.addAndGet(1);
+      logger.info("INSERT: Received reply, total completed requests: {}", completedRequests);
       return replyMsg.getResult();
     } catch (Exception e) {
-      System.err.println(e);
+      logger.error("INSERT: Exception {}", e.getMessage());
       return -1;
     }
   }
@@ -93,9 +104,11 @@ public class IsosYcsbClient extends DB {
       OrderedClientReply reply = (OrderedClientReply) this.client.sendRequest(request.getBytes());
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
+      var completedRequests = IsosYcsbClient.counter.addAndGet(1);
+      logger.info("READ: Received reply, total completed requests: {}", completedRequests);
       return replyMsg.getResult();
     } catch (Exception e) {
-      // TODO Kai: What should we do in YCSB on error?
+      logger.error("READ: Exception {}", e.getMessage());
       return -1;
     }
   }
@@ -123,9 +136,11 @@ public class IsosYcsbClient extends DB {
       OrderedClientReply reply = (OrderedClientReply) this.client.sendRequest(msg.getBytes());
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
+      var completedRequests = IsosYcsbClient.counter.addAndGet(1);
+      logger.info("UPDATE: Received reply, total completed requests: {}", completedRequests);
       return replyMsg.getResult();
     } catch (Exception e) {
-      // TODO Kai:
+      logger.error("UPDATE: Exception {}", e.getMessage());
       return -1;
     }
   }
