@@ -66,8 +66,10 @@ public class NettyClientServerCommunicationSystemClientSide
   private int clientId;
   protected ReplyReceiver trr;
   private ConfigurationManager configManager;
-  private ConcurrentHashMap<Integer, NettyClientServerSession> sessionClientToReplica =
-      new ConcurrentHashMap<>();
+
+  /** This map contains the current active sessions to replicas. */
+  private ConcurrentHashMap<Integer, NettyClientServerSession> replicaIdToSession;
+
   private ReentrantReadWriteLock replicaIdToSessionMapLock;
   private Signature signatureEngine;
   private boolean closed = false;
@@ -81,10 +83,10 @@ public class NettyClientServerCommunicationSystemClientSide
   private List<ReplicaId> pingTargets;
   // Compared to the ping implementation in ServerConnection, we have only a single
   // NettyClientServerSystem that communicates with all replicas.
-  // It is not
   private ConcurrentHashMap<ReplicaId, byte[]> lastPingNonces;
   private ConcurrentHashMap<ReplicaId, Long> lastPingNanos;
   private ConcurrentHashMap<ReplicaId, Long> replicaPingMillis;
+  private CountDownLatch remainingPings;
   private int PING_PERIOD_MS = 10000;
 
   private SecretKeyFactory secretKeyFactory;
@@ -110,8 +112,8 @@ public class NettyClientServerCommunicationSystemClientSide
     this.lastPingNonces = new ConcurrentHashMap<>();
     this.lastPingNanos = new ConcurrentHashMap<>();
     this.replicaPingMillis = new ConcurrentHashMap<>();
-    try {
 
+    try {
       this.secretKeyFactory = TOMUtil.getSecretFactory();
 
       this.configManager = configManager;
@@ -120,9 +122,10 @@ public class NettyClientServerCommunicationSystemClientSide
       privKey = configManager.getStaticConf().getPrivateKey();
 
       this.listener = new SyncListener();
+      this.replicaIdToSession = new ConcurrentHashMap<>();
       this.replicaIdToSessionMapLock = new ReentrantReadWriteLock();
 
-      // FIXME Kai: what about replicas not from the initial view?
+      // FIXME: Currently no support for reconfiguration
       int[] currV = configManager.getStaticConf().getInitialView();
 
       for (int replicaId : currV) {
@@ -140,12 +143,6 @@ public class NettyClientServerCommunicationSystemClientSide
           if (!future.isSuccess()) {
             logger.error("Failed to connect to {}", replicaId);
           }
-
-        } catch (NullPointerException ex) {
-          // What is this??? This is not possible!!!
-          logger.debug(
-              "Should fix the problem, and I think it has no other implications :-), "
-                  + "but we must make the servers store the view in a different place.");
         } catch (Exception ex) {
           logger.error("Failed to initialize MAC engine", ex);
         }
@@ -153,6 +150,8 @@ public class NettyClientServerCommunicationSystemClientSide
     } catch (NoSuchAlgorithmException ex) {
       logger.error("Failed to initialize secret key factory", ex);
     }
+
+    logger.info("Connected to initial view: {}", replicaIdToSession.entrySet());
   }
 
   // TODO Kai: is this even needed for the communication channel? Can't this be solved somehow else?
@@ -221,7 +220,6 @@ public class NettyClientServerCommunicationSystemClientSide
       return;
     }
 
-    // TODO Kai: Somehow check whether this is a PingMessage or not
     if (sm instanceof ClientMessageWrapper wrapperMsg) {
       trr.replyReceived(wrapperMsg);
     } else if (sm instanceof PingMessage pingMsg) {
@@ -257,6 +255,11 @@ public class NettyClientServerCommunicationSystemClientSide
     long roundTripNanos = System.nanoTime() - lastPingNanos;
     long roundTripMillis = TimeUnit.MILLISECONDS.convert(roundTripNanos, TimeUnit.NANOSECONDS);
 
+    if (!this.replicaPingMillis.containsKey(sender)) {
+      this.remainingPings.countDown();
+      logger.info("Remaining first pings to receive: {}", this.remainingPings.getCount());
+    }
+
     this.replicaPingMillis.put(sender, roundTripMillis);
   }
 
@@ -269,7 +272,16 @@ public class NettyClientServerCommunicationSystemClientSide
     logger.debug("Channel active");
   }
 
-  private void startPingTask() {
+  @Override
+  public void setPingTargets(List<ReplicaId> targets) {
+    this.pingTargets = targets;
+    // After starting the ping task, it waits until we have an initial ping for all
+    // First, wait all sessions are included
+    this.startPingTaskAndWait();
+  }
+
+  /** Starts the ping task */
+  private void startPingTaskAndWait() {
     logger.debug("Try to start ping task");
     if (this.pingTask != null && !this.pingTask.isCancelled()) {
       logger.debug("Ping task is already started");
@@ -281,6 +293,8 @@ public class NettyClientServerCommunicationSystemClientSide
       return;
     }
 
+    this.replicaPingMillis.clear();
+    this.remainingPings = new CountDownLatch(this.pingTargets.size());
     this.pingTask =
         this.scheduledExecutor.scheduleAtFixedRate(
             () -> {
@@ -297,14 +311,28 @@ public class NettyClientServerCommunicationSystemClientSide
                 this.lastPingNonces.put(target, pingNonce);
               }
             },
-            500,
+            0,
             PING_PERIOD_MS,
             TimeUnit.MILLISECONDS);
     logger.debug("Scheduled ping task");
+
+    logger.info("Wait for all pings to return");
+    try {
+      boolean latchReached = this.remainingPings.await(3000, TimeUnit.MILLISECONDS);
+      if (latchReached) {
+        logger.info("Received ping answers from all replicas. Can proceed to ");
+      } else {
+        logger.warn(
+            "Did not receive ping answers from all replicas before reaching timeout. Some replicas might be missing replica->client connections, which prevents sending answers to clients.");
+      }
+    } catch (InterruptedException e) {
+      logger.warn("Interrupted while waiting for remaining pings: {}", e.getMessage());
+    }
   }
 
   private void stopPingTask() {
     this.pingTask.cancel(true);
+    this.remainingPings = null;
     this.lastPingNonces.clear();
     this.lastPingNanos.clear();
   }
@@ -320,7 +348,7 @@ public class NettyClientServerCommunicationSystemClientSide
   public void reconnect(final ChannelHandlerContext ctx) {
     replicaIdToSessionMapLock.writeLock().lock();
 
-    ArrayList<NettyClientServerSession> sessions = new ArrayList<>(sessionClientToReplica.values());
+    ArrayList<NettyClientServerSession> sessions = new ArrayList<>(replicaIdToSession.values());
     for (NettyClientServerSession ncss : sessions) {
       if (ncss.getChannel() == ctx.channel()) {
         int replicaId = ncss.getReplicaId();
@@ -365,13 +393,6 @@ public class NettyClientServerCommunicationSystemClientSide
   @Override
   public void setReplyReceiver(ReplyReceiver trr) {
     this.trr = trr;
-  }
-
-  @Override
-  public void setPingTargets(List<ReplicaId> targets) {
-    this.pingTargets = targets;
-
-    this.startPingTask();
   }
 
   /**
@@ -428,7 +449,7 @@ public class NettyClientServerCommunicationSystemClientSide
         wrapperMsg.destination = target.value();
 
         replicaIdToSessionMapLock.readLock().lock();
-        Channel channel = sessionClientToReplica.get(target.value()).getChannel();
+        Channel channel = replicaIdToSession.get(target.value()).getChannel();
         replicaIdToSessionMapLock.readLock().unlock();
         if (channel.isActive()) {
           wrapperMsg.signed = sign;
@@ -452,7 +473,7 @@ public class NettyClientServerCommunicationSystemClientSide
       logger.debug("Send ping message (Current pings: {})", this.replicaPingMillis.entrySet());
       for (ReplicaId target : targets) {
         replicaIdToSessionMapLock.readLock().lock();
-        Channel channel = sessionClientToReplica.get(target.value()).getChannel();
+        Channel channel = replicaIdToSession.get(target.value()).getChannel();
         replicaIdToSessionMapLock.readLock().unlock();
         if (channel.isActive()) {
           ChannelFuture f = channel.writeAndFlush(pingMsg);
@@ -511,7 +532,7 @@ public class NettyClientServerCommunicationSystemClientSide
     this.closed = true;
     // Iterator sessions = sessionClientToReplica.values().iterator();
     replicaIdToSessionMapLock.readLock().lock();
-    ArrayList<NettyClientServerSession> sessions = new ArrayList<>(sessionClientToReplica.values());
+    ArrayList<NettyClientServerSession> sessions = new ArrayList<>(replicaIdToSession.values());
     replicaIdToSessionMapLock.readLock().unlock();
     for (NettyClientServerSession ncss : sessions) {
       Channel c = ncss.getChannel();
@@ -524,7 +545,7 @@ public class NettyClientServerCommunicationSystemClientSide
 
     final NettyClientPipelineFactory nettyClientPipelineFactory =
         new NettyClientPipelineFactory(
-            this, sessionClientToReplica, configManager, replicaIdToSessionMapLock);
+            this, replicaIdToSession, configManager, replicaIdToSessionMapLock);
 
     return new ChannelInitializer<>() {
       @Override
@@ -575,7 +596,6 @@ public class NettyClientServerCommunicationSystemClientSide
     private final Condition enoughCompleted;
 
     public SyncListener() {
-
       this.remainingFutures = 0;
 
       this.futureLock = new ReentrantLock();
@@ -658,13 +678,13 @@ public class NettyClientServerCommunicationSystemClientSide
 
     NettyClientServerSession ncss =
         new NettyClientServerSession(channelFuture.channel(), replicaId);
-    sessionClientToReplica.put(replicaId, ncss);
+    replicaIdToSession.put(replicaId, ncss);
 
     return channelFuture;
   }
 
   public synchronized void removeClient(int clientId) {
-    sessionClientToReplica.remove(clientId);
+    replicaIdToSession.remove(clientId);
   }
 
   /**
@@ -700,7 +720,7 @@ public class NettyClientServerCommunicationSystemClientSide
     sm = sm.clone();
     sm.destination = replicaId;
     replicaIdToSessionMapLock.readLock().lock();
-    Channel channel = sessionClientToReplica.get(replicaId).getChannel();
+    Channel channel = replicaIdToSession.get(replicaId).getChannel();
     replicaIdToSessionMapLock.readLock().unlock();
     if (channel.isActive()) {
       sm.signed = sign;
