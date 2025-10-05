@@ -7,9 +7,6 @@ import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +14,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ExecutionManager implements Runnable {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -157,7 +156,7 @@ public class ExecutionManager implements Runnable {
 
       // The execution window should be recalculated after SCCs are executed, because the "first
       // not executed request" might change after SCC execution.
-      Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
+      Set<SequenceNumber> slotsInWindow = this.executedAndExecutionWindowSlots();
 
       // This has to be recalculated every time the SCCs are executed, because we do not want to
       // select agreement slots that were already executed (waste of CPU cycles)
@@ -234,7 +233,7 @@ public class ExecutionManager implements Runnable {
       // Reset loop condition
       didExecuteAgreementSlots = false;
 
-      Set<SequenceNumber> slotsInWindow = this.slotsInExecutionWindow();
+      Set<SequenceNumber> slotsInWindow = this.executedAndExecutionWindowSlots();
       Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
       committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
       committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
@@ -259,20 +258,15 @@ public class ExecutionManager implements Runnable {
           // -> we have to skip this v and choose next one
           continue;
         }
-        //        logger.info(
-        //            "All dependencies {} of sequence number {} are committed and in execution
-        // window.",
-        //            slotDependencies,
-        //            v);
-        // We have a v where all dependencies are committed
+        // We have a v where all dependencies (without deps that are outside the execution window)
+        // are committed
 
         List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
 
         try {
           // Line 186
           var firstSCC = SCCs.getFirst();
-          logger.info(
-              "Unblock case: execute only first SCC with sequence numbers {}", firstSCC);
+          logger.info("Unblock case: execute only first SCC with sequence numbers {}", firstSCC);
           this.execute(
               firstSCC.stream().filter(element -> !this.executed.contains(element)).toList());
 
@@ -297,7 +291,7 @@ public class ExecutionManager implements Runnable {
    * @return If the stream is empty, returns empty optional. Else, returns the smallest sequence
    *     number.
    */
-  public static Optional<SequenceNumber> firstNotExecutedRequestForReplica(
+  public static SequenceNumber firstNotExecutedRequestForReplica(
       ReplicaId replicaId, Set<SequenceNumber> committed, Set<SequenceNumber> executed) {
     // Get all not executed Sequence Numbers
     var notExecutedByReplica =
@@ -305,27 +299,36 @@ public class ExecutionManager implements Runnable {
             .filter(
                 seqNum -> seqNum.replicaId() == replicaId.value() && !executed.contains(seqNum));
 
-    return notExecutedByReplica.min(SequenceNumber::compareTo);
+    return notExecutedByReplica
+        .min(SequenceNumber::compareTo)
+        .orElseGet(
+            () -> {
+              // If all sequence numbers are already executed, then return the highest committed seq
+              // num
+              // If committed is empty, return the first sequence number
+              return committed.stream()
+                  .max(Comparator.naturalOrder())
+                  .orElseGet(() -> SequenceNumber.of(replicaId, 0));
+            });
   }
 
   /**
-   * !! Hot Path !!
-   *
-   * <p>Executed slots and slots in execution window.
-   *
-   * <p>Returns all agreement slots where its sequence number is smaller than the
+   * !! Hot Path !! Executed slots and slots in execution window. See static method {@link
+   * #executedAndExecutionWindowSlots(Set, Set, int)} for more information.
    *
    * <p>Pseudocode Name: exp_k
    *
    * @return
    */
-  private Set<SequenceNumber> slotsInExecutionWindow() {
-    return ExecutionManager.slotsInExecutionWindow(
+  private Set<SequenceNumber> executedAndExecutionWindowSlots() {
+    return ExecutionManager.executedAndExecutionWindowSlots(
         this.committed, this.executed, this.executionWindowSize);
   }
 
   /**
    * Returns all executed slots and the slots contained in the execution window.
+   *
+   * <p>Pseudocode Name: exp_k
    *
    * <p>Note: The execution window contains sequence numbers that are not committed / proposed yet.
    *
@@ -333,12 +336,17 @@ public class ExecutionManager implements Runnable {
    * Dependencies to requests beyond expansion limit are treated as missing, and block execution of
    * a request.
    *
+   * <p>If a replica has not yet executed slots, the set will contain future slots that might not
+   * have been committed yet (of max. executionWindowSize length). If all slots of a replica are
+   * executed, then the set will only contain the executed slots, without the execution window
+   * slots.
+   *
    * @param committed Committed sequence numbers / agreement slots
    * @param executed Executed sequence numbers / agreement slots
    * @param executionWindowSize The size of the execution window.
    * @return
    */
-  public static Set<SequenceNumber> slotsInExecutionWindow(
+  public static Set<SequenceNumber> executedAndExecutionWindowSlots(
       Set<SequenceNumber> committed, Set<SequenceNumber> executed, int executionWindowSize) {
     // We need all slots where the sequence number is smaller than the first not executed request
     // of the replica of that sequence number plus the execution window size.
@@ -357,19 +365,16 @@ public class ExecutionManager implements Runnable {
                 replicaId ->
                     ExecutionManager.firstNotExecutedRequestForReplica(
                         ReplicaId.of(replicaId), committedByReplica.get(replicaId), executed))
-            .filter(Optional::isPresent)
-            .map(Optional::get)
             .collect(Collectors.toMap(SequenceNumber::replicaId, SequenceNumber::sequenceCounter));
 
     var executionWindow =
         firstNotExecutedByReplica.entrySet().parallelStream()
             .flatMap(
                 // For each replica, we generate the sequence numbers from the minimum sequence
-                // number,
-                // up to the execution window (excluding)
+                // number, up to the execution window (excluding)
                 entry -> {
                   // value of entry is the lower bound -> First not executed request
-                  return IntStream.range(entry.getValue(), entry.getValue() + executionWindowSize)
+                  return IntStream.range(0, entry.getValue() + executionWindowSize)
                       .mapToObj(seqCounter -> SequenceNumber.of(entry.getKey(), seqCounter));
                 })
             .collect(Collectors.toSet());

@@ -1,26 +1,28 @@
 package isos.execution;
 
-import isos.consensus.model.DependencySet;
-import isos.consensus.model.SequenceNumber;
-import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
-import isos.message.client.OrderedClientRequest;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
-import java.util.HashSet;
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.*;
 
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
+import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
+import isos.message.client.OrderedClientRequest;
+import java.util.HashSet;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 class ExecutionManagerTest {
 
   @Test
-  void testSlotsInExecutionWindow() {
+  void testExecutedAndExecutionWindowSlots() {
     Set<SequenceNumber> committed =
         new HashSet<>(
-            Set.of(SequenceNumber.of(0, 1), SequenceNumber.of(1, 0), SequenceNumber.of(2, 1)));
+            Set.of(
+                SequenceNumber.of(0, 1), //
+                SequenceNumber.of(1, 0),
+                SequenceNumber.of(2, 1)));
     Set<SequenceNumber> executed = Set.of(SequenceNumber.of(2, 1));
     int executionWindowSize = 3;
 
@@ -32,21 +34,31 @@ class ExecutionManagerTest {
             SequenceNumber.of(0, 3),
             SequenceNumber.of(1, 0),
             SequenceNumber.of(1, 1),
-            SequenceNumber.of(1, 2));
+            SequenceNumber.of(1, 2),
+            SequenceNumber.of(2, 0),
+            SequenceNumber.of(2, 1),
+            SequenceNumber.of(2, 2),
+            SequenceNumber.of(2, 3));
 
     var actualSlots =
-        ExecutionManager.slotsInExecutionWindow(committed, executed, executionWindowSize);
+        ExecutionManager.executedAndExecutionWindowSlots(committed, executed, executionWindowSize);
 
-    assertEquals(expectedSlotsInExecutionWindow, actualSlots);
+    assertEquals(
+        expectedSlotsInExecutionWindow.stream().sorted().toList(),
+        actualSlots.stream().sorted().toList());
   }
 
   @Test
   void testExecutionManagerThread() throws InterruptedException {
     var executor = mock(ExecuteInApplication.class);
+    var executionWindowSize = 10;
     var batchProcessingMaxSize = 10;
     var manager =
         new ExecutionManager(
-            10, new TrivialDependencyGraphBuilder(), executor, batchProcessingMaxSize);
+            executionWindowSize,
+            new TrivialDependencyGraphBuilder(),
+            executor,
+            batchProcessingMaxSize);
     Thread managerThread = Thread.ofVirtual().start(manager);
 
     int clientId = 0;
@@ -84,9 +96,9 @@ class ExecutionManagerTest {
 
     var actualValueList = execCaptor.getAllValues();
 
-    assertEquals(firstRequest, actualValueList.getFirst());
-    assertEquals(secondRequestDependency, actualValueList.get(1));
-    assertEquals(secondRequest, actualValueList.get(2));
+    assertEquals(firstRequest, actualValueList.getFirst()); // SeqNum 0.0
+    assertEquals(secondRequestDependency, actualValueList.get(1)); // SeqNum 0.1
+    assertEquals(secondRequest, actualValueList.get(2)); // SeqNum 0.2
 
     // Stop the thread and wait for join
     managerThread.interrupt();
