@@ -102,7 +102,7 @@ public class SingleRequestHandler<T> implements RequestReplyHandler<T> {
       return Optional.of(this.quorumResponse);
     }
 
-    var senderId = new ReplicaId(reply.getSender());
+    var senderId = ReplicaId.of(reply.getSender());
     logger.debug("Received reply from replica {}", senderId);
 
     if (!this.allowedReplicas.contains(senderId)) {

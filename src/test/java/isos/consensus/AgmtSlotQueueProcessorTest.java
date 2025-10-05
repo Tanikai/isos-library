@@ -58,24 +58,24 @@ class AgmtSlotQueueProcessorTest {
    */
   @Test
   void testCoordinatorFastPath() {
-    var ownReplicaId = new ReplicaId(2);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(1), new ReplicaId(0), new ReplicaId(3)};
+    var ownReplicaId = ReplicaId.of(2);
+    var otherReplicaIds = new ReplicaId[] {ReplicaId.of(1), ReplicaId.of(0), ReplicaId.of(3)};
     // Act
-    var seqNum = new SequenceNumber(ownReplicaId, 1);
+    var seqNum = SequenceNumber.of(ownReplicaId, 1);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
     var clientRequestHash = clientRequest.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
-        .thenReturn(new DependencySet(new SequenceNumber(ownReplicaId, 0)));
+        .thenReturn(new DependencySet(SequenceNumber.of(ownReplicaId, 0)));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
     // coordinator
     var slot = new AgreementSlot(seqNum, clientRequest);
 
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
-        .thenReturn(new HashSet<>(List.of(new ReplicaId(0), new ReplicaId(3))));
+        .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
 
     var queueProcessor =
         new AgmtSlotQueueProcessor(
@@ -109,8 +109,8 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, depPropose.seqNum());
     assertEquals(ownReplicaId, depPropose.coordinatorId());
     assertEquals(clientRequestHash, depPropose.requestHash());
-    assertEquals(new DependencySet(new SequenceNumber(ownReplicaId, 0)), depPropose.depSet());
-    assertEquals(Set.of(new ReplicaId(3), new ReplicaId(0)), depPropose.followerQuorum());
+    assertEquals(new DependencySet(SequenceNumber.of(ownReplicaId, 0)), depPropose.depSet());
+    assertEquals(Set.of(ReplicaId.of(3), ReplicaId.of(0)), depPropose.followerQuorum());
 
     // When other replicas receive the DepPropose message, they calculate their dependencies and
     // send a DepVerify message
@@ -120,7 +120,7 @@ class AgmtSlotQueueProcessorTest {
     // f+1 Replicas reply with an additional dependency, thus it has to be included in the DepCommit
     // The original dependency is included in all replies
     DependencySet finalDepSet =
-        new DependencySet(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(0, 0));
+        new DependencySet(SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(0, 0));
 
     // Only the replicas in the follower quorum send a DepVerify message
     for (var r : depPropose.followerQuorum()) {
@@ -167,9 +167,9 @@ class AgmtSlotQueueProcessorTest {
    */
   @Test
   void testCoordinatorReconciliationPath() {
-    var ownReplicaId = new ReplicaId(2);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(1), new ReplicaId(0), new ReplicaId(3)};
-    var seqNum = new SequenceNumber(ownReplicaId, 1);
+    var ownReplicaId = ReplicaId.of(2);
+    var otherReplicaIds = new ReplicaId[] {ReplicaId.of(1), ReplicaId.of(0), ReplicaId.of(3)};
+    var seqNum = SequenceNumber.of(ownReplicaId, 1);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
     var clientRequestHash = clientRequest.calculateHash();
@@ -178,14 +178,14 @@ class AgmtSlotQueueProcessorTest {
     when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(
             new DependencySet(
-                new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)));
+                SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(otherReplicaIds[0], 0)));
 
     // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
     // coordinator
     var slot = new AgreementSlot(seqNum, clientRequest);
 
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
-        .thenReturn(new HashSet<>(List.of(new ReplicaId(0), new ReplicaId(3))));
+        .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
 
     var queueProcessor =
         new AgmtSlotQueueProcessor(
@@ -221,22 +221,22 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(clientRequestHash, depPropose.requestHash());
     assertEquals(
         new DependencySet(
-            new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[0], 0)),
+            SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(otherReplicaIds[0], 0)),
         depPropose.depSet());
-    assertEquals(Set.of(new ReplicaId(3), new ReplicaId(0)), depPropose.followerQuorum());
+    assertEquals(Set.of(ReplicaId.of(3), ReplicaId.of(0)), depPropose.followerQuorum());
 
     List<DepVerifyMessage> replies = new LinkedList<>();
     var depProposeHash = depPropose.calculateHash();
 
     DependencySet depSet1 =
         new DependencySet(
-            new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[1], 0));
+            SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(otherReplicaIds[1], 0));
     DependencySet depSet2 =
         new DependencySet(
-            new SequenceNumber(ownReplicaId, 0), new SequenceNumber(otherReplicaIds[2], 0));
+            SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(otherReplicaIds[2], 0));
 
-    replies.add(new DepVerifyMessage(seqNum, new ReplicaId(0), depProposeHash, depSet1));
-    replies.add(new DepVerifyMessage(seqNum, new ReplicaId(3), depProposeHash, depSet2));
+    replies.add(new DepVerifyMessage(seqNum, ReplicaId.of(0), depProposeHash, depSet1));
+    replies.add(new DepVerifyMessage(seqNum, ReplicaId.of(3), depProposeHash, depSet2));
     incomingQueue.addAll(replies);
 
     var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(replies);
@@ -286,10 +286,10 @@ class AgmtSlotQueueProcessorTest {
     // The final dependency set is the union of all dependency sets
     var depSetUnion =
         new DependencySet(
-            new SequenceNumber(ownReplicaId, 0),
-            new SequenceNumber(otherReplicaIds[0], 0),
-            new SequenceNumber(otherReplicaIds[1], 0),
-            new SequenceNumber(otherReplicaIds[2], 0));
+            SequenceNumber.of(ownReplicaId, 0),
+            SequenceNumber.of(otherReplicaIds[0], 0),
+            SequenceNumber.of(otherReplicaIds[1], 0),
+            SequenceNumber.of(otherReplicaIds[2], 0));
 
     var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
@@ -301,15 +301,15 @@ class AgmtSlotQueueProcessorTest {
 
   @Test
   void testFollowerHappyPath() {
-    var coordinatorId = new ReplicaId(0);
+    var coordinatorId = ReplicaId.of(0);
 
-    var ownReplicaId = new ReplicaId(1);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(2), new ReplicaId(0), new ReplicaId(3)};
+    var ownReplicaId = ReplicaId.of(1);
+    var otherReplicaIds = new ReplicaId[] {ReplicaId.of(2), ReplicaId.of(0), ReplicaId.of(3)};
 
-    var otherFollowerId = new ReplicaId(3);
-    var seqNum = new SequenceNumber(coordinatorId, 1);
+    var otherFollowerId = ReplicaId.of(3);
+    var seqNum = SequenceNumber.of(coordinatorId, 1);
 
-    var depSet = new DependencySet(new SequenceNumber(0, 0));
+    var depSet = new DependencySet(SequenceNumber.of(0, 0));
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
@@ -321,7 +321,7 @@ class AgmtSlotQueueProcessorTest {
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
-        .thenReturn(new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
+        .thenReturn(new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)));
 
     // We have 1 dependencySet with 0.0 and 2 with 0.0+1.0
 
@@ -357,7 +357,7 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(ownReplicaId, depVerify.followerId());
     assertEquals(depProposeHash, depVerify.depProposeHash());
     assertEquals(
-        new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)), depVerify.depSet());
+        new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)), depVerify.depSet());
 
     // We still have to receive the second DepVerify from the other replica
     var otherDepVerify =
@@ -365,7 +365,7 @@ class AgmtSlotQueueProcessorTest {
             seqNum,
             otherFollowerId,
             depProposeHash,
-            new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
+            new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)));
     incomingQueue.add(otherDepVerify);
 
     var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(List.of(otherDepVerify, depVerify));
@@ -396,19 +396,19 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, execMessage.seqNum());
     assertEquals(clientRequest, execMessage.clientRequest());
     assertEquals(
-        new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)),
+        new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)),
         execMessage.depSet());
   }
 
   @Test
   void testFollowerReconciliationPath() {
-    var coordinatorId = new ReplicaId(1);
-    var ownReplicaId = new ReplicaId(3);
-    var otherFollowerId = new ReplicaId(0);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(0), new ReplicaId(1), new ReplicaId(2)};
+    var coordinatorId = ReplicaId.of(1);
+    var ownReplicaId = ReplicaId.of(3);
+    var otherFollowerId = ReplicaId.of(0);
+    var otherReplicaIds = new ReplicaId[] {ReplicaId.of(0), ReplicaId.of(1), ReplicaId.of(2)};
 
-    var seqNum = new SequenceNumber(coordinatorId, 3);
-    var depSet = new DependencySet(new SequenceNumber(0, 0));
+    var seqNum = SequenceNumber.of(coordinatorId, 3);
+    var depSet = new DependencySet(SequenceNumber.of(0, 0));
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
@@ -420,7 +420,7 @@ class AgmtSlotQueueProcessorTest {
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
-        .thenReturn(new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)));
+        .thenReturn(new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)));
 
     var slot = new AgreementSlot(seqNum);
     var queueProcessor =
@@ -453,11 +453,11 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(ownReplicaId, depVerify.followerId());
     assertEquals(depProposeHash, depVerify.depProposeHash());
     assertEquals(
-        new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0)), depVerify.depSet());
+        new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)), depVerify.depSet());
 
     var otherDepVerify =
         new DepVerifyMessage(
-            seqNum, otherFollowerId, depProposeHash, new DependencySet(new SequenceNumber(0, 0)));
+            seqNum, otherFollowerId, depProposeHash, new DependencySet(SequenceNumber.of(0, 0)));
     incomingQueue.add(otherDepVerify);
 
     // Technically there are f+1 replicas with the SequenceNumber(1,0) in the DependencySet, but as
@@ -499,7 +499,7 @@ class AgmtSlotQueueProcessorTest {
     commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(commits);
 
-    var depSetUnion = new DependencySet(new SequenceNumber(0, 0), new SequenceNumber(1, 0));
+    var depSetUnion = new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0));
 
     var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
@@ -511,18 +511,18 @@ class AgmtSlotQueueProcessorTest {
 
   @Test
   void testOutOfOrderMessages() throws Exception {
-    var ownReplicaId = new ReplicaId(2);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(1), new ReplicaId(0), new ReplicaId(3)};
-    var seqNum = new SequenceNumber(ownReplicaId, 2);
+    var ownReplicaId = ReplicaId.of(2);
+    var otherReplicaIds = new ReplicaId[] {ReplicaId.of(1), ReplicaId.of(0), ReplicaId.of(3)};
+    var seqNum = SequenceNumber.of(ownReplicaId, 2);
     var clientRequest = new OrderedClientRequest(2, "OutOfOrder".getBytes(), 0L);
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
-        .thenReturn(new DependencySet(new SequenceNumber(ownReplicaId, 0)));
+        .thenReturn(new DependencySet(SequenceNumber.of(ownReplicaId, 0)));
 
     var slot = new AgreementSlot(seqNum, clientRequest);
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
-        .thenReturn(new HashSet<>(List.of(new ReplicaId(0), new ReplicaId(3))));
+        .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
 
     var queueProcessor =
         new AgmtSlotQueueProcessor(
@@ -547,7 +547,7 @@ class AgmtSlotQueueProcessorTest {
     var depPropose = depProposeWithRequest.depPropose();
     var depProposeHash = depPropose.calculateHash();
     DependencySet finalDepSet =
-        new DependencySet(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(0, 0));
+        new DependencySet(SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(0, 0));
 
     // Prepare DepVerify replies (follower quorum)
     List<DepVerifyMessage> depVerifyReplies = new LinkedList<>();

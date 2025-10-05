@@ -73,10 +73,10 @@ public class MessagingExample extends Thread {
     var agreementSlotCount = 5;
 
     // Broadcast DepPropose message for own replica
-    var seqNum = new SequenceNumber(replicaId, 0);
+    var seqNum = SequenceNumber.of(replicaId, 0);
     var payload =
         new DepProposeMessage(
-            seqNum, new ReplicaId(replicaId), "abc", new DependencySet(), new HashSet<>());
+            seqNum, ReplicaId.of(replicaId), "abc", new DependencySet(), new HashSet<>());
     var msg = new ISOSMessageWrapper(payload, replicaId);
     if (replicaId == 0) {
       logger.info("Broadcast message to other replicas");

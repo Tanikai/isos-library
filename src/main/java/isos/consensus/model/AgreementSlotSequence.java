@@ -98,7 +98,7 @@ public class AgreementSlotSequence {
       var resultList = new LinkedList<SequenceNumber>();
 
       for (int i = start.sequenceCounter(); i < seqNum.sequenceCounter() + 1; i++) {
-        var newSeqNum = new SequenceNumber(this.replicaId.value(), i);
+        var newSeqNum = SequenceNumber.of(this.replicaId.value(), i);
         createDefaultEntry(newSeqNum);
         resultList.add(newSeqNum);
         size++;
@@ -111,7 +111,7 @@ public class AgreementSlotSequence {
   }
 
   public SequenceNumber getLowestUnusedSequenceNumber() {
-    return new SequenceNumber(this.replicaId.value(), size);
+    return SequenceNumber.of(this.replicaId.value(), size);
   }
 
   /**

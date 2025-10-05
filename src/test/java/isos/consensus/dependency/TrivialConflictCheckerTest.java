@@ -14,18 +14,18 @@ class TrivialConflictCheckerTest {
   public static List<SequenceNumber> generateSequenceNumbers(ReplicaId replicaId, int count) {
     List<SequenceNumber> result = new LinkedList<>();
     for (int i = 1; i <= count; i++) {
-      result.add(new SequenceNumber(replicaId, i));
+      result.add(SequenceNumber.of(replicaId, i));
     }
     return result;
   }
 
   public static Dependency createEdge(int replicaIdInt, int from, int to) {
-    var replicaId = new ReplicaId(replicaIdInt);
-    return new Dependency(new SequenceNumber(replicaId, from), new SequenceNumber(replicaId, to));
+    var replicaId = ReplicaId.of(replicaIdInt);
+    return new Dependency(SequenceNumber.of(replicaId, from), SequenceNumber.of(replicaId, to));
   }
 
   public static SequenceNumber getSeqNum(int replicaIdInt, int nodeId) {
-    return new SequenceNumber(replicaIdInt, nodeId);
+    return SequenceNumber.of(replicaIdInt, nodeId);
   }
 
   /**
@@ -43,7 +43,7 @@ class TrivialConflictCheckerTest {
    * </pre>
    */
   DependencyGraph getTestGraph() {
-    Set<SequenceNumber> nodes = new HashSet<>(generateSequenceNumbers(new ReplicaId(0), 8));
+    Set<SequenceNumber> nodes = new HashSet<>(generateSequenceNumbers(ReplicaId.of(0), 8));
     Set<Dependency> edges = new HashSet<>();
     edges.add(createEdge(0, 1, 5));
     edges.add(createEdge(0, 2, 1));
@@ -73,12 +73,12 @@ class TrivialConflictCheckerTest {
   void TestRemoveRedundantDependencies() {
     Map<SequenceNumber, Set<SequenceNumber>> graph = new HashMap<>();
 
-    SequenceNumber v0 = new SequenceNumber(0, 0); // Client 1, K1
-    SequenceNumber v1 = new SequenceNumber(0, 1); // Client 1, K2
-    SequenceNumber v2 = new SequenceNumber(0, 2); // Client 1, K1
-    SequenceNumber v3 = new SequenceNumber(0, 3); // Client 2, K2
-    SequenceNumber v4 = new SequenceNumber(0, 4); // Client 2, K1
-    SequenceNumber v5 = new SequenceNumber(0, 5); // Client 2, K2
+    SequenceNumber v0 = SequenceNumber.of(0, 0); // Client 1, K1
+    SequenceNumber v1 = SequenceNumber.of(0, 1); // Client 1, K2
+    SequenceNumber v2 = SequenceNumber.of(0, 2); // Client 1, K1
+    SequenceNumber v3 = SequenceNumber.of(0, 3); // Client 2, K2
+    SequenceNumber v4 = SequenceNumber.of(0, 4); // Client 2, K1
+    SequenceNumber v5 = SequenceNumber.of(0, 5); // Client 2, K2
 
     graph.put(v0, Set.of());
     graph.put(v1, Set.of(v0));

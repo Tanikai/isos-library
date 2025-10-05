@@ -12,9 +12,9 @@ class DependencySetTest {
 
   @Test
   void asBytes_sameContentDifferentOrder_producesSameBytes() {
-    SequenceNumber sn1 = new SequenceNumber(new ReplicaId(1), 100);
-    SequenceNumber sn2 = new SequenceNumber(new ReplicaId(2), 200);
-    SequenceNumber sn2_1 = new SequenceNumber(new ReplicaId(2), 200);
+    SequenceNumber sn1 = SequenceNumber.of(ReplicaId.of(1), 100);
+    SequenceNumber sn2 = SequenceNumber.of(ReplicaId.of(2), 200);
+    SequenceNumber sn2_1 = SequenceNumber.of(ReplicaId.of(2), 200);
     Set<SequenceNumber> setA = new HashSet<>(Arrays.asList(sn1, sn2));
     Set<SequenceNumber> setB = new HashSet<>(Arrays.asList(sn2_1, sn1));
     DependencySet depSetA = new DependencySet(setA);
@@ -26,9 +26,9 @@ class DependencySetTest {
 
   @Test
   void asBytes_differentContent_producesDifferentBytes() {
-    SequenceNumber sn1 = new SequenceNumber(new ReplicaId(1), 100);
-    SequenceNumber sn2 = new SequenceNumber(new ReplicaId(2), 200);
-    SequenceNumber sn3 = new SequenceNumber(new ReplicaId(3), 300);
+    SequenceNumber sn1 = SequenceNumber.of(ReplicaId.of(1), 100);
+    SequenceNumber sn2 = SequenceNumber.of(ReplicaId.of(2), 200);
+    SequenceNumber sn3 = SequenceNumber.of(ReplicaId.of(3), 300);
     DependencySet depSetA = new DependencySet(sn1, sn2);
     DependencySet depSetB = new DependencySet(sn1, sn3);
     byte[] bytesA = depSetA.asBytes();

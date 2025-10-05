@@ -232,7 +232,7 @@ public class ServersCommunicationLayer extends Thread {
             .map(ReplicaId::new)
             .collect(Collectors.toCollection(ArrayList::new));
     if (includeSelf) {
-      replicaList.add(new ReplicaId(me));
+      replicaList.add(ReplicaId.of(me));
     }
     return replicaList;
   }
@@ -256,7 +256,7 @@ public class ServersCommunicationLayer extends Thread {
         // Sort ascending by ping
         .sorted(Comparator.comparing(entry -> entry.getValue().getCurrentPingMillis()))
         .limit(count)
-        .map(entry -> new ReplicaId(entry.getKey()))
+        .map(entry -> ReplicaId.of(entry.getKey()))
         .collect(Collectors.toSet());
   }
 

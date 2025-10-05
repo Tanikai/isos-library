@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 class DepVerifyMessageSerializationTest {
   @Test
   void testDepVerifyMessageSerialization() throws Exception {
-    SequenceNumber seqNum = new SequenceNumber(2, 42);
-    ReplicaId followerId = new ReplicaId(2);
+    SequenceNumber seqNum = SequenceNumber.of(2, 42);
+    ReplicaId followerId = ReplicaId.of(2);
     String depProposeHash = "hash456";
     DependencySet depSet = new DependencySet();
 

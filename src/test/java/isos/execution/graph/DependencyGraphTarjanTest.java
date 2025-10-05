@@ -17,18 +17,18 @@ public class DependencyGraphTarjanTest {
   public static List<SequenceNumber> generateSequenceNumbers(ReplicaId replicaId, int count) {
     List<SequenceNumber> result = new LinkedList<>();
     for (int i = 1; i <= count; i++) {
-      result.add(new SequenceNumber(replicaId, i));
+      result.add(SequenceNumber.of(replicaId, i));
     }
     return result;
   }
 
   public static List<SequenceNumber> sequenceNumbersOf(int replicaIdInt, List<Integer> counters) {
-    return counters.stream().map(counter -> new SequenceNumber(replicaIdInt, counter)).toList();
+    return counters.stream().map(counter -> SequenceNumber.of(replicaIdInt, counter)).toList();
   }
 
   public static Dependency createEdge(int replicaIdInt, int from, int to) {
-    var replicaId = new ReplicaId(replicaIdInt);
-    return new Dependency(new SequenceNumber(replicaId, from), new SequenceNumber(replicaId, to));
+    var replicaId = ReplicaId.of(replicaIdInt);
+    return new Dependency(SequenceNumber.of(replicaId, from), SequenceNumber.of(replicaId, to));
   }
 
   /**
@@ -48,7 +48,7 @@ public class DependencyGraphTarjanTest {
    */
   @Test
   void testTarjansSCCAlgorithm() {
-    Set<SequenceNumber> nodes = new HashSet<>(generateSequenceNumbers(new ReplicaId(0), 8));
+    Set<SequenceNumber> nodes = new HashSet<>(generateSequenceNumbers(ReplicaId.of(0), 8));
     Set<Dependency> edges = new HashSet<>();
     edges.add(createEdge(0, 1, 5));
     edges.add(createEdge(0, 2, 1));

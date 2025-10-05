@@ -99,7 +99,7 @@ public class ServerConnection {
     this.configManager = configManager;
     this.socket = socket;
     this.remoteId = remoteId;
-    this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
+    this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
     this.inQueue = inQueue;
     this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
 

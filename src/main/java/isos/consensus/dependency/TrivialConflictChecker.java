@@ -5,7 +5,6 @@ import isos.consensus.model.SequenceNumber;
 import isos.execution.CommittedCommand;
 import isos.execution.graph.DependencyGraph;
 import isos.message.client.OrderedClientRequest;
-
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiPredicate;

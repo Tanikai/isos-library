@@ -30,7 +30,7 @@ class SingleRequestHandlerTest {
   @Test
   void testHappyPathQuorumReached() throws Exception {
     int quorum = 2;
-    List<ReplicaId> replicas = List.of(new ReplicaId(0), new ReplicaId(1), new ReplicaId(2));
+    List<ReplicaId> replicas = List.of(ReplicaId.of(0), ReplicaId.of(1), ReplicaId.of(2));
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
@@ -61,7 +61,7 @@ class SingleRequestHandlerTest {
   @Test
   void testTimeoutNotEnoughReplies() {
     int quorum = 3;
-    List<ReplicaId> replicas = List.of(new ReplicaId(0), new ReplicaId(1), new ReplicaId(2));
+    List<ReplicaId> replicas = List.of(ReplicaId.of(0), ReplicaId.of(1), ReplicaId.of(2));
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
@@ -99,7 +99,7 @@ class SingleRequestHandlerTest {
   @Test
   void testQuorumImpossible() throws Exception {
     int quorum = 2;
-    List<ReplicaId> replicas = List.of(new ReplicaId(0), new ReplicaId(1), new ReplicaId(2));
+    List<ReplicaId> replicas = List.of(ReplicaId.of(0), ReplicaId.of(1), ReplicaId.of(2));
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,
@@ -136,7 +136,7 @@ class SingleRequestHandlerTest {
   @Test
   void testReplyExtractionOrder() throws Exception {
     int quorum = 2;
-    List<ReplicaId> replicas = List.of(new ReplicaId(0), new ReplicaId(1), new ReplicaId(2));
+    List<ReplicaId> replicas = List.of(ReplicaId.of(0), ReplicaId.of(1), ReplicaId.of(2));
     SingleRequestHandler<byte[]> handler =
         new SingleRequestHandler<>(
             CLIENT_ID,

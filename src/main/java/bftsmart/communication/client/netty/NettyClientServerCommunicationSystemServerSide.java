@@ -82,7 +82,7 @@ public class NettyClientServerCommunicationSystemServerSide
   public NettyClientServerCommunicationSystemServerSide(ConfigurationManager configManager) {
     try {
       this.configManager = configManager;
-      this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
+      this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
       /* Tulio Ribeiro */
       privKey = configManager.getStaticConf().getPrivateKey();
 

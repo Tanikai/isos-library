@@ -23,8 +23,8 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
   @Test
   void testDepProposeWithRequestTriggersCommitTimeout() throws Exception {
     // Setup
-    SequenceNumber seqNum = new SequenceNumber(1, 0);
-    ReplicaId coordinatorId = new ReplicaId(1);
+    SequenceNumber seqNum = SequenceNumber.of(1, 0);
+    ReplicaId coordinatorId = ReplicaId.of(1);
     DepProposeMessage depPropose =
         new DepProposeMessage(
             seqNum, coordinatorId, "hash123", new DependencySet(), new HashSet<>());

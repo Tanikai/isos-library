@@ -28,8 +28,8 @@ class AgreementSlotManagerWaitForDepsTest {
   @Test
   void testWaitForDepsUnblocksWhenAllDepsCompleted() throws Exception {
     int numDeps = 4;
-    var ownReplicaId = new ReplicaId(2);
-    var otherReplicaIds = new ReplicaId[] {new ReplicaId(0), new ReplicaId(1), new ReplicaId(3)};
+    var ownReplicaId = ReplicaId.of(2);
+    var otherReplicaIds = new ReplicaId[] {ReplicaId.of(0), ReplicaId.of(1), ReplicaId.of(3)};
 
     AgreementSlotManager manager =
         new AgreementSlotManager(
@@ -45,7 +45,7 @@ class AgreementSlotManagerWaitForDepsTest {
     // We are waiting for the first agreement slot of each of the 4 replicas
     Set<SequenceNumber> waitDepSet = new HashSet<>();
     for (int i = 0; i < numDeps; i++) {
-      SequenceNumber seq = new SequenceNumber(i, 0);
+      SequenceNumber seq = SequenceNumber.of(i, 0);
       waitDepSet.add(seq);
       manager.createSequenceNumberEntry(seq);
     }

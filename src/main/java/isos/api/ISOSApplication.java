@@ -84,7 +84,7 @@ public class ISOSApplication {
         new TimeoutConfiguration(
             this.configManager.getStaticConf().getInitialIsosTimeoutDeltaMillis());
     this.deserializer = deserializer;
-    this.ownReplicaId = new ReplicaId(configManager.getStaticConf().getProcessId());
+    this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
 
     // Conflicts
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();

@@ -356,7 +356,7 @@ public class ExecutionManager implements Runnable {
             .map(
                 replicaId ->
                     ExecutionManager.firstNotExecutedRequestForReplica(
-                        new ReplicaId(replicaId), committedByReplica.get(replicaId), executed))
+                        ReplicaId.of(replicaId), committedByReplica.get(replicaId), executed))
             .filter(Optional::isPresent)
             .map(Optional::get)
             .collect(Collectors.toMap(SequenceNumber::replicaId, SequenceNumber::sequenceCounter));
@@ -370,7 +370,7 @@ public class ExecutionManager implements Runnable {
                 entry -> {
                   // value of entry is the lower bound -> First not executed request
                   return IntStream.range(entry.getValue(), entry.getValue() + executionWindowSize)
-                      .mapToObj(seqCounter -> new SequenceNumber(entry.getKey(), seqCounter));
+                      .mapToObj(seqCounter -> SequenceNumber.of(entry.getKey(), seqCounter));
                 })
             .collect(Collectors.toSet());
 

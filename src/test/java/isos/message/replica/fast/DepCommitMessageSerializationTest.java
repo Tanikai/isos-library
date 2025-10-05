@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 class DepCommitMessageSerializationTest {
   @Test
   void testDepCommitMessageSerialization() throws Exception {
-    SequenceNumber seqNum = new SequenceNumber(2, 42);
-    ReplicaId replicaId = new ReplicaId(2);
+    SequenceNumber seqNum = SequenceNumber.of(2, 42);
+    ReplicaId replicaId = ReplicaId.of(2);
     String depVerifysHash = "hash789";
 
     DepCommitMessage original = new DepCommitMessage(

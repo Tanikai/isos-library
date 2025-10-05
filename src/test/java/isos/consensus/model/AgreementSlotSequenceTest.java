@@ -11,7 +11,7 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testInitialSlotsEmpty() {
-    ReplicaId replicaId = new ReplicaId(1);
+    ReplicaId replicaId = ReplicaId.of(1);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5);
     List<AgreementSlot> slots = seq.getAgreementSlotsReadOnly();
     assertEquals(0, slots.size());
@@ -19,11 +19,11 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testCreateLowestUnusedSequenceNumberEntryFillsSlot() {
-    ReplicaId replicaId = new ReplicaId(2);
+    ReplicaId replicaId = ReplicaId.of(2);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 3);
     assertEquals(0, seq.size());
     var actualSeqNum = seq.createLowestUnusedSequenceNumberEntry(null);
-    SequenceNumber expectedSeqNum = new SequenceNumber(2, 0);
+    SequenceNumber expectedSeqNum = SequenceNumber.of(2, 0);
     assertEquals(expectedSeqNum, actualSeqNum);
     assertEquals(1, seq.size());
     AgreementSlot slot = seq.getAgreementSlotValue(expectedSeqNum);
@@ -34,9 +34,9 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testReplicaIdEnforced() {
-    var seq = new AgreementSlotSequence(new ReplicaId(1), 5);
+    var seq = new AgreementSlotSequence(ReplicaId.of(1), 5);
     seq.createLowestUnusedSequenceNumberEntry(null);
-    var invalidSequenceNum = new SequenceNumber(42, 0);
+    var invalidSequenceNum = SequenceNumber.of(42, 0);
     var invalidAgreementSlot = new AgreementSlot(invalidSequenceNum);
     assertThrowsExactly(
         InvalidReplicaIdException.class, () -> seq.putAgreementSlotValue(invalidAgreementSlot));
@@ -44,17 +44,17 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testPutAgreementSlotOutOfBounds() {
-    ReplicaId replicaId = new ReplicaId(1);
+    ReplicaId replicaId = ReplicaId.of(1);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 3);
     seq.createLowestUnusedSequenceNumberEntry(null);
-    SequenceNumber wrongCounter = new SequenceNumber(replicaId, 2);
+    SequenceNumber wrongCounter = SequenceNumber.of(replicaId, 2);
     AgreementSlot wrongSlot = new AgreementSlot(wrongCounter);
     assertThrows(IndexOutOfBoundsException.class, () -> seq.putAgreementSlotValue(wrongSlot));
   }
 
   @Test
   void testGetAgreementSlotsReadOnlyIsUnmodifiable() {
-    ReplicaId replicaId = new ReplicaId(3);
+    ReplicaId replicaId = ReplicaId.of(3);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5);
     var num0 = seq.createLowestUnusedSequenceNumberEntry(null);
     var num1 = seq.createLowestUnusedSequenceNumberEntry(null);
@@ -69,9 +69,9 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testBatchCreateSequenceNumberUntilFillsSlots() {
-    ReplicaId replicaId = new ReplicaId(3);
+    ReplicaId replicaId = ReplicaId.of(3);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 10);
-    SequenceNumber seqNum = new SequenceNumber(3, 3); // creates slots from 0-3 -> size 4
+    SequenceNumber seqNum = SequenceNumber.of(3, 3); // creates slots from 0-3 -> size 4
     seq.batchCreateSequenceNumberUntil(seqNum);
     List<AgreementSlot> slots = seq.getAgreementSlotsReadOnly();
     assertEquals(4, slots.size());
@@ -85,10 +85,10 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testPutAgreementSlotValueUpdatesSlot() {
-    ReplicaId replicaId = new ReplicaId(5);
+    ReplicaId replicaId = ReplicaId.of(5);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5);
-    seq.batchCreateSequenceNumberUntil(new SequenceNumber(3, 2)); // creates 3 slots
-    SequenceNumber sn = new SequenceNumber(replicaId, 1);
+    seq.batchCreateSequenceNumberUntil(SequenceNumber.of(3, 2)); // creates 3 slots
+    SequenceNumber sn = SequenceNumber.of(replicaId, 1);
     AgreementSlot newSlot = new AgreementSlot(sn);
     seq.putAgreementSlotValue(newSlot);
     List<AgreementSlot> slots = seq.getAgreementSlotsReadOnly();
@@ -97,7 +97,7 @@ class AgreementSlotSequenceTest {
 
   @Test
   void doNotOverwriteExistingWhenBatchCreateUntil() {
-    ReplicaId replicaId = new ReplicaId(1);
+    ReplicaId replicaId = ReplicaId.of(1);
     AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 10);
     var firstSeqEntry = seq.createLowestUnusedSequenceNumberEntry(null);
     AgreementSlot firstEntryExpected =
@@ -112,7 +112,7 @@ class AgreementSlotSequenceTest {
                 null);
     seq.putAgreementSlotValue(firstEntryExpected);
 
-    var newSeqNum = new SequenceNumber(replicaId, 3); // create from 1-3
+    var newSeqNum = SequenceNumber.of(replicaId, 3); // create from 1-3
     seq.batchCreateSequenceNumberUntil(newSeqNum);
 
     assertEquals(4, seq.size());

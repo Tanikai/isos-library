@@ -20,19 +20,19 @@ class ExecutionManagerTest {
   void testSlotsInExecutionWindow() {
     Set<SequenceNumber> committed =
         new HashSet<>(
-            Set.of(new SequenceNumber(0, 1), new SequenceNumber(1, 0), new SequenceNumber(2, 1)));
-    Set<SequenceNumber> executed = Set.of(new SequenceNumber(2, 1));
+            Set.of(SequenceNumber.of(0, 1), SequenceNumber.of(1, 0), SequenceNumber.of(2, 1)));
+    Set<SequenceNumber> executed = Set.of(SequenceNumber.of(2, 1));
     int executionWindowSize = 3;
 
     Set<SequenceNumber> expectedSlotsInExecutionWindow =
         Set.of(
-            new SequenceNumber(0, 0),
-            new SequenceNumber(0, 1),
-            new SequenceNumber(0, 2),
-            new SequenceNumber(0, 3),
-            new SequenceNumber(1, 0),
-            new SequenceNumber(1, 1),
-            new SequenceNumber(1, 2));
+            SequenceNumber.of(0, 0),
+            SequenceNumber.of(0, 1),
+            SequenceNumber.of(0, 2),
+            SequenceNumber.of(0, 3),
+            SequenceNumber.of(1, 0),
+            SequenceNumber.of(1, 1),
+            SequenceNumber.of(1, 2));
 
     var actualSlots =
         ExecutionManager.slotsInExecutionWindow(committed, executed, executionWindowSize);
@@ -53,7 +53,7 @@ class ExecutionManagerTest {
     byte[] clientCommand = "Hello World!".getBytes();
     long clientTimestamp = 1000;
 
-    var seqNum = new SequenceNumber(0, 0);
+    var seqNum = SequenceNumber.of(0, 0);
     OrderedClientRequest firstRequest =
         new OrderedClientRequest(clientId, clientCommand, clientTimestamp);
 
@@ -65,13 +65,13 @@ class ExecutionManagerTest {
 
     OrderedClientRequest secondRequest = new OrderedClientRequest(1, clientCommand, 2000);
 
-    var dependencySeqNum = new SequenceNumber(0, 1);
+    var dependencySeqNum = SequenceNumber.of(0, 1);
     OrderedClientRequest secondRequestDependency = new OrderedClientRequest(2, clientCommand, 1500);
 
     // Submit the command and dependency out of order to test
     manager.submitCommittedRequest(
         new CommittedCommand(
-            new SequenceNumber(0, 2), secondRequest, new DependencySet(Set.of(dependencySeqNum))));
+            SequenceNumber.of(0, 2), secondRequest, new DependencySet(Set.of(dependencySeqNum))));
 
     Thread.sleep(1000);
 

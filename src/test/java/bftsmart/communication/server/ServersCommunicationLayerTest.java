@@ -44,17 +44,17 @@ public class ServersCommunicationLayerTest {
   @Test
   public void testGetAllConnectedReplicasIncludeSelf() {
     List<ReplicaId> replicas = commLayer.getAllConnectedReplicas(true);
-    assertTrue(replicas.contains(new ReplicaId(1)));
-    assertTrue(replicas.contains(new ReplicaId(2)));
-    assertTrue(replicas.contains(new ReplicaId(3)));
+    assertTrue(replicas.contains(ReplicaId.of(1)));
+    assertTrue(replicas.contains(ReplicaId.of(2)));
+    assertTrue(replicas.contains(ReplicaId.of(3)));
   }
 
   @Test
   public void testGetAllConnectedReplicasExcludeSelf() {
     List<ReplicaId> replicas = commLayer.getAllConnectedReplicas(false);
-    assertFalse(replicas.contains(new ReplicaId(1)));
-    assertTrue(replicas.contains(new ReplicaId(2)));
-    assertTrue(replicas.contains(new ReplicaId(3)));
+    assertFalse(replicas.contains(ReplicaId.of(1)));
+    assertTrue(replicas.contains(ReplicaId.of(2)));
+    assertTrue(replicas.contains(ReplicaId.of(3)));
   }
 
   @Test
@@ -74,7 +74,7 @@ public class ServersCommunicationLayerTest {
     connections.put(4, conn4);
 
     Set<ReplicaId> result = ServersCommunicationLayer.getLowestPingReplicas(connections, 2);
-    Set<ReplicaId> expected = new HashSet<>(Arrays.asList(new ReplicaId(2), new ReplicaId(4)));
+    Set<ReplicaId> expected = new HashSet<>(Arrays.asList(ReplicaId.of(2), ReplicaId.of(4)));
     // The two lowest pings are 10 (id=2) and 20 (id=4)
     assertEquals(expected, result);
   }

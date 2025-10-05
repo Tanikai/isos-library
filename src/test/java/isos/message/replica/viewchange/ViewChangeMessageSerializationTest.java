@@ -24,16 +24,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ViewChangeMessageSerializationTest {
   @Test
   void testViewChangeMessageSerialization() throws Exception {
-    SequenceNumber seqNum = new SequenceNumber(2, 42);
+    SequenceNumber seqNum = SequenceNumber.of(2, 42);
     ViewNumber viewNumber = new ViewNumber(5);
-    ReplicaId coordinatorId = new ReplicaId(2);
+    ReplicaId coordinatorId = ReplicaId.of(2);
     DepProposeMessage depPropose =
         new DepProposeMessage(
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
     DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, req);
     List<DepVerifyMessage> depVerifys = new ArrayList<>();
-    depVerifys.add(new DepVerifyMessage(seqNum, new ReplicaId(3), "hash", new DependencySet()));
+    depVerifys.add(new DepVerifyMessage(seqNum, ReplicaId.of(3), "hash", new DependencySet()));
 
     var fpc = new FastPathCertificate(dp, depVerifys);
     ViewChangeMessage original = new ViewChangeMessage(seqNum, viewNumber, coordinatorId, fpc);

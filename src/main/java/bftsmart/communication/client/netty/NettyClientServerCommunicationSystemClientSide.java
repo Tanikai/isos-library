@@ -223,7 +223,7 @@ public class NettyClientServerCommunicationSystemClientSide
     if (sm instanceof ClientMessageWrapper wrapperMsg) {
       trr.replyReceived(wrapperMsg);
     } else if (sm instanceof PingMessage pingMsg) {
-      this.handlePingMessage(new ReplicaId(sm.getSender()), pingMsg);
+      this.handlePingMessage(ReplicaId.of(sm.getSender()), pingMsg);
     } else {
       logger.warn("Received unsupported SystemMessage, throwing away");
     }

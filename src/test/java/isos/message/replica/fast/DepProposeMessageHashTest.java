@@ -12,13 +12,13 @@ class DepProposeMessageHashTest {
 
   @Test
   void testCalculateHashConsistency() {
-    SequenceNumber seqNum = new SequenceNumber(1, 42);
-    ReplicaId coordinatorId = new ReplicaId(7);
+    SequenceNumber seqNum = SequenceNumber.of(1, 42);
+    ReplicaId coordinatorId = ReplicaId.of(7);
     String requestHash = "abc123";
     DependencySet depSet = new DependencySet(
-        new SequenceNumber(2, 10),
-        new SequenceNumber(3, 20));
-    Set<ReplicaId> followerQuorum = Set.of(new ReplicaId(5), new ReplicaId(2));
+        SequenceNumber.of(2, 10),
+        SequenceNumber.of(3, 20));
+    Set<ReplicaId> followerQuorum = Set.of(ReplicaId.of(5), ReplicaId.of(2));
 
     DepProposeMessage msg1 = new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
     DepProposeMessage msg2 = new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
@@ -30,13 +30,13 @@ class DepProposeMessageHashTest {
 
   @Test
   void testCalculateHashDifference() {
-    SequenceNumber seqNum = new SequenceNumber(1, 42);
-    ReplicaId coordinatorId = new ReplicaId(7);
+    SequenceNumber seqNum = SequenceNumber.of(1, 42);
+    ReplicaId coordinatorId = ReplicaId.of(7);
     String requestHash = "abc123";
     DependencySet depSet = new DependencySet(
-        new SequenceNumber(2, 10),
-        new SequenceNumber(3, 20));
-    Set<ReplicaId> followerQuorum = Set.of(new ReplicaId(5), new ReplicaId(2));
+        SequenceNumber.of(2, 10),
+        SequenceNumber.of(3, 20));
+    Set<ReplicaId> followerQuorum = Set.of(ReplicaId.of(5), ReplicaId.of(2));
 
     DepProposeMessage msg1 = new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);
     DepProposeMessage msg2 = new DepProposeMessage(seqNum, coordinatorId, "different", depSet, followerQuorum);

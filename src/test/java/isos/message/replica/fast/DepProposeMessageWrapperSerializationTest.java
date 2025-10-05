@@ -17,13 +17,13 @@ class DepProposeMessageWrapperSerializationTest {
   @Test
   void testDepProposeMessageWrapperSerialization() throws Exception {
     // Arrange
-    SequenceNumber seqNum = new SequenceNumber(2, 42);
-    ReplicaId coordinatorId = new ReplicaId(2);
+    SequenceNumber seqNum = SequenceNumber.of(2, 42);
+    ReplicaId coordinatorId = ReplicaId.of(2);
     String requestHash = "hash123";
     DependencySet depSet = new DependencySet();
     Set<ReplicaId> followerQuorum = new HashSet<>();
-    followerQuorum.add(new ReplicaId(3));
-    followerQuorum.add(new ReplicaId(4));
+    followerQuorum.add(ReplicaId.of(3));
+    followerQuorum.add(ReplicaId.of(4));
 
     DepProposeMessage depPropose =
         new DepProposeMessage(seqNum, coordinatorId, requestHash, depSet, followerQuorum);

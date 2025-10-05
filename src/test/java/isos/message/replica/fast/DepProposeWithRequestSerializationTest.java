@@ -28,8 +28,8 @@ class DepProposeWithRequestSerializationTest {
 
   @Test
   void testSerializationWithRequest() throws Exception {
-    SequenceNumber seqNum = new SequenceNumber(2, 42);
-    ReplicaId coordinatorId = new ReplicaId(2);
+    SequenceNumber seqNum = SequenceNumber.of(2, 42);
+    ReplicaId coordinatorId = ReplicaId.of(2);
     DepProposeMessage depPropose =
         new DepProposeMessage(
             seqNum, coordinatorId, "test123", new DependencySet(), new HashSet<>());
@@ -45,8 +45,8 @@ class DepProposeWithRequestSerializationTest {
 
   @Test
   void testSerializationWithNullRequest() throws Exception {
-    SequenceNumber seqNum = new SequenceNumber(2, 42);
-    ReplicaId coordinatorId = new ReplicaId(2);
+    SequenceNumber seqNum = SequenceNumber.of(2, 42);
+    ReplicaId coordinatorId = ReplicaId.of(2);
     DepProposeMessage depPropose =
         new DepProposeMessage(
             seqNum, coordinatorId, "test123", new DependencySet(), new HashSet<>());
