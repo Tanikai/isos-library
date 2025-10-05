@@ -171,7 +171,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Use different handlers depending on the received message
     switch (msg) {
-
       // Fast path
       case DepProposeWithRequest depPropose ->
           // This case only happens if we receive a depPropose from another replica. For requests
@@ -194,33 +193,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
       case ExecMessage exec -> this.handleExecMessage(exec);
       default -> {}
     }
-  }
-
-  /**
-   * Unified method that checks whether the step precondition holds for a message in the current
-   * state. Generally, if a step precondition does not hold, the message should be buffered so that
-   * it can be processed later when the correct step is reached.
-   */
-  private boolean stepPrecondHolds(ISOSMessageType msgType) {
-    var currentStep = this.slot.getStep();
-    return switch (msgType) {
-      // Fast Path
-      case DEP_PROPOSE_WITH_REQ -> currentStep == AgreementSlotPhase.INIT; // Throw away message
-      case DEP_VERIFY -> currentStep == AgreementSlotPhase.PROPOSED; // Keep Message
-      case DEP_COMMIT -> currentStep == AgreementSlotPhase.FP_VERIFIED; // Keep Message
-      // Reconciliation Path
-      case REC_PREPARE -> currentStep == AgreementSlotPhase.RP_VERIFIED; // Keep Message
-      case REC_COMMIT -> currentStep == AgreementSlotPhase.RP_PREPARED; // Keep Message
-      // View Change
-      case VC_VIEWCHANGE -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
-      case VC_NEWVIEW -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
-      case VC_QUERYEXEC -> true;
-      case VC_EXEC -> true;
-      // Invalid cases
-      case DEP_PROPOSE -> throw new IllegalArgumentException();
-      case TIMEOUT -> throw new IllegalArgumentException("Timeout message does not have precond");
-      default -> throw new IllegalArgumentException(String.format("Invalid msgType %s", msgType));
-    };
   }
 
   /**
@@ -405,6 +377,91 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // region Preconditions, buffering message
 
+  /**
+   * Unified method that checks whether the step precondition holds for a message in the current
+   * state. Generally, if a step precondition does not hold, the message should be buffered so that
+   * it can be processed later when the correct step is reached.
+   */
+  private boolean stepPrecondHolds(ISOSMessageType msgType) {
+    var currentStep = this.slot.getStep();
+    return switch (msgType) {
+      // Fast Path
+      case DEP_PROPOSE_WITH_REQ -> currentStep == AgreementSlotPhase.INIT; // Throw away message
+      case DEP_VERIFY -> currentStep == AgreementSlotPhase.PROPOSED; // Keep Message
+      case DEP_COMMIT -> currentStep == AgreementSlotPhase.FP_VERIFIED; // Keep Message
+      // Reconciliation Path
+      case REC_PREPARE -> currentStep == AgreementSlotPhase.RP_VERIFIED; // Keep Message
+      case REC_COMMIT -> currentStep == AgreementSlotPhase.RP_PREPARED; // Keep Message
+      // View Change
+      case VC_VIEWCHANGE -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
+      case VC_NEWVIEW -> currentStep == AgreementSlotPhase.VIEW_CHANGE; // Keep Message
+      case VC_QUERYEXEC -> true;
+      case VC_EXEC -> true;
+      // Invalid cases
+      case DEP_PROPOSE ->
+          throw new IllegalArgumentException("DepPropose without Request cannot be processed");
+      case TIMEOUT -> throw new IllegalArgumentException("Timeout message does not have precond");
+      default -> throw new IllegalArgumentException(String.format("Invalid msgType %s", msgType));
+    };
+  }
+
+  /**
+   * Processes messages that have been buffered due to a step mismatch. After moving to a new step,
+   * call this procedure to handle the messages.
+   *
+   * @param newStep The new step of the agreement slot after finishing the previous step
+   */
+  private void processBufferedMessages(AgreementSlotPhase newStep, ViewNumber currentView) {
+    logger.info("Process buffered messages, current step {}", newStep);
+    switch (newStep) {
+      case NULL -> {}
+      case INIT -> {}
+      case PROPOSED -> { //
+        getAndHandleMessagesFromBuffer(ISOSMessageType.DEP_VERIFY, null);
+      }
+      case FP_VERIFIED -> {
+        getAndHandleMessagesFromBuffer(ISOSMessageType.DEP_COMMIT, null);
+      }
+      case FP_COMMITTED -> {
+        // done
+      }
+      case RP_VERIFIED -> {
+        getAndHandleMessagesFromBuffer(ISOSMessageType.REC_PREPARE, currentView);
+      }
+      case RP_PREPARED -> {
+        getAndHandleMessagesFromBuffer(ISOSMessageType.REC_COMMIT, currentView);
+      }
+      case RP_COMMITTED -> {
+        // done
+      }
+      case VIEW_CHANGE -> {
+        getAndHandleMessagesFromBuffer(ISOSMessageType.VC_VIEWCHANGE, currentView);
+        getAndHandleMessagesFromBuffer(ISOSMessageType.VC_NEWVIEW, currentView);
+      }
+    }
+  }
+
+  private void getAndHandleMessagesFromBuffer(ISOSMessageType msgType, ViewNumber currentView) {
+    Collection<? extends ISOSMessage> bufferedMessages;
+    if (currentView == null) {
+      bufferedMessages = this.bufferedMessages.removeBufferedMsgWithoutView(msgType);
+    } else {
+      bufferedMessages = this.bufferedMessages.removeBufferedMsgWithView(msgType, currentView);
+    }
+
+    if (!bufferedMessages.isEmpty()) {
+      logger.info(
+          "Buffer contains {} messages of type {}. Process messages.",
+          bufferedMessages.size(),
+          msgType);
+    }
+
+    // Handle the messages sequentially
+    for (ISOSMessage msg : bufferedMessages) {
+      this.handleMessage(msg);
+    }
+  }
+
   // endregion
 
   // region Fast Path
@@ -481,6 +538,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
         var wrapper = new ISOSMessageWrapper(depVerify, this.ownReplicaId.value());
         this.msgSender.broadcastToReplicas(true, wrapper);
       }
+
+      // New step -> handle DepVerify that were buffered
+      this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
     } else {
       logger.error("Received DepPropose message without request! Is this valid?");
     }
@@ -566,12 +626,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // from
     // 2f+1 replicas (possibly including itself)
     this.msgSender.broadcastToReplicas(true, wrapper);
+
+    // New step -> handle DepCommit that were buffered
+    this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
   }
 
   private void handleDepCommit(DepCommitMessage depCommit) {
     this.bufferedMessages.storeDepCommit(depCommit);
 
-    if (!this.bufferedMessages.depCommitQuorumReached((2 * this.maxFaults) + 1)) {
+    if (!this.bufferedMessages.depCommitQuorumSizeReached((2 * this.maxFaults) + 1)) {
       return;
     }
 
@@ -618,6 +681,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var wrapper = new ISOSMessageWrapper(prepareMsg, this.ownReplicaId);
     // We have to process our own prepare message as well, so includeSelf is true
     this.msgSender.broadcastToReplicas(true, wrapper);
+
+    // New step -> handle Prepare messages that were buffered
+    this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
   }
 
   /**
@@ -657,7 +723,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // If we have a 2f+1 quorum, we can continue
     // TODO Kai: do we need to check for other conditions of the quorum? Same hash?
-    if (!this.bufferedMessages.prepareQuorumReached(
+    if (!this.bufferedMessages.prepareQuorumSizeReached(
         this.slot.getViewNumber(), (2 * this.maxFaults) + 1)) {
       logger.info(
           "Received prepare message for view {}, but quorum not reached yet.",
@@ -670,6 +736,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
         new CommitMessage(this.seqNum, this.slot.getViewNumber(), this.ownReplicaId, depVerifyHash);
     var wrapper = new ISOSMessageWrapper(commitMsg, this.ownReplicaId);
     this.msgSender.broadcastToReplicas(true, wrapper);
+
+    // New step -> handle (Reconciliation) Commit messages that were buffered
+    this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
   }
 
   /**
@@ -698,7 +767,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    if (!this.bufferedMessages.commitQuorumReached(
+    if (!this.bufferedMessages.commitQuorumSizeReached(
         this.slot.getViewNumber(), (2 * this.maxFaults) + 1)) {
       logger.info(
           "Received commit message for view {}, but quorum not reached yet.",
@@ -809,6 +878,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
             new ViewChangeMessage(
                 this.seqNum, newViewNum, this.ownReplicaId, this.slot.getViewChangeCertificate()),
             this.ownReplicaId));
+
+    // New step -> handle ViewChange / NewView messages that were buffered
+    this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
   }
 
   /**

@@ -1,10 +1,5 @@
 package isos.consensus;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-
 import isos.communication.MessageSender;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
@@ -21,15 +16,21 @@ import isos.message.replica.reconciliation.CommitMessage;
 import isos.message.replica.reconciliation.PrepareMessage;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 class AgmtSlotQueueProcessorTest {
 
@@ -508,7 +509,83 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(depSetUnion, execMessage.depSet());
   }
 
+  @Test
+  void testOutOfOrderMessages() throws Exception {
+    var ownReplicaId = new ReplicaId(2);
+    var otherReplicaIds = new ReplicaId[] {new ReplicaId(1), new ReplicaId(0), new ReplicaId(3)};
+    var seqNum = new SequenceNumber(ownReplicaId, 2);
+    var clientRequest = new OrderedClientRequest(2, "OutOfOrder".getBytes(), 0L);
+
+    ConflictChecker conflictChecker = mock(ConflictChecker.class);
+    when(conflictChecker.getCompactDependencySet(any(), any()))
+        .thenReturn(new DependencySet(new SequenceNumber(ownReplicaId, 0)));
+
+    var slot = new AgreementSlot(seqNum, clientRequest);
+    when(msgSenderMock.getLowestPingReplicas(anyInt()))
+        .thenReturn(new HashSet<>(List.of(new ReplicaId(0), new ReplicaId(3))));
+
+    var queueProcessor =
+        new AgmtSlotQueueProcessor(
+            ownReplicaId,
+            seqNum,
+            incomingQueue,
+            timeoutConfig,
+            msgSenderMock,
+            slot,
+            conflictChecker,
+            dependencyWaitMock,
+            requestExecutorMock,
+            maxFaults,
+            replicaCount);
+    var queueProcessorThread = new Thread(queueProcessor);
+    queueProcessorThread.start();
+
+    var msgCaptor = ArgumentCaptor.forClass(ISOSMessageWrapper.class);
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), msgCaptor.capture());
+    var wrapper = msgCaptor.getValue();
+    var depProposeWithRequest = (DepProposeWithRequest) wrapper.getPayload();
+    var depPropose = depProposeWithRequest.depPropose();
+    var depProposeHash = depPropose.calculateHash();
+    DependencySet finalDepSet =
+        new DependencySet(new SequenceNumber(ownReplicaId, 0), new SequenceNumber(0, 0));
+
+    // Prepare DepVerify replies (follower quorum)
+    List<DepVerifyMessage> depVerifyReplies = new LinkedList<>();
+    for (var r : depPropose.followerQuorum()) {
+      depVerifyReplies.add(new DepVerifyMessage(seqNum, r, depProposeHash, finalDepSet));
+    }
+    var depVerifysHash = DepVerifyMap.calculateDepVerifyHash(depVerifyReplies);
+
+    // Prepare DepCommit messages
+    DepCommitMessage depCommit1 = new DepCommitMessage(seqNum, otherReplicaIds[0], depVerifysHash);
+    DepCommitMessage depCommit2 = new DepCommitMessage(seqNum, otherReplicaIds[1], depVerifysHash);
+
+    // Send DepCommit messages before DepVerify messages out of order
+    incomingQueue.add(depCommit1);
+    incomingQueue.add(depCommit2);
+
+    // Now send DepVerify messages
+    incomingQueue.addAll(depVerifyReplies);
+
+    // After receiving 2f DepVerify messages, the coordinator broadcasts a DepCommit message.
+    // Receive the DepCommit message from the outgoing queue and loopback.
+    verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(true), msgCaptor.capture());
+    wrapper = msgCaptor.getValue();
+    var depCommit = (DepCommitMessage) wrapper.getPayload();
+    incomingQueue.add(depCommit);
+
+    // Wait for execution to be triggered
+    var execCaptor = ArgumentCaptor.forClass(CommittedCommand.class);
+    verify(requestExecutorMock, timeout(1000)).forwardRequestToExecution(execCaptor.capture());
+    var execMessage = execCaptor.getValue();
+    assertEquals(seqNum, execMessage.seqNum());
+    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(finalDepSet, execMessage.depSet());
+  }
+
   /** A replica that is not included in the followerQuorum of the DepPropose message. */
   @Test
-  void testReplicaFastPath() {}
+  void testNotFollowerReplicaFastPath() {
+    // FIXME
+  }
 }

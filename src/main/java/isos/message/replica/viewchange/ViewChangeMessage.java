@@ -2,10 +2,11 @@ package isos.message.replica.viewchange;
 
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.viewchange.ViewChangeCertificate;
-import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
+import isos.message.replica.ISOSMessageWithViewNumber;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
+
 import java.io.Serializable;
 
 /**
@@ -19,7 +20,7 @@ public record ViewChangeMessage(
     ViewNumber viewNumber,
     ReplicaId replicaId,
     ViewChangeCertificate certificate)
-    implements ISOSMessage, Serializable {
+    implements ISOSMessageWithViewNumber, Serializable {
 
   @Override
   public ISOSMessageType msgType() {
