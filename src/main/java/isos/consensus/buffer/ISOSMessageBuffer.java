@@ -80,7 +80,6 @@ public class ISOSMessageBuffer {
       }
       msgMap.put(sender, withViewNumber);
     } else {
-      System.out.println("buffer message without view num");
       // Message does not have a ViewNumber (Fast Path)
       var msgMap = this.bufferedMessages.get(msgType);
       if (msgMap.containsKey(sender)) {
@@ -99,7 +98,6 @@ public class ISOSMessageBuffer {
    */
   public Collection<ISOSMessage> removeBufferedMsgWithoutView(ISOSMessageType msgType) {
     // TODO Kai: write unit tests with out of order messages
-    System.out.println("get messages without view num");
     Map<ReplicaId, ISOSMessage> msgTypeMap = this.bufferedMessages.get(msgType);
     if (msgTypeMap.isEmpty()) {
       return List.of();

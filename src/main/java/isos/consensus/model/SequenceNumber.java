@@ -15,6 +15,9 @@ import java.util.concurrent.ConcurrentMap;
 public record SequenceNumber(int replicaId, int sequenceCounter)
     implements Comparable<SequenceNumber>, Serializable {
   // TODO Kai: make configurable
+  // Potential Issue: this strategy is only used when the developer needs a new sequence number
+  // instance. When a new SequenceNumber is created during deserialization of received messages,
+  // a new instance is created.
   private static final SequenceNumberStrategy instanceStrategy =
       new SequenceNumberCacheMapStrategy();
 

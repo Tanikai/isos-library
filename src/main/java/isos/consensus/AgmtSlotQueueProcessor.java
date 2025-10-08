@@ -412,7 +412,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
    * @param newStep The new step of the agreement slot after finishing the previous step
    */
   private void processBufferedMessages(AgreementSlotPhase newStep, ViewNumber currentView) {
-    logger.info("Process buffered messages, current step {}", newStep);
     switch (newStep) {
       case NULL -> {}
       case INIT -> {}
