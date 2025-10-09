@@ -25,7 +25,7 @@ import java.io.ObjectOutputStream;
 import java.util.function.BiPredicate;
 
 /**
- * DECISION Kai: Maybe interface instead of class? This class is used as the central manager of the
+ * DECIDED Kai: Maybe interface instead of class? This class is used as the central manager of the
  * replica-side state and logic. -> Use class as baseline, and let users extend certain parts of
  * logic via inheritance, or pass lambda functions to the constructor.
  */
@@ -37,8 +37,8 @@ public class ISOSApplication {
   private final ReplicaId ownReplicaId;
 
   /**
-   * DECISION Kai: AgreementSlotSequence that contains slots of all replicas, or
-   * AgreementSlotSequence per replica? -> All slots of replicas
+   * DECIDED Kai: AgreementSlotSequence that contains slots of all replicas, or AgreementSlotSequence
+   * per replica? -> All slots of replicas
    */
   private final AgreementSlotManager agrSlotManager;
 
@@ -93,7 +93,6 @@ public class ISOSApplication {
     this.conflictChecker =
         new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
 
-    // FIXME Kai: there should not be this cyclic dependency with the AgreementSlotManager and SCS
     var maxFaults = configManager.getStaticConf().getF();
     var replicaCount = configManager.getStaticConf().getN();
     this.agrSlotManager =

@@ -280,6 +280,11 @@ public class NettyClientServerCommunicationSystemClientSide
     this.startPingTaskAndWait();
   }
 
+  @Override
+  public Map<ReplicaId, Long> getCurrentPings() {
+    return Collections.unmodifiableMap(this.replicaPingMillis);
+  }
+
   /** Starts the ping task */
   private void startPingTaskAndWait() {
     logger.debug("Try to start ping task");

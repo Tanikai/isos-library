@@ -19,6 +19,7 @@ import isos.communication.ClientMessageWrapper;
 import isos.utils.ReplicaId;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Methods that should be implemented by the client side of the client-server communication system
@@ -31,6 +32,8 @@ public interface CommunicationSystemClientSide {
   void setReplyReceiver(ReplyReceiver trr);
 
   void setPingTargets(List<ReplicaId> targets);
+
+  Map<ReplicaId, Long> getCurrentPings();
 
   void sign(ClientMessageWrapper sm);
 

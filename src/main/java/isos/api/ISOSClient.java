@@ -19,10 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -45,7 +42,7 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
   private int currentF;
   private int currentQuorumSize;
 
-  // TODO Kai: ISOS does not really support hotswapping replicas
+  // FIXME: Currently no support for replacing / adding / removing replicas
   private List<ReplicaId> currentOverallView;
 
   public ISOSClient(int processId) {
@@ -154,15 +151,18 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
     // create request wrapper containing metadata
     ClientMessageWrapper requestWrapper = this.currentRequestContext.createRequest(payload);
 
-    // TODO Kai: Should the user choose the replica, or should it be automatically determined via
-    // lowest latency?
-    Random rand = new Random();
-    // Send the request to a single random replica
+    // Send the request to the replica with lowest known latency
+    ReplicaId lowestReplica =
+        this.ccs.getCurrentPings().entrySet().stream()
+            .min(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .orElseGet(
+                () -> {
+                  Random rand = new Random();
+                  return this.currentOverallView.get(rand.nextInt(this.currentOverallView.size()));
+                });
     this.ccs.send(
-        this.useSignatures,
-        List.of(this.currentOverallView.get(rand.nextInt(this.currentOverallView.size()))),
-        requestWrapper,
-        this.currentQuorumSize);
+        this.useSignatures, List.of(lowestReplica), requestWrapper, this.currentQuorumSize);
 
     // wait for future
     var replyFuture = this.currentRequestContext.getResponse();
