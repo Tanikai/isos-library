@@ -37,8 +37,6 @@ public class TrivialConflictChecker implements ConflictChecker {
     this.graphLock = new ReentrantLock();
   }
 
-  // TODO Kai: when a client request is added, maybe pass the already calculated dependency set to
-  // avoid double calculation?
   @Override
   public void addClientRequest(SequenceNumber slot, OrderedClientRequest r, DependencySet deps) {
     this.graphLock.lock();
@@ -55,9 +53,6 @@ public class TrivialConflictChecker implements ConflictChecker {
     this.graphLock.lock();
     try {
       this.agreementSlots.put(slot, r);
-
-      // TODO Kai: When a client request is overwritten, update the internal dependency graph
-      // accordingly (e.g. remove old vertex and edges, recalculate dependencies for this slot)
     } finally {
       this.graphLock.unlock();
     }

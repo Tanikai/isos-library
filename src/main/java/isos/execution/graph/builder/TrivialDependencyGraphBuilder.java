@@ -38,8 +38,6 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
     Set<SequenceNumber> D = new HashSet<>();
     Set<Dependency> edges = new HashSet<>();
 
-    // TODO Kai: should we ignore sequence numbers that we have already calculated?
-
     while (!D.equals(DPrime)) {
       // Pseudocode line 156: D := D'
       D.clear();
@@ -97,7 +95,13 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       Set<SequenceNumber> executed) {
     Set<SequenceNumber> DPrime = new HashSet<>(Set.of(v));
     DPrime.retainAll(executionWindow); // D' := {v} ∩ exp_k
-    // TODO Kai: What happens if v is outside the execution window? Nothing?
+    // What happens if v is outside the execution window? Nothing?
+    // -> If v is not in the execution window, then return an empty dependency graph. In this case,
+    // there will be another v that is inside of the execution window, as the window starts from
+    // the lowest, not executed slot.
+    if (DPrime.isEmpty()) {
+      return new DependencyGraph(Set.of(), Set.of());
+    }
     Set<SequenceNumber> D = new HashSet<>();
     Set<Dependency> edges = new HashSet<>();
 

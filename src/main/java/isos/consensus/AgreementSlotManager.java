@@ -167,13 +167,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    * newSeqNum have an inputQueue and agreementSlotProcessor.
    */
   public void createSequenceNumberEntry(SequenceNumber newSeqNum) {
-    // Fast check: if newSeqNum is already initialized, return early
-    //    if (this.replicaAgreementSlots.containsKey(newSeqNum)) {
-    //      return;
-    //    }
-    // TODO Kai: this is wrong
-
-    // Else: We have to initialize the sequence numbers from the lowest uninitialized agreementSlot
+    // We have to initialize the sequence numbers from the lowest uninitialized agreementSlot
     ReplicaId replicaId = newSeqNum.replicaIdRec();
     AgreementSlotSequence sequence = this.replicaAgreementSlots.get(replicaId);
 
@@ -303,9 +297,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    */
   @Override
   public void requestReceived(ClientMessageWrapper msg, boolean fromClient) {
-    // TODO Kai line 11: assert r correctly signed (-> should be done in networking layer)
-
-    // TODO Kai: Information stored in ClientMessageWrapper that is required to respond to
+    // Assert r correctly signed -> should done in networking layer
 
     try (ByteArrayInputStream bis = new ByteArrayInputStream(msg.getPayload());
         ObjectInputStream ois = new ObjectInputStream(bis)) {

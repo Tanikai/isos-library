@@ -38,16 +38,16 @@ public class AgreementSlot {
 
   // current phase
   private AgreementSlotPhase step;
-  private ViewChangeMap viewChanges;
+  private final ViewChangeMap viewChanges;
   // View number for slot s_j, initially -1
   private ViewNumber viewNumber;
   // Highest view number for slot s_j seen for replica r_i
-  private Map<ReplicaId, ViewNumber> peerViewNumbers;
+  private final Map<ReplicaId, ViewNumber> peerViewNumbers;
 
-  // DECISION Kai: should SequenceNumber be stored in the AgreementSlot object as well, or only in
+  // DECIDED Kai: should SequenceNumber be stored in the AgreementSlot object as well, or only in
   // the AgreementSlotSequence? -> only stored in the sequence, so that coordination does not have
   // to be
-  // DECISION kai: Should AgreementSlot be record, or normal object? -> normal object, due to
+  // DECIDED kai: Should AgreementSlot be record, or normal object? -> normal object, due to
   // frequent changes to the fields
 
   private ViewChangeCertificate viewChangeCertificate;

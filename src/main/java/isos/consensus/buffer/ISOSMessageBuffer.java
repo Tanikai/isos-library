@@ -97,7 +97,6 @@ public class ISOSMessageBuffer {
    * @return
    */
   public Collection<ISOSMessage> removeBufferedMsgWithoutView(ISOSMessageType msgType) {
-    // TODO Kai: write unit tests with out of order messages
     Map<ReplicaId, ISOSMessage> msgTypeMap = this.bufferedMessages.get(msgType);
     if (msgTypeMap.isEmpty()) {
       return List.of();

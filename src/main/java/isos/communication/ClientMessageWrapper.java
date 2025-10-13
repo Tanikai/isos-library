@@ -37,9 +37,6 @@ public class ClientMessageWrapper extends SystemMessage
   public transient int destination = -1; // message destination
   public transient int retry = 4;
 
-  // TODO: do I need replyServer?
-  // TODO: Information about whether the message originated from client or server
-
   public transient ClientMessageWrapper reply; // reply associated with this message
 
   public ClientMessageWrapper() {}
