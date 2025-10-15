@@ -13,7 +13,7 @@ class PrepareMessageSerializationTest {
   @Test
   void testPrepareMessageSerialization() throws Exception {
     SequenceNumber seqNum = SequenceNumber.of(2, 42);
-    ViewNumber viewNumber = new ViewNumber(5);
+    ViewNumber viewNumber = ViewNumber.of(5);
     ReplicaId replicaId = ReplicaId.of(2);
     String depVerifysHash = "hashPrepare";
 

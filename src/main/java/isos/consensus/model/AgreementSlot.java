@@ -81,7 +81,7 @@ public class AgreementSlot {
         null,
         AgreementSlotPhase.INIT,
         new HashMap<>(),
-        new ViewNumber(),
+        ViewNumber.defaultViewNumber(),
         new HashMap<>(),
         new EmptyCertificate());
   }
@@ -253,8 +253,14 @@ public class AgreementSlot {
     return Collections.unmodifiableMap(peerViewNumbers);
   }
 
+  /**
+   * Returns the current view number of the given replica id. If no ViewNumber has been set before,
+   *
+   * @param replicaId
+   * @return
+   */
   public ViewNumber getPeerViewNumber(ReplicaId replicaId) {
-    return this.peerViewNumbers.get(replicaId);
+    return this.peerViewNumbers.getOrDefault(replicaId, ViewNumber.of(-1));
   }
 
   public void setPeerViewNumber(ReplicaId replicaId, ViewNumber newPeerViewNumber) {

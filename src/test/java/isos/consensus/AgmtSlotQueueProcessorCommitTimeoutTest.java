@@ -69,11 +69,11 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
     incomingQueue.put(depProposeWithRequest);
 
     // Assert
-    assertEquals(new ViewNumber(-1), slot.getViewNumber());
+    assertEquals(ViewNumber.of(-1), slot.getViewNumber());
     Thread.sleep(
         timeoutConfig.getCommitTimeout() + 500); // wait until commit timeout expires + 500 millis
     // after the commit timeout expires, the view number should be increased by 1
-    assertEquals(new ViewNumber(0), slot.getViewNumber());
+    assertEquals(ViewNumber.of(0), slot.getViewNumber());
     processorThread.interrupt();
     processorThread.join();
   }

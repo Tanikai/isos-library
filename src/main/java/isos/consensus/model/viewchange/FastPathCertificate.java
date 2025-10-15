@@ -22,6 +22,6 @@ public record FastPathCertificate(
 
   @Override
   public ViewNumber previousViewNumber() {
-    return new ViewNumber(-1);
+    return ViewNumber.of(-1);
   }
 }

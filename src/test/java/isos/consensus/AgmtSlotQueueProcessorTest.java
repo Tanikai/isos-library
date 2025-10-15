@@ -249,7 +249,7 @@ class AgmtSlotQueueProcessorTest {
     incomingQueue.add(prepare);
     assertEquals(seqNum, prepare.seqNum());
     // view number only increases if a timeout triggers
-    assertEquals(new ViewNumber(-1), prepare.viewNumber());
+    assertEquals(ViewNumber.of(-1), prepare.viewNumber());
     assertEquals(ownReplicaId, prepare.replicaId());
     assertEquals(depVerifysHash, prepare.depVerifysHash());
 
@@ -260,9 +260,9 @@ class AgmtSlotQueueProcessorTest {
     // Create
     List<PrepareMessage> prepares = new LinkedList<>();
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
+        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
+        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(prepares);
 
     verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -271,13 +271,13 @@ class AgmtSlotQueueProcessorTest {
     var commit = (CommitMessage) wrapper.getPayload();
     incomingQueue.add(commit);
     assertEquals(seqNum, commit.seqNum());
-    assertEquals(new ViewNumber(-1), commit.viewNumber());
+    assertEquals(ViewNumber.of(-1), commit.viewNumber());
     assertEquals(ownReplicaId, commit.replicaId());
     assertEquals(depVerifysHash, commit.depVerifysHash());
 
     List<CommitMessage> commits = new LinkedList<>();
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
+    commits.add(new CommitMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
+    commits.add(new CommitMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(commits);
 
     // After the coordinator receives 2f+1 commit messages (including its own), it can forward the
@@ -472,16 +472,16 @@ class AgmtSlotQueueProcessorTest {
     var prepare = (PrepareMessage) wrapper.getPayload();
     incomingQueue.add(prepare);
     assertEquals(seqNum, prepare.seqNum());
-    assertEquals(new ViewNumber(-1), prepare.viewNumber());
+    assertEquals(ViewNumber.of(-1), prepare.viewNumber());
     assertEquals(ownReplicaId, prepare.replicaId());
     assertEquals(depVerifysHash, prepare.depVerifysHash());
 
     // Create the remaining prepare messages
     List<PrepareMessage> prepares = new LinkedList<>();
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
+        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
     prepares.add(
-        new PrepareMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
+        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(prepares);
 
     verify(msgSenderMock, timeout(500).times(3)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -490,13 +490,13 @@ class AgmtSlotQueueProcessorTest {
     var commit = (CommitMessage) wrapper.getPayload();
     incomingQueue.add(commit);
     assertEquals(seqNum, commit.seqNum());
-    assertEquals(new ViewNumber(-1), commit.viewNumber());
+    assertEquals(ViewNumber.of(-1), commit.viewNumber());
     assertEquals(ownReplicaId, commit.replicaId());
     assertEquals(depVerifysHash, commit.depVerifysHash());
 
     List<CommitMessage> commits = new LinkedList<>();
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[0], depVerifysHash));
-    commits.add(new CommitMessage(seqNum, new ViewNumber(-1), otherReplicaIds[1], depVerifysHash));
+    commits.add(new CommitMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
+    commits.add(new CommitMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(commits);
 
     var depSetUnion = new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0));

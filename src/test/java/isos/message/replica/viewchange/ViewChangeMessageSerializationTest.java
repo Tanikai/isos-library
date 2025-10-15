@@ -25,7 +25,7 @@ class ViewChangeMessageSerializationTest {
   @Test
   void testViewChangeMessageSerialization() throws Exception {
     SequenceNumber seqNum = SequenceNumber.of(2, 42);
-    ViewNumber viewNumber = new ViewNumber(5);
+    ViewNumber viewNumber = ViewNumber.of(5);
     ReplicaId coordinatorId = ReplicaId.of(2);
     DepProposeMessage depPropose =
         new DepProposeMessage(

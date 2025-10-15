@@ -26,7 +26,7 @@ class NewViewMessageSerializationTest {
   @Test
   void testNewViewMessageSerialization() throws Exception {
     SequenceNumber seqNum = SequenceNumber.of(2, 42);
-    ViewNumber viewNumber = new ViewNumber(5);
+    ViewNumber viewNumber = ViewNumber.of(5);
     ReplicaId replicaId = ReplicaId.of(2);
     ReplicaId coordinatorId = ReplicaId.of(1);
     DepProposeMessage depPropose =
@@ -71,7 +71,7 @@ class NewViewMessageSerializationTest {
   @Test
   void testNewViewMessageSerializationWithNullDepPropose() throws Exception {
     SequenceNumber seqNum = SequenceNumber.of(2, 42);
-    ViewNumber viewNumber = new ViewNumber(5);
+    ViewNumber viewNumber = ViewNumber.of(5);
     ReplicaId replicaId = ReplicaId.of(2);
     List<DepVerifyMessage> depVerifys = new ArrayList<>();
     depVerifys.add(new DepVerifyMessage(seqNum, ReplicaId.of(3), "hash", new DependencySet()));
@@ -106,7 +106,7 @@ class NewViewMessageSerializationTest {
   @Test
   void testNewViewMessageSerializationWithNullDepVerifys() throws Exception {
     SequenceNumber seqNum = SequenceNumber.of(2, 42);
-    ViewNumber viewNumber = new ViewNumber(5);
+    ViewNumber viewNumber = ViewNumber.of(5);
     ReplicaId replicaId = ReplicaId.of(2);
     ReplicaId coordinatorId = ReplicaId.of(1);
     DepProposeMessage depPropose =
