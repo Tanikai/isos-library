@@ -36,20 +36,11 @@ public record SequenceNumber(int replicaId, int sequenceCounter)
 
   @Override
   public int compareTo(SequenceNumber o) {
-    if (this.replicaId > o.replicaId) {
-      return 1;
-    } else if (this.replicaId < o.replicaId) {
-      return -1;
-    } else {
-      // same replica
-      if (this.sequenceCounter > o.sequenceCounter) {
-        return 1;
-      } else if (this.sequenceCounter < o.sequenceCounter) {
-        return -1;
-      } else {
-        return 0;
-      }
+    int cmp = Integer.compare(this.replicaId, o.replicaId);
+    if (cmp != 0) {
+      return cmp;
     }
+    return Integer.compare(this.sequenceCounter, o.sequenceCounter);
   }
 
   @Override

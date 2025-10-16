@@ -1,17 +1,19 @@
 package isos.execution;
 
+import isos.consensus.model.DependencySet;
+import isos.consensus.model.SequenceNumber;
+import isos.execution.graph.ExecutionUtils;
+import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
+import isos.message.client.OrderedClientRequest;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import java.util.HashSet;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.*;
-
-import isos.consensus.model.DependencySet;
-import isos.consensus.model.SequenceNumber;
-import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
-import isos.message.client.OrderedClientRequest;
-import java.util.HashSet;
-import java.util.Set;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 class ExecutionManagerTest {
 
@@ -41,7 +43,7 @@ class ExecutionManagerTest {
             SequenceNumber.of(2, 3));
 
     var actualSlots =
-        ExecutionManager.executedAndExecutionWindowSlots(committed, executed, executionWindowSize);
+        ExecutionUtils.executedAndExecutionWindowSlots(committed, executed, executionWindowSize);
 
     assertEquals(
         expectedSlotsInExecutionWindow.stream().sorted().toList(),
@@ -55,8 +57,7 @@ class ExecutionManagerTest {
     var batchProcessingMaxSize = 10;
     var manager =
         new ExecutionManager(
-            executionWindowSize,
-            new TrivialDependencyGraphBuilder(),
+            new TrivialDependencyGraphBuilder(executionWindowSize),
             executor,
             batchProcessingMaxSize);
     Thread managerThread = Thread.ofVirtual().start(manager);

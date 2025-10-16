@@ -7,24 +7,21 @@ import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ExecutionManager implements Runnable {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
   private static final Logger staticLogger = LoggerFactory.getLogger("ExecutionManagerStatic");
 
   // Variables at each replica
-  /** Size of execution window, k in pseudocode */
-  private final int executionWindowSize;
-
   /** How many new committed commands should be processed (and executed) at the same time */
   private final int batchProcessingMaxSize;
 
@@ -44,13 +41,11 @@ public class ExecutionManager implements Runnable {
   private final ConcurrentMap<SequenceNumber, OrderedClientRequest> requests;
 
   public ExecutionManager(
-      int executionWindowSize,
       DependencyGraphBuilder dependencyGraphBuilder,
       ExecuteInApplication executor,
       int batchProcessingMaxSize) {
     this.committed = new HashSet<>();
     this.executed = new HashSet<>();
-    this.executionWindowSize = executionWindowSize;
     this.depGraphBuilder = dependencyGraphBuilder;
     this.incomingCommittedSlots = new LinkedBlockingQueue<>();
     this.deps = new ConcurrentHashMap<>();
@@ -86,6 +81,7 @@ public class ExecutionManager implements Runnable {
       logger.info(
           "Execute request {} with dependencies {}", seqNum, this.deps.get(seqNum).dependencies());
       this.executor.execute(request);
+      this.depGraphBuilder.addExecuted(seqNum);
       this.executed.add(seqNum);
       // rhist variable is ignored
     }
@@ -132,6 +128,7 @@ public class ExecutionManager implements Runnable {
     for (var committedCommand : batchCommittedSlots) {
       var seqNum = committedCommand.seqNum();
       this.committed.add(seqNum);
+      this.depGraphBuilder.addCommittedWithDeps(seqNum, committedCommand.depSet().dependencies());
       this.deps.put(seqNum, committedCommand.depSet());
       this.requests.put(seqNum, committedCommand.clientRequest());
     }
@@ -156,10 +153,12 @@ public class ExecutionManager implements Runnable {
 
       // The execution window should be recalculated after SCCs are executed, because the "first
       // not executed request" might change after SCC execution.
-      Set<SequenceNumber> slotsInWindow = this.executedAndExecutionWindowSlots();
+      Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExpansionLimitSlots();
+
+      logger.info("Slots in window {}", slotsInWindow);
 
       // This has to be recalculated every time the SCCs are executed, because we do not want to
-      // select agreement slots that were already executed (waste of CPU cycles)
+      // select agreement slots that were already executed
       Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
       committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
       committedSlotsInWindowWithoutExecuted.retainAll(
@@ -182,7 +181,7 @@ public class ExecutionManager implements Runnable {
       for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
         // Build dependency graph
         DependencyGraph depGraph =
-            this.depGraphBuilder.buildDependencyGraph(v, this.deps, this.executed);
+            this.depGraphBuilder.buildDependencyGraph(v);
 
         // Checking whether all dependencies are contained in the vertices is wrong. Instead, we
         // have to check whether all **edge destinations** are contained in the execution window.
@@ -233,7 +232,7 @@ public class ExecutionManager implements Runnable {
       // Reset loop condition
       didExecuteAgreementSlots = false;
 
-      Set<SequenceNumber> slotsInWindow = this.executedAndExecutionWindowSlots();
+      Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExpansionLimitSlots();
       Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
       committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
       committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
@@ -246,9 +245,7 @@ public class ExecutionManager implements Runnable {
       logger.debug("Unblock Case: Dependency Graph with execution window limit");
       for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
         // Build dependency graph, but excludes slots outside the execution window
-        DependencyGraph depGraph =
-            this.depGraphBuilder.buildDependencyGraphExp(
-                v, slotsInWindow, this.deps, this.executed);
+        DependencyGraph depGraph = this.depGraphBuilder.buildDependencyGraphExp(v, slotsInWindow);
         var slotDependencies =
             depGraph.edges().stream().map(Dependency::to).collect(Collectors.toSet());
 
@@ -310,78 +307,6 @@ public class ExecutionManager implements Runnable {
                   .max(Comparator.naturalOrder())
                   .orElseGet(() -> SequenceNumber.of(replicaId, 0));
             });
-  }
-
-  /**
-   * !! Hot Path !! Executed slots and slots in execution window. See static method {@link
-   * #executedAndExecutionWindowSlots(Set, Set, int)} for more information.
-   *
-   * <p>Pseudocode Name: exp_k
-   *
-   * @return
-   */
-  private Set<SequenceNumber> executedAndExecutionWindowSlots() {
-    return ExecutionManager.executedAndExecutionWindowSlots(
-        this.committed, this.executed, this.executionWindowSize);
-  }
-
-  /**
-   * Returns all executed slots and the slots contained in the execution window.
-   *
-   * <p>Pseudocode Name: exp_k
-   *
-   * <p>Note: The execution window contains sequence numbers that are not committed / proposed yet.
-   *
-   * <p>Execution window: Oldest agreement slot of the coordinator with a not yet executed request.
-   * Dependencies to requests beyond expansion limit are treated as missing, and block execution of
-   * a request.
-   *
-   * <p>If a replica has not yet executed slots, the set will contain future slots that might not
-   * have been committed yet (of max. executionWindowSize length). If all slots of a replica are
-   * executed, then the set will only contain the executed slots, without the execution window
-   * slots.
-   *
-   * @param committed Committed sequence numbers / agreement slots
-   * @param executed Executed sequence numbers / agreement slots
-   * @param executionWindowSize The size of the execution window.
-   * @return
-   */
-  public static Set<SequenceNumber> executedAndExecutionWindowSlots(
-      Set<SequenceNumber> committed, Set<SequenceNumber> executed, int executionWindowSize) {
-    // We need all slots where the sequence number is smaller than the first not executed request
-    // of the replica of that sequence number plus the execution window size.
-    // i.e., all v, where v.sequenceCounter < exp(v.replicaId) + k
-
-    // First, we group the committed slots by replicaId.
-    var committedByReplica =
-        committed.stream()
-            .collect(Collectors.groupingBy(SequenceNumber::replicaId, Collectors.toSet()));
-
-    // Then, we get the first not executed request for each replica
-    // <ReplicaId, sequenceCounter of first not executed Request>
-    Map<Integer, Integer> firstNotExecutedByReplica =
-        committedByReplica.keySet().parallelStream()
-            .map(
-                replicaId ->
-                    ExecutionManager.firstNotExecutedRequestForReplica(
-                        ReplicaId.of(replicaId), committedByReplica.get(replicaId), executed))
-            .collect(Collectors.toMap(SequenceNumber::replicaId, SequenceNumber::sequenceCounter));
-
-    var executionWindow =
-        firstNotExecutedByReplica.entrySet().parallelStream()
-            .flatMap(
-                // For each replica, we generate the sequence numbers from the minimum sequence
-                // number, up to the execution window (excluding)
-                entry -> {
-                  // value of entry is the lower bound -> First not executed request
-                  return IntStream.range(0, entry.getValue() + executionWindowSize)
-                      .mapToObj(seqCounter -> SequenceNumber.of(entry.getKey(), seqCounter));
-                })
-            .collect(Collectors.toSet());
-
-    executionWindow.addAll(executed);
-
-    return executionWindow;
   }
 
   /**

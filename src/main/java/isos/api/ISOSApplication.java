@@ -89,7 +89,6 @@ public class ISOSApplication {
     // Conflicts
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
     this.applicationConflict = applicationConflict;
-    this.dependencyGraphBuilder = new TrivialDependencyGraphBuilder();
     this.conflictChecker =
         new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
 
@@ -115,9 +114,9 @@ public class ISOSApplication {
     this.agrSlotManager.initialize(scs);
 
     // Request Execution
+    this.dependencyGraphBuilder = new TrivialDependencyGraphBuilder(this.configManager.getStaticConf().getExecutionWindowSize());
     this.executionManager =
         new ExecutionManager(
-            this.configManager.getStaticConf().getExecutionWindowSize(),
             this.dependencyGraphBuilder,
             executor,
             this.configManager.getStaticConf().getMaxBatchSize());

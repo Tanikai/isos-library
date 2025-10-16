@@ -1,15 +1,16 @@
 package isos.execution.graph.builder;
 
-import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
+import isos.execution.graph.ExecutionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -19,21 +20,34 @@ import java.util.concurrent.ConcurrentMap;
 public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  public TrivialDependencyGraphBuilder() {}
+  private final ConcurrentMap<SequenceNumber, Set<SequenceNumber>> committedWithDepsMap;
+  private final ConcurrentMap<SequenceNumber, Boolean> executedSet;
+  private final int executionWindowSize;
+
+  public TrivialDependencyGraphBuilder(int executionWindowSize) {
+    this.committedWithDepsMap = new ConcurrentHashMap<>();
+    this.executedSet = new ConcurrentHashMap<>();
+    this.executionWindowSize = executionWindowSize;
+  }
+
+  @Override
+  public void addCommittedWithDeps(SequenceNumber seqNum, Set<SequenceNumber> deps) {
+    this.committedWithDepsMap.put(seqNum, deps);
+  }
+
+  @Override
+  public void addExecuted(SequenceNumber executedSlot) {
+    this.executedSet.put(executedSlot, true);
+  }
 
   /**
    * Pseudocode line 153-162
    *
    * @param v The slot for which the Dependency Graph should be calculated
-   * @param deps Mapping of an agreement slots to its dependencies
-   * @param executed The set of agreement slots that are already executed
    * @return
    */
   @Override
-  public DependencyGraph buildDependencyGraph(
-      SequenceNumber v,
-      ConcurrentMap<SequenceNumber, DependencySet> deps,
-      Set<SequenceNumber> executed) {
+  public DependencyGraph buildDependencyGraph(SequenceNumber v) {
     Set<SequenceNumber> DPrime = new HashSet<>(Set.of(v)); // D'
     Set<SequenceNumber> D = new HashSet<>();
     Set<Dependency> edges = new HashSet<>();
@@ -43,17 +57,17 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       D.clear();
       D.addAll(DPrime);
       for (var seqNum : D) {
-        if (!executed.contains(seqNum)) {
+        if (!this.executedSet.containsKey(seqNum)) {
           // D' = D' UNION (UNION for all d in deps(v): (v -> d) UNION {d})
           // i.e., the dependency graph is a set of present nodes, and directed relationships of two
           // nodes.
-          var slotDeps = deps.get(seqNum);
+          var slotDeps = this.committedWithDepsMap.get(seqNum);
           if (slotDeps == null) {
             continue;
           }
 
           // Add every dependency
-          for (var d : slotDeps.dependencies()) {
+          for (var d : slotDeps) {
             DPrime.add(d);
             edges.add(new Dependency(seqNum, d));
           }
@@ -62,6 +76,20 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       }
     }
     return new DependencyGraph(D, edges);
+  }
+
+  /**
+   * !! Hot Path !! Executed slots and slots in execution window. See static method {@link
+   * ExecutionUtils#executedAndExecutionWindowSlots(Set, Set, int)} for more information.
+   *
+   * <p>Pseudocode Name: exp_k
+   *
+   * @return
+   */
+  @Override
+  public Set<SequenceNumber> getExpansionLimitSlots() {
+    return ExecutionUtils.executedAndExecutionWindowSlots(
+        this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.executionWindowSize);
   }
 
   /**
@@ -89,10 +117,7 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
    */
   @Override
   public DependencyGraph buildDependencyGraphExp(
-      SequenceNumber v,
-      Set<SequenceNumber> executionWindow,
-      ConcurrentMap<SequenceNumber, DependencySet> deps,
-      Set<SequenceNumber> executed) {
+      SequenceNumber v, Set<SequenceNumber> executionWindow) {
     Set<SequenceNumber> DPrime = new HashSet<>(Set.of(v));
     DPrime.retainAll(executionWindow); // D' := {v} ∩ exp_k
     // What happens if v is outside the execution window? Nothing?
@@ -112,17 +137,17 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       D.clear();
       D.addAll(DPrime);
       for (var seqNum : D) {
-        if (!executed.contains(seqNum)) {
+        if (!this.executedSet.containsKey(seqNum)) {
           // D' = D' UNION (UNION for all d in deps(v), where d IN execWindow: (v -> d) UNION {d})
           // i.e., the dependency graph is a set of present nodes, and directed relationships of two
           // nodes.
-          var slotDeps = deps.get(seqNum);
+          var slotDeps = this.committedWithDepsMap.get(seqNum);
           if (slotDeps == null) {
             continue;
           }
 
           // Add every dependency if it is in the execution window
-          for (var d : slotDeps.dependencies()) {
+          for (var d : slotDeps) {
             if (!executionWindow.contains(d)) {
               continue;
             }

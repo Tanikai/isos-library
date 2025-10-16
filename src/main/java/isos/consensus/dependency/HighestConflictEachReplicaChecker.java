@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 /**
  * This conflict checker implements the strategy where the highest conflict of each replica is
- * returned as the compact dependency set. This 
+ * returned as the compact dependency set. This
  */
 public class HighestConflictEachReplicaChecker implements ConflictChecker {
   private final ConcurrentMap<

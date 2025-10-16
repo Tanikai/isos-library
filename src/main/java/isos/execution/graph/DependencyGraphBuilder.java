@@ -1,13 +1,8 @@
 package isos.execution.graph;
 
-import isos.consensus.model.AgreementSlot;
-import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
-import isos.message.client.OrderedClientRequest;
 
-import java.util.Collection;
 import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * The DependencyGraphBuilder interface is used to build a dependency graph from committed and
@@ -26,6 +21,20 @@ public interface DependencyGraphBuilder {
    */
 
   /**
+   * Update the slot dependencies with the given deps.
+   *
+   * @param seqNum
+   * @param deps
+   */
+  void addCommittedWithDeps(SequenceNumber seqNum, Set<SequenceNumber> deps);
+
+  /**
+   * Add slot to the set of agreement slots that are already executed
+   * @param executedSlot
+   */
+  void addExecuted(SequenceNumber executedSlot);
+
+  /**
    * Calculate the dependency graph for slot v.
    *
    * <p>Pseudocode line 152-162, function rdeps(v)
@@ -33,10 +42,16 @@ public interface DependencyGraphBuilder {
    * @param v
    * @return
    */
-  DependencyGraph buildDependencyGraph(
-      SequenceNumber v,
-      ConcurrentMap<SequenceNumber, DependencySet> deps,
-      Set<SequenceNumber> executed);
+  DependencyGraph buildDependencyGraph(SequenceNumber v);
+
+  /**
+   * Executed slots plus slots in execution window.
+   *
+   * Pseudocode: exp_k
+   *
+   * @return
+   */
+  Set<SequenceNumber> getExpansionLimitSlots();
 
   /**
    * Calculate dependency graph for slot v. Excludes slots outside the execution window.
@@ -49,7 +64,5 @@ public interface DependencyGraphBuilder {
    */
   DependencyGraph buildDependencyGraphExp(
       SequenceNumber v,
-      Set<SequenceNumber> executionWindowSlots,
-      ConcurrentMap<SequenceNumber, DependencySet> deps,
-      Set<SequenceNumber> executed);
+      Set<SequenceNumber> executionWindowSlots);
 }
