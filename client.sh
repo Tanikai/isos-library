@@ -1,8 +1,8 @@
 #!/bin/bash
 
 if [ -z "$1" ]; then
-  echo "Usage: $0 <classpath>"
-  echo "Example: $0 isos.examples.MessagingExampleClient"
+  echo "Usage: $0 <classpath> <clientId>"
+  echo "Example: $0 isos.examples.MessagingExampleClient 0"
   exit 1
 fi
 
@@ -12,4 +12,4 @@ CLASSNAME="$1"
 
 cd $DIR
 
-./$SCRIPTNAME $CLASSNAME 0 # 0 is id of client
+./$SCRIPTNAME $CLASSNAME "${@}"
