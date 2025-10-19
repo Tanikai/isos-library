@@ -397,7 +397,7 @@ public class ServerConnection {
       while (doWork) {
         // get a message to be sent
         try {
-          data = outQueue.poll(POLL_TIME, TimeUnit.MILLISECONDS);
+          data = outQueue.take();
         } catch (InterruptedException ex) {
           logger.error("Failed to poll message from outQueue", ex);
         }
