@@ -31,7 +31,7 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
 
   public static void main(String[] args) {
     if (args.length < 1) {
-      System.out.println("Use: java isos.benchmark.kvstore.KVStoreReplica <processId>");
+      System.err.println("Use: java isos.benchmark.kvstore.KVStoreReplica <processId>");
       System.exit(-1);
     }
 

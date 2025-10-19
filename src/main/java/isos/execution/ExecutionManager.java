@@ -155,7 +155,7 @@ public class ExecutionManager implements Runnable {
       // not executed request" might change after SCC execution.
       Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExpansionLimitSlots();
 
-      logger.info("Slots in window {}", slotsInWindow);
+      // logger.info("Slots in window {}", slotsInWindow);
 
       // This has to be recalculated every time the SCCs are executed, because we do not want to
       // select agreement slots that were already executed
@@ -180,8 +180,7 @@ public class ExecutionManager implements Runnable {
       logger.debug("Normal Case: Complete Dependency Graph");
       for (SequenceNumber v : committedSlotsInWindowWithoutExecuted) {
         // Build dependency graph
-        DependencyGraph depGraph =
-            this.depGraphBuilder.buildDependencyGraph(v);
+        DependencyGraph depGraph = this.depGraphBuilder.buildDependencyGraph(v);
 
         // Checking whether all dependencies are contained in the vertices is wrong. Instead, we
         // have to check whether all **edge destinations** are contained in the execution window.

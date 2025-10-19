@@ -10,7 +10,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -18,7 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class KVStoreLatencyClient {
-  private final Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger;
 
   private final int clientId;
   private final double writeRatio; // 5%
@@ -30,15 +29,17 @@ public class KVStoreLatencyClient {
 
   // Result data
   private int failureCount = 0;
-  private LinkedList<Boolean> wasWriteRequest;
-  private LinkedList<Long> latencies; // -1 if it was failure
+  private final LinkedList<Boolean> wasWriteRequest;
+  private final LinkedList<Long> latencies; // -1 if it was failure
 
   public KVStoreLatencyClient(int clientId, int writeRatioPercent, int conflictRatioPercent) {
+    this.logger = LoggerFactory.getLogger(String.format("Client%d", clientId));
     this.clientId = clientId;
     this.client = new KVStoreClient<>(clientId);
     this.conflictRatio = (double) conflictRatioPercent / 100;
     this.writeRatio = (double) writeRatioPercent / 100;
-    this.logger.info("Initialized KVStoreLatencyClient");
+    this.wasWriteRequest = new LinkedList<>();
+    this.latencies = new LinkedList<>();
   }
 
   public String getKey() {
@@ -52,10 +53,10 @@ public class KVStoreLatencyClient {
     }
   }
 
-  public void runRequests(CountDownLatch startSignal, int requestCount)
+  public void runRequests(int requestCount)
       throws IOException, InterruptedException, ClassNotFoundException {
-    startSignal.await();
 
+    logger.info("Run {} requests", requestCount);
     for (int i = 0; i < requestCount; i++) {
       // TODO Kai: How to determine read/write ratio?
       try {
@@ -82,6 +83,7 @@ public class KVStoreLatencyClient {
         latencies.add(-1L);
       }
     }
+    logger.info("Client {} is done!", this.clientId);
   }
 
   /**

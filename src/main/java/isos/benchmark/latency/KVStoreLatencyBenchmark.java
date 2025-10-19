@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.concurrent.*;
 
 /**
@@ -35,7 +36,7 @@ public class KVStoreLatencyBenchmark {
     // parse arguments
     for (int i = 0; i < args.length; i++) {
       var arg = args[i];
-      if (arg.startsWith("-groupId")) {
+      if (arg.startsWith("--")) {
         String[] parts = arg.substring(2).split("=", 2);
         if (parts.length == 2) {
           options.put(parts[0], parts[1]);
@@ -87,19 +88,26 @@ public class KVStoreLatencyBenchmark {
       int clientId = i;
       this.executor.submit(
           () -> {
+            logger.info("Start client {}", clientId);
             var client = this.clients[clientId];
             try {
-              client.runRequests(this.startLatch, this.requestCount);
+              this.startLatch.await();
+              client.runRequests(this.requestCount);
 
               var results = client.getBenchmarkResult();
               // TODO Kai: How to store results for further analysis?
+              OptionalDouble averageMs = results.stream().mapToLong(Map.Entry::getKey).average();
+              logger.info("Average latencies: {}", averageMs.orElse(-1D));
             } catch (InterruptedException e) {
               logger.info("Thread was interrupted, stopping");
             } catch (IOException e) {
               logger.error("IOException in client {}: {}", clientId, e.getMessage());
             } catch (ClassNotFoundException e) {
               logger.error("ClassNotFoundException in client {}: {}", client, e.getMessage());
+            } catch (Exception e) {
+              logger.error("Unhandled exception: {}", e.getMessage());
             }
+            this.endLatch.countDown();
           });
     }
   }
