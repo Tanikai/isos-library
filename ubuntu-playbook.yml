@@ -1,0 +1,91 @@
+---
+- name: Install dependencies and create user for benchmark node
+  hosts: all
+  become: yes
+
+  vars:
+    new_sudo_user: ubuntu
+    ubuntu_initial_password: "Your_Very_Strong_Password_Here"
+    root_authorized_keys_path: "/root/.ssh/authorized_keys"
+
+  tasks:
+    - name: Perform apt update and upgrade
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+        cache_valid_time: 86400
+
+    - name: Install Java LTS 21 runtime
+      package:
+        name: "openjdk-21-jdk"
+        state: present
+
+    - name: Create '{{ new_sudo_user }}' user with sudo permissions
+      ansible.builtin.user:
+        name: "{{ new_sudo_user }}"
+        state: present
+        create_home: yes
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+        password: "{{ ubuntu_initial_password | password_hash('sha512') }}"
+
+    - name: Ensure new home directory has strict 0700 permissions
+      ansible.builtin.file:
+        path: "/home/{{ new_sudo_user }}"
+        state: directory
+        owner: "{{ new_sudo_user }}"
+        group: "{{ new_sudo_user }}"
+        mode: '0700'
+
+    - name: Ensure .ssh directory exists for new user
+      ansible.builtin.file:
+        path: "/home/{{ new_sudo_user }}/.ssh"
+        state: directory
+        owner: "{{ new_sudo_user }}"
+        group: "{{ new_sudo_user }}"
+        mode: '0700'
+
+    - name: Copy public key from root to '{{ new_sudo_user }}' user
+      become: yes
+      ansible.builtin.copy:
+        src: "{{ root_authorized_keys_path }}"
+        dest: "/home/{{ new_sudo_user }}/.ssh/authorized_keys"
+        owner: "{{ new_sudo_user }}"
+        group: "{{ new_sudo_user }}"
+        mode: '0600'
+        remote_src: yes
+
+    - name: Configure passwordless sudo for '{{ new_sudo_user }}'
+      ansible.builtin.lineinfile:
+        path: "/etc/sudoers.d/90-{{ new_sudo_user }}-nopasswd"
+        create: yes
+        mode: '0440' # Essential permissions for sudoers files
+        line: "{{ new_sudo_user }} ALL=(ALL) NOPASSWD: ALL"
+        validate: /usr/sbin/visudo -cf %s
+        state: present
+
+    - name: Ensure SSH configuration for '{{ new_sudo_user }}' disables password login
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^PasswordAuthentication\\s+yes"
+        line: "PasswordAuthentication no"
+        state: present
+        insertafter: "^#PasswordAuthentication"
+      notify: Restart sshd
+
+    - name: Disallow password authentication for '{{ new_sudo_user }}' specifically
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        block: |
+          Match User {{ new_sudo_user }}
+            PasswordAuthentication no
+        marker: "# {mark} ANSIBLE MANAGED BLOCK FOR {{ new_sudo_user }} SSH CONFIG"
+      notify: Restart sshd
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: sshd
+        state: restarted

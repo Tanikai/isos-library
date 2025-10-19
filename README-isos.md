@@ -27,15 +27,26 @@ To exit, press Ctrl+C multiple times, or `tmux action key` + `&`, then confirm
 with `y`.
 
 The client can then be run with the `client.sh` script together with the Java
-class name:
+class name and the client ID:
 
 ```shell
-./client.sh isos.benchmark.kvstore.KVStoreClientInteractive
+./client.sh isos.benchmark.kvstore.KVStoreClientInteractive 0
 ```
 
 ## Configuration
 
 TODO: configuration values for ISOS
+
+## Profiling
+
+TODO Screenshot IntelliJ configuration
+
+Run Replica 0 with the `KVStoreReplica` class via the IDE profiler. The
+remaining replicas can be started with the `profiler-triple-replica.sh` script:
+
+```shell
+./profiler-triple-replica.sh smartrun.sh isos.benchmark.kvstore.KVStoreReplica
+```
 
 ## Benchmarking
 
@@ -47,7 +58,6 @@ a separate copy of the BFT-SMaRt repository. Follow these commands:
 ```shell
 git clone https://github.com/bft-smart/library.git bft-smart-library
 git checkout v2.0
-cp 
 
 ```
 
@@ -82,6 +92,16 @@ replicas:
       ansible_host: 192.168.178.13
 ```
 
+Then, install the required dependencies with the `ubuntu-playbook.yml` playbook.
+In some cases, the stock image only provides a `root` user. This image creates
+an `ubuntu` user with the same authorized public key as the root user for SSH
+login. The `inventory.root.yml` file is like the inventory file above, but with
+`ansible_user: root`.
+
+```shell
+ansible-playbook -i inventory.root.yml ubuntu-playbook.yml --private-key ~/.ssh/my_custom_key
+```
+
 **Update the IP addresses in the `config/hosts.config` file to your replica IP
 addresses.**
 
@@ -108,7 +128,7 @@ Four replicas locally with tmux:
 Four SSH sessions automatically with tmux:
 
 ```shell
-./ssh-quad-replica.sh smartrun.sh isos.benchmark.kvstore.KVStoreReplica  ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3
+./ssh-quad-replica.sh smartrun.sh isos.benchmark.kvstore.KVStoreReplica ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3
 ```
 
 One replica in one of each region, manually:

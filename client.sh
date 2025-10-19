@@ -10,6 +10,8 @@ DIR="./clients/c"
 SCRIPTNAME="smartrun.sh"
 CLASSNAME="$1"
 
+shift # Skip the classname
+
 cd $DIR
 
 ./$SCRIPTNAME $CLASSNAME "${@}"
