@@ -18,6 +18,13 @@ import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
 import isos.utils.ReplicaId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.net.ssl.*;
 import java.io.*;
 import java.net.*;
 import java.security.KeyStore;
@@ -28,12 +35,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
-import javax.net.ssl.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author alysson Tulio A. Ribeiro. Generate a KeyPair used by SSL/TLS connections. Note that
@@ -432,15 +433,15 @@ public class ServersCommunicationLayer extends Thread {
         // This must never happen!!!
         // first time that this connection is being established
         // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
-        logger.info("!!! should not happen");
+        logger.warn("Received new connection before it was initialized internally. Should not happen, accepting anyway");
         this.connections.put(
             remoteId, new ServerConnection(configManager, newSocket, remoteId, inQueue));
         return;
       }
 
       // reconnection
-      logger.info("!!! Accept connection from replica {}", remoteId);
-      this.connections.get(remoteId).reconnect(newSocket);
+      logger.info("Accept connection from replica {}", remoteId);
+      this.connections.get(remoteId).connectToReplica(newSocket, false);
     } finally {
       connectionsLock.unlock();
     }

@@ -46,7 +46,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author alysson
  */
 public class ServerConnection {
-  private final Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger;
 
   private static final long POLL_TIME = 5000;
   private final ConfigurationManager configManager;
@@ -95,20 +95,24 @@ public class ServerConnection {
       SSLSocket socket,
       int remoteId,
       LinkedBlockingQueue<SystemMessage> inQueue) {
-
     this.configManager = configManager;
-    this.socket = socket;
+    // this.socket = socket; // Do not assign socket here, use connectToReplica instead (creates
+    // In-/OutputStream)
     this.remoteId = remoteId;
     this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
     this.inQueue = inQueue;
     this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
 
+    this.logger =
+        LoggerFactory.getLogger(
+            String.format("ServerConnection %d<->%d", this.ownReplicaId.value(), remoteId));
+
     logger.info(
-        "Create Serverconnection {} -> {}",
+        "Create ServerConnection {} -> {}",
         this.configManager.getStaticConf().getProcessId(),
         remoteId);
 
-    reconnect(socket);
+    connectToReplica(socket, false);
 
     // ******* EDUARDO BEGIN **************//
     this.useSenderThread = this.configManager.getStaticConf().isUseSenderThread();
@@ -275,7 +279,8 @@ public class ServerConnection {
           abort = true;
         }
       } else {
-        logger.info("SendBytes: Socket is null, or outStream is null");
+        logger.info(
+            "SendBytes: Socket {} or outStream {} is null", this.socket, this.socketOutStream);
         waitAndConnect();
         abort = true;
       }
@@ -297,9 +302,9 @@ public class ServerConnection {
    * @param newSocket null to create new connection, non-null if connection of other replica was
    *     accepted (only used if processId is less than remoteId)
    */
-  protected void reconnect(SSLSocket newSocket) {
+  protected void connectToReplica(SSLSocket newSocket, boolean isReconnect) {
     if (socket != null && socket.isConnected()) {
-      //      logger.info("Reconnect called, but already connected");
+      logger.info("Reconnect called, but already connected");
       return; // do nothing if current socket is already connected
     }
 
@@ -307,7 +312,7 @@ public class ServerConnection {
     try {
       connectLock.lock();
 
-      if (isToConnect()) { // if I should connect, create a new connection
+      if (isToConnect() || isReconnect) { // if I should connect, create a new connection
         logger.info(
             "I (Replica {}) should connect to Replica {}",
             this.configManager.getStaticConf().getProcessId(),
@@ -373,13 +378,13 @@ public class ServerConnection {
   private void waitAndConnect() {
     if (doWork) {
       try {
-        Thread.sleep(1000);
+        Thread.sleep(2000);
       } catch (InterruptedException ie) {
         logger.error("Failed to sleep", ie);
       }
 
       outQueue.clear();
-      reconnect(null);
+      connectToReplica(null, true);
     }
   }
 
@@ -417,7 +422,6 @@ public class ServerConnection {
 
     public ReceiverThread() {
       super("Receiver for " + remoteId);
-      logger.info("create receiver for {}", remoteId);
     }
 
     @Override
