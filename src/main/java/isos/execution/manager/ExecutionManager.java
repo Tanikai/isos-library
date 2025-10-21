@@ -1,10 +1,14 @@
-package isos.execution;
+package isos.execution.manager;
 
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
+import isos.execution.CommittedCommand;
+import isos.execution.ExecuteInApplication;
 import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
+import isos.execution.scc.SccFinder;
+import isos.execution.scc.SccUtils;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
@@ -17,7 +21,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
-public class ExecutionManager implements Runnable {
+public class ExecutionManager implements ISOSExecutionManager, Runnable {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
   private static final Logger staticLogger = LoggerFactory.getLogger("ExecutionManagerStatic");
 
@@ -30,6 +34,7 @@ public class ExecutionManager implements Runnable {
   private final Set<SequenceNumber> executed;
 
   private final DependencyGraphBuilder depGraphBuilder;
+  private final SccFinder sccFinder;
 
   private final BlockingQueue<CommittedCommand> incomingCommittedSlots;
 
@@ -42,11 +47,13 @@ public class ExecutionManager implements Runnable {
 
   public ExecutionManager(
       DependencyGraphBuilder dependencyGraphBuilder,
+      SccFinder sccFinder,
       ExecuteInApplication executor,
       int batchProcessingMaxSize) {
     this.committed = new HashSet<>();
     this.executed = new HashSet<>();
     this.depGraphBuilder = dependencyGraphBuilder;
+    this.sccFinder = sccFinder;
     this.incomingCommittedSlots = new LinkedBlockingQueue<>();
     this.deps = new ConcurrentHashMap<>();
     this.requests = new ConcurrentHashMap<>();
@@ -119,6 +126,8 @@ public class ExecutionManager implements Runnable {
   private void updateCommittedSlots() throws InterruptedException {
     // Line 176
     List<CommittedCommand> batchCommittedSlots = new ArrayList<>(this.batchProcessingMaxSize);
+
+    // To prevent polling, block until a committed slot is available
     CommittedCommand first = incomingCommittedSlots.take();
     batchCommittedSlots.add(first);
 
@@ -202,7 +211,8 @@ public class ExecutionManager implements Runnable {
         // We have a v where all dependencies are committed
 
         // Now: Find not yet executed SCCs in rdeps(v) in inverse topological order
-        List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
+        var adjList = DependencyGraph.toAdjacencyList(depGraph);
+        List<Set<SequenceNumber>> SCCs = sccFinder.getSCC(adjList, depGraph.slots());
 
         for (Set<SequenceNumber> scc : SCCs) {
           // Line 178: Normal case execution
@@ -257,7 +267,8 @@ public class ExecutionManager implements Runnable {
         // We have a v where all dependencies (without deps that are outside the execution window)
         // are committed
 
-        List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
+        var adjList = DependencyGraph.toAdjacencyList(depGraph);
+        List<Set<SequenceNumber>> SCCs = sccFinder.getSCC(adjList, depGraph.slots());
 
         try {
           // Line 186

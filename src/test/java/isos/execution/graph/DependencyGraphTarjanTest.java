@@ -1,6 +1,8 @@
 package isos.execution.graph;
 
 import isos.consensus.model.SequenceNumber;
+import isos.execution.scc.SccUtils;
+import isos.execution.scc.TarjanSCC;
 import isos.utils.ReplicaId;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +50,7 @@ public class DependencyGraphTarjanTest {
    */
   @Test
   void testTarjansSCCAlgorithm() {
+    var sccFinder = new TarjanSCC();
     Set<SequenceNumber> nodes = new HashSet<>(generateSequenceNumbers(ReplicaId.of(0), 8));
     Set<Dependency> edges = new HashSet<>();
     edges.add(createEdge(0, 1, 5));
@@ -66,7 +69,8 @@ public class DependencyGraphTarjanTest {
     edges.add(createEdge(0, 8, 8));
 
     DependencyGraph depGraph = new DependencyGraph(nodes, edges);
-    var SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
+    var adjList = DependencyGraph.toAdjacencyList(depGraph);
+    var SCCs = sccFinder.getSCC(adjList, depGraph.slots());
 
     assertEquals(4, SCCs.size());
     assertEquals(Set.copyOf(sequenceNumbersOf(0, List.of(1, 2, 5))), Set.copyOf(SCCs.get(0)));

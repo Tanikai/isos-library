@@ -4,6 +4,8 @@ import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.execution.graph.ExecutionUtils;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
+import isos.execution.manager.ExecutionManager;
+import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientRequest;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -55,9 +57,11 @@ class ExecutionManagerTest {
     var executor = mock(ExecuteInApplication.class);
     var executionWindowSize = 10;
     var batchProcessingMaxSize = 10;
+    var sccFinder = new TarjanSCC();
     var manager =
         new ExecutionManager(
             new TrivialDependencyGraphBuilder(executionWindowSize),
+            sccFinder,
             executor,
             batchProcessingMaxSize);
     Thread managerThread = Thread.ofVirtual().start(manager);

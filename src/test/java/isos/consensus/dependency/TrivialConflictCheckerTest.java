@@ -3,9 +3,12 @@ package isos.consensus.dependency;
 import isos.consensus.model.SequenceNumber;
 import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
+import isos.execution.scc.SccUtils;
+import isos.execution.scc.TarjanSCC;
 import isos.utils.ReplicaId;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.plaf.synth.SynthColorChooserUI;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -71,6 +74,7 @@ class TrivialConflictCheckerTest {
 
   @Test
   void TestRemoveRedundantDependencies() {
+    var sccFinder = new TarjanSCC();
     Map<SequenceNumber, Set<SequenceNumber>> graph = new HashMap<>();
 
     SequenceNumber v0 = SequenceNumber.of(0, 0); // Client 1, K1
@@ -93,7 +97,7 @@ class TrivialConflictCheckerTest {
         Set.of(v4); // v4 (the latest Client 2 command) is the only direct dependency
 
     Set<SequenceNumber> actualCompactDepSet =
-        TrivialConflictChecker.removeRedundantDependencies(graph, v5, completeDependencySet);
+        TrivialConflictChecker.removeRedundantDependencies(sccFinder, graph, v5, completeDependencySet);
 
     assertEquals(expectedCompactDepSet, actualCompactDepSet);
   }
@@ -116,10 +120,11 @@ class TrivialConflictCheckerTest {
   void TestIsSccReachableWithout() {
     // Setup
     var depGraph = getTestGraph();
-    List<Set<SequenceNumber>> SCCs = DependencyGraph.TarjanSCCDepGraph(depGraph);
-    Map<SequenceNumber, Integer> sccLookup = DependencyGraph.buildSccLookup(SCCs);
+    var sccFinder = new TarjanSCC();
     var adjList = DependencyGraph.toAdjacencyList(depGraph);
-    Map<Integer, Set<Integer>> sccDag = DependencyGraph.buildSccDAG(adjList, sccLookup, SCCs);
+    List<Set<SequenceNumber>> SCCs = sccFinder.getSCC(adjList, depGraph.slots());
+    Map<SequenceNumber, Integer> sccLookup = SccUtils.buildSccLookup(SCCs);
+    Map<Integer, Set<Integer>> sccDag = SccUtils.buildSccDAG(adjList, sccLookup, SCCs);
 
     var node1Scc = sccLookup.get(getSeqNum(1));
     var node2Scc = sccLookup.get(getSeqNum(2));

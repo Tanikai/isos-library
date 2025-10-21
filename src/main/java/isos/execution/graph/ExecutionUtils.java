@@ -1,7 +1,7 @@
 package isos.execution.graph;
 
 import isos.consensus.model.SequenceNumber;
-import isos.execution.ExecutionManager;
+import isos.execution.manager.ExecutionManager;
 import isos.utils.ReplicaId;
 
 import java.util.Map;

@@ -9,10 +9,13 @@ import isos.consensus.dependency.TrivialConflictChecker;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecuteInApplication;
-import isos.execution.ExecutionManager;
+import isos.execution.manager.ExecutionManager;
+import isos.execution.manager.ISOSExecutionManager;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
+import isos.execution.scc.SccFinder;
+import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
@@ -60,13 +63,19 @@ public class ISOSApplication {
    */
   private final ConflictChecker conflictChecker;
 
+
+  /**
+   * Used to find the strongly connected components of a dependency graph.
+   */
+  private final SccFinder sccFinder;
+
   /**
    * Used to generate the dependency set and determine the strongly connected components for
    * execution.
    */
   private final DependencyGraphBuilder dependencyGraphBuilder;
 
-  private final ExecutionManager executionManager;
+  private final ISOSExecutionManager executionManager;
   private final Thread executionManagerThread;
 
   private final ClientPayloadDeserializer deserializer;
@@ -86,11 +95,13 @@ public class ISOSApplication {
     this.deserializer = deserializer;
     this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
 
+    this.sccFinder = new TarjanSCC();
+
     // Conflicts
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
     this.applicationConflict = applicationConflict;
     this.conflictChecker =
-        new TrivialConflictChecker(this.defaultConflict, this.applicationConflict);
+        new TrivialConflictChecker(this.sccFinder, this.defaultConflict, this.applicationConflict);
 
     var maxFaults = configManager.getStaticConf().getF();
     var replicaCount = configManager.getStaticConf().getN();
@@ -119,6 +130,7 @@ public class ISOSApplication {
     this.executionManager =
         new ExecutionManager(
             this.dependencyGraphBuilder,
+            this.sccFinder,
             executor,
             this.configManager.getStaticConf().getMaxBatchSize());
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);

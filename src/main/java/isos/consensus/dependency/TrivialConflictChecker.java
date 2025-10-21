@@ -4,6 +4,8 @@ import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.execution.CommittedCommand;
 import isos.execution.graph.DependencyGraph;
+import isos.execution.scc.SccFinder;
+import isos.execution.scc.SccUtils;
 import isos.message.client.OrderedClientRequest;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
@@ -20,6 +22,8 @@ public class TrivialConflictChecker implements ConflictChecker {
 
   private final Map<SequenceNumber, Set<SequenceNumber>> currentDependencyGraph;
 
+  private final SccFinder sccFinder;
+
   // Conflict predicates
   BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
   BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
@@ -27,10 +31,12 @@ public class TrivialConflictChecker implements ConflictChecker {
   private final ReentrantLock graphLock;
 
   public TrivialConflictChecker(
+      SccFinder sccFinder,
       BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict,
       BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict) {
     this.agreementSlots = new HashMap<>();
     this.currentDependencyGraph = new HashMap<>();
+    this.sccFinder = sccFinder;
     this.defaultConflict = defaultConflict;
     this.applicationConflict = applicationConflict;
 
@@ -121,7 +127,7 @@ public class TrivialConflictChecker implements ConflictChecker {
 
       return new DependencySet(
           TrivialConflictChecker.removeRedundantDependencies(
-              this.currentDependencyGraph, seqNum, candidateDependencies));
+              this.sccFinder, this.currentDependencyGraph, seqNum, candidateDependencies));
     } finally {
       this.graphLock.unlock();
     }
@@ -134,6 +140,7 @@ public class TrivialConflictChecker implements ConflictChecker {
    * @return Compact Dependency Set
    */
   public static Set<SequenceNumber> removeRedundantDependencies(
+      SccFinder sccFinder,
       Map<SequenceNumber, Set<SequenceNumber>> originalGraph,
       SequenceNumber newVertex,
       Set<SequenceNumber> candidateDeps) {
@@ -148,14 +155,14 @@ public class TrivialConflictChecker implements ConflictChecker {
     // Because we are calculating the SCCs before deduplication and the new dependencies could
     // introduce new cycles,
     // we are adding the candidate dependencies to the original graph.
-    var SCCs = DependencyGraph.TarjanSCC(graph, vertices);
+    var SCCs = sccFinder.getSCC(graph, vertices);
 
     // After we get the SCCs, we can build a DAG out of the super-vertices, containing multiple
     // SequenceNumbers.
-    Map<SequenceNumber, Integer> sccLookup = DependencyGraph.buildSccLookup(SCCs);
+    Map<SequenceNumber, Integer> sccLookup = SccUtils.buildSccLookup(SCCs);
     Integer newVertexSccId = sccLookup.get(newVertex);
 
-    Map<Integer, Set<Integer>> sccDag = DependencyGraph.buildSccDAG(graph, sccLookup, SCCs);
+    Map<Integer, Set<Integer>> sccDag = SccUtils.buildSccDAG(graph, sccLookup, SCCs);
 
     // First, we group the candidate edges by their SCC destination. Because any vertex in a SCC
     // can be reached from any other vertex, they can be counted as a same edge and grouped
