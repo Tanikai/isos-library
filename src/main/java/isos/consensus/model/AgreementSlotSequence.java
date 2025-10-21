@@ -12,8 +12,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * by a sequence number. Allows for concurrent access on independent (!) keys.
  */
 public class AgreementSlotSequence {
-  public static final int AGREEMENTSLOT_SEQUENCE_LENGTH = 1000;
-
   /**
    * Requirements:
    *
@@ -35,15 +33,11 @@ public class AgreementSlotSequence {
   private final int length;
   private Lock addEntryLock;
 
-  public AgreementSlotSequence(ReplicaId replicaId) {
-    this(replicaId, AGREEMENTSLOT_SEQUENCE_LENGTH);
-  }
-
-  public AgreementSlotSequence(ReplicaId replicaId, int length) {
+  public AgreementSlotSequence(ReplicaId replicaId, int sequenceLength) {
     this.replicaId = replicaId; // required to return SequenceNumber
-    this.slots = new AgreementSlot[length];
+    this.slots = new AgreementSlot[sequenceLength];
     this.size = 0;
-    this.length = length;
+    this.length = sequenceLength;
     this.addEntryLock = new ReentrantLock();
   }
 

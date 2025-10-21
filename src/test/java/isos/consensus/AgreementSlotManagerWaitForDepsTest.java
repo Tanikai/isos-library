@@ -36,6 +36,7 @@ class AgreementSlotManagerWaitForDepsTest {
             ownReplicaId,
             timeoutConfig,
             otherReplicaIds,
+            100,
             mock(ConflictChecker.class),
             mock(ExecutableRequestReceiver.class),
             mock(ClientPayloadDeserializer.class),

@@ -37,6 +37,19 @@ class name and the client ID:
 
 TODO: configuration values for ISOS
 
+```config
+# The length of 
+system.isos.replica.agreementSlotSequenceLength = 5000
+
+# Missing here :
+
+#
+system.isos.replica.initialIsosTimeoutDeltaMillis = 3000
+
+# The size of the expansion window of the 
+system.isos.replica.executionWindowSize = 100
+```
+
 ## Profiling
 
 TODO Screenshot IntelliJ configuration

@@ -99,6 +99,7 @@ public class ISOSApplication {
             ownReplicaId,
             timeoutConf,
             configManager.getStaticConf().getInitialViewAsReplicaId(),
+            configManager.getStaticConf().getAgreementSlotSequenceLength(),
             this.conflictChecker,
             this::receiveCommittedRequest,
             deserializer,

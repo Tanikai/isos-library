@@ -39,6 +39,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
   /** State Storage */
   private final ReplicaId ownReplicaId;
 
+  private final int agreementSlotSequenceLength;
   private final ConcurrentMap<ReplicaId, AgreementSlotSequence> replicaAgreementSlots;
 
   /** Message handling threads / supporting data structures */
@@ -77,6 +78,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       ReplicaId ownReplicaId,
       TimeoutConfiguration timeoutConfig,
       ReplicaId[] replicaIds,
+      int agreementSlotSequenceLength,
       ConflictChecker conflictChecker,
       ExecutableRequestReceiver executableRequestReceiver,
       ClientPayloadDeserializer clientPayloadDeserializer,
@@ -84,14 +86,15 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       int replicaCount) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
+    this.agreementSlotSequenceLength = agreementSlotSequenceLength;
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
     this.queueProcessorInputQueue = new HashMap<>();
     this.queueProcessorThreads = new HashMap<>();
     this.queueProcessors = new HashMap<>();
     // Create agreement slot sequences for own replica and other replicas
-    this.replicaAgreementSlots.put(ownReplicaId, new AgreementSlotSequence(ownReplicaId));
+    this.replicaAgreementSlots.put(ownReplicaId, new AgreementSlotSequence(ownReplicaId, agreementSlotSequenceLength));
     for (var rId : replicaIds) {
-      this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId));
+      this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId, agreementSlotSequenceLength));
     }
     this.conflictChecker = conflictChecker;
     this.executableRequestReceiver = executableRequestReceiver;

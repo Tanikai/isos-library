@@ -64,7 +64,14 @@ public class TOMConfiguration extends Configuration {
   private boolean sameBatchSize;
   private boolean fairbatch;
   private String bindAddress;
+  /**
+   * Time after which the request times out at the client side
+   */
   private int clientInvokeOrderedTimeout; // in seconds
+  private int agreementSlotSequenceLength;
+  /**
+   * Delta is the maximum one-way delay between replicas.
+   */
   private int initialIsosTimeoutDeltaMillis;
   private int executionWindowSize;
 
@@ -424,14 +431,21 @@ public class TOMConfiguration extends Configuration {
         clientInvokeOrderedTimeout = Integer.parseInt(s);
       }
 
-      s = (String) configs.remove("system.isos.client.initialIsosTimeoutDeltaMillis");
+      s = (String) configs.remove("system.isos.replica.agreementSlotSequenceLength");
       if (s == null) {
-        initialIsosTimeoutDeltaMillis = 1000;
+        agreementSlotSequenceLength = 1000;
+      } else {
+        agreementSlotSequenceLength = Integer.parseInt(s);
+      }
+
+      s = (String) configs.remove("system.isos.replica.initialIsosTimeoutDeltaMillis");
+      if (s == null) {
+        initialIsosTimeoutDeltaMillis = 5000;
       } else {
         initialIsosTimeoutDeltaMillis = Integer.parseInt(s);
       }
 
-      s = (String) configs.remove("system.isos.client.executionWindowSize");
+      s = (String) configs.remove("system.isos.replica.executionWindowSize");
       if (s == null) {
         executionWindowSize = 100;
       } else {
@@ -642,6 +656,10 @@ public class TOMConfiguration extends Configuration {
 
   public String[] getEnabledCiphers() {
     return enabledCiphers;
+  }
+
+  public int getAgreementSlotSequenceLength() {
+    return agreementSlotSequenceLength;
   }
 
   public int getInitialIsosTimeoutDeltaMillis() {
