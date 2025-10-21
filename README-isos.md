@@ -196,6 +196,18 @@ Run the YCSB client with:
 ./ycsb_client.sh isos.benchmark.ycsb.IsosYcsbClient isos_1
 ```
 
+## Evaluation
+
+Evaluation is done with a Jupyter Notebook written in Python.
+
+
+```shell
+cd evaluation
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## Documentation of Thread Names
 
 - `SCommS`: ServerCommunicationSystem
