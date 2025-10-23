@@ -1,8 +1,11 @@
 package isos.api;
 
+import bftsmart.communication.MessageHandler;
 import bftsmart.communication.ServerCommunicationSystem;
+import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
 import isos.communication.ClientMessageWrapper;
+import isos.communication.MessageSender;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.dependency.TrivialConflictChecker;
@@ -32,7 +35,7 @@ import java.util.function.BiPredicate;
  * replica-side state and logic. -> Use class as baseline, and let users extend certain parts of
  * logic via inheritance, or pass lambda functions to the constructor.
  */
-public class ISOSApplication {
+public class ISOSApplication implements MessageHandler {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
   // FIXME Kai: Timeout value should be dynamic, determined by round trip time
@@ -40,8 +43,8 @@ public class ISOSApplication {
   private final ReplicaId ownReplicaId;
 
   /**
-   * DECIDED Kai: AgreementSlotSequence that contains slots of all replicas, or AgreementSlotSequence
-   * per replica? -> All slots of replicas
+   * DECIDED Kai: AgreementSlotSequence that contains slots of all replicas, or
+   * AgreementSlotSequence per replica? -> All slots of replicas
    */
   private final AgreementSlotManager agrSlotManager;
 
@@ -63,10 +66,7 @@ public class ISOSApplication {
    */
   private final ConflictChecker conflictChecker;
 
-
-  /**
-   * Used to find the strongly connected components of a dependency graph.
-   */
+  /** Used to find the strongly connected components of a dependency graph. */
   private final SccFinder sccFinder;
 
   /**
@@ -105,6 +105,14 @@ public class ISOSApplication {
 
     var maxFaults = configManager.getStaticConf().getF();
     var replicaCount = configManager.getStaticConf().getN();
+
+    try {
+      this.scs = new ServerCommunicationSystem(configManager, this);
+    } catch (Exception e) {
+      throw new RuntimeException(
+          "Could not initialize ServerCommunicationSystem: " + e.getMessage());
+    }
+
     this.agrSlotManager =
         new AgreementSlotManager(
             ownReplicaId,
@@ -114,19 +122,16 @@ public class ISOSApplication {
             this.conflictChecker,
             this::receiveCommittedRequest,
             deserializer,
+            this.scs,
             maxFaults,
             replicaCount);
-    try {
-      this.scs = new ServerCommunicationSystem(configManager, this.agrSlotManager);
-      this.scs.setRequestReceiver(this.agrSlotManager);
-    } catch (Exception e) {
-      throw new RuntimeException(
-          "Could not initialize ServerCommunicationSystem: " + e.getMessage());
-    }
-    this.agrSlotManager.initialize(scs);
+
+    this.scs.setRequestReceiver(this.agrSlotManager);
 
     // Request Execution
-    this.dependencyGraphBuilder = new TrivialDependencyGraphBuilder(this.configManager.getStaticConf().getExecutionWindowSize());
+    this.dependencyGraphBuilder =
+        new TrivialDependencyGraphBuilder(
+            this.configManager.getStaticConf().getExecutionWindowSize());
     this.executionManager =
         new ExecutionManager(
             this.dependencyGraphBuilder,
@@ -180,4 +185,12 @@ public class ISOSApplication {
       logger.warn("Failed to serialize OrderedClientReply for client response", e);
     }
   }
+
+  @Override
+  public void processData(SystemMessage sm) {
+    this.agrSlotManager.handleReplicaMessage(sm);
+  }
+
+  @Override
+  public void verifyPending() {}
 }

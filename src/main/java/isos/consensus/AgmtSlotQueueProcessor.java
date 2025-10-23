@@ -141,6 +141,56 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.logger = LoggerFactory.getLogger(String.format("QueueProcessor %s", seqNum.toString()));
   }
 
+  /** Processes incoming messages from the queue in a loop. */
+  @Override
+  public void run() {
+    // We have to differentiate whether the Queue Processor was created due to a received
+    // ClientRequest, or just a Replica Message
+
+    // When we received a ClientRequest, the AgreementSlot request is already populated
+    if (this.slot.getRequest() != null) {
+      handleClientRequest();
+    }
+
+    while (!Thread.currentThread().isInterrupted()) {
+      try {
+        ISOSMessage msg = this.incomingQueue.take();
+
+        // Do not check timeout messages for preconditions
+        if (msg instanceof TimeoutMessage timeoutMsg) {
+          this.handleTimeoutMessage(timeoutMsg);
+          continue;
+        }
+
+        try {
+          if (!this.stepPrecondHolds(msg.msgType())) {
+            logger.warn(
+                    "Step mismatch when processing {}, current step {}",
+                    msg.msgType(),
+                    this.slot.getStep());
+            // Defer processing of messages if preconditions do not hold.
+            if (msg.msgType() != ISOSMessageType.DEP_PROPOSE_WITH_REQ) {
+              this.bufferedMessages.bufferMessage(msg);
+            }
+            continue;
+          }
+        } catch (AssertionError e) {
+          logger.error("Assertion has failed, throwing message away. Reason: {}", e.getMessage());
+          continue;
+        }
+
+        // If the preconditions hold and all asserts passed, we can handle the message normally.
+        this.handleMessage(msg);
+      } catch (InterruptedException e) {
+        // interrupted while waiting to take new message from incomingQueue
+        logger.info("Interrupted while waiting for message in incomingQueue. Exiting.");
+        Thread.currentThread().interrupt(); // Re-interrupt to keep interrupted status
+        break;
+      }
+    }
+    logger.info("QueueProcessor has been stopped.");
+  }
+
   /**
    * Pseudocode line 60
    *
@@ -1186,53 +1236,5 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   // endregion
 
-  /** Processes incoming messages from the queue in a loop. */
-  @Override
-  public void run() {
-    // We have to differentiate whether the Queue Processor was created due to a received
-    // ClientRequest, or just a Replica Message
 
-    // When we received a ClientRequest, the AgreementSlot request is already populated
-    if (this.slot.getRequest() != null) {
-      handleClientRequest();
-    }
-
-    while (!Thread.currentThread().isInterrupted()) {
-      try {
-        ISOSMessage msg = this.incomingQueue.take();
-
-        // Do not check timeout messages for preconditions
-        if (msg instanceof TimeoutMessage timeoutMsg) {
-          this.handleTimeoutMessage(timeoutMsg);
-          continue;
-        }
-
-        try {
-          if (!this.stepPrecondHolds(msg.msgType())) {
-            logger.warn(
-                "Step mismatch when processing {}, current step {}",
-                msg.msgType(),
-                this.slot.getStep());
-            // Defer processing of messages if preconditions do not hold.
-            if (msg.msgType() != ISOSMessageType.DEP_PROPOSE_WITH_REQ) {
-              this.bufferedMessages.bufferMessage(msg);
-            }
-            continue;
-          }
-        } catch (AssertionError e) {
-          logger.error("Assertion has failed, throwing message away. Reason: {}", e.getMessage());
-          continue;
-        }
-
-        // If the preconditions hold and all asserts passed, we can handle the message normally.
-        this.handleMessage(msg);
-      } catch (InterruptedException e) {
-        // interrupted while waiting to take new message from incomingQueue
-        logger.info("Interrupted while waiting for message in incomingQueue. Exiting.");
-        Thread.currentThread().interrupt(); // Re-interrupt to keep interrupted status
-        break;
-      }
-    }
-    logger.info("QueueProcessor has been stopped.");
-  }
 }

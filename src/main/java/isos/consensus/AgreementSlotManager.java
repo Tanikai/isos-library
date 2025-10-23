@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 /**
  * This class maintains an AgreementSlotSequence for each replica.
@@ -33,7 +32,7 @@ import java.util.stream.Collectors;
  * <p>Additionally, it pre-sorts incoming messages according to their sequence number so that
  * agreement slot-specific worker threads
  */
-public class AgreementSlotManager implements MessageHandler, RequestReceiver {
+public class AgreementSlotManager implements RequestReceiver {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   /** State Storage */
@@ -82,6 +81,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       ConflictChecker conflictChecker,
       ExecutableRequestReceiver executableRequestReceiver,
       ClientPayloadDeserializer clientPayloadDeserializer,
+      MessageSender msgSender,
       int maxFaults,
       int replicaCount) {
     this.ownReplicaId = ownReplicaId;
@@ -91,20 +91,38 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
     this.queueProcessorInputQueue = new HashMap<>();
     this.queueProcessorThreads = new HashMap<>();
     this.queueProcessors = new HashMap<>();
-    // Create agreement slot sequences for own replica and other replicas
-    this.replicaAgreementSlots.put(ownReplicaId, new AgreementSlotSequence(ownReplicaId, agreementSlotSequenceLength));
-    for (var rId : replicaIds) {
-      this.replicaAgreementSlots.put(rId, new AgreementSlotSequence(rId, agreementSlotSequenceLength));
-    }
     this.conflictChecker = conflictChecker;
     this.executableRequestReceiver = executableRequestReceiver;
     this.clientPayloadDeserializer = clientPayloadDeserializer;
+    this.msgSender = msgSender;
     this.maxFaults = maxFaults;
     this.replicaCount = replicaCount;
+
+    // Create agreement slot sequences for own replica and other replicas
+    // Start virtual threads of own AgreementSlotSequence one by one, but start threads of other
+    // sequences at once
+    this.initializeReplicaId(ownReplicaId, false); // Do not start
+    for (var rId : replicaIds) {
+      if (ownReplicaId.equals(rId)) {
+        continue;
+      }
+      this.initializeReplicaId(rId, true);
+    }
   }
 
-  public void initialize(MessageSender msgSender) {
-    this.msgSender = msgSender;
+  /**
+   * Creates the sequence, threads, and inputQueue for all elements of the sequence.
+   *
+   * @param replicaId
+   */
+  private void initializeReplicaId(ReplicaId replicaId, boolean startNewThread) {
+    var sequence = new AgreementSlotSequence(replicaId, agreementSlotSequenceLength);
+    this.replicaAgreementSlots.put(replicaId, sequence);
+
+    for (int i = 0; i < agreementSlotSequenceLength; i++) {
+      var seqNum = SequenceNumber.of(replicaId, i);
+      this.initializeEmptyAgreementSlot(seqNum, startNewThread);
+    }
   }
 
   private Optional<AgreementSlot> getAgreementSlot(SequenceNumber seqNum) {
@@ -127,10 +145,11 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    *
    * @param newSlot
    */
-  private void initializeEmptyAgreementSlot(SequenceNumber newSlot)
+  private void initializeEmptyAgreementSlot(SequenceNumber newSlot, boolean startNewThread)
       throws IllegalArgumentException, IndexOutOfBoundsException {
     // check whether there is already a queue processor or not
     if (this.queueProcessorThreads.containsKey(newSlot)) {
+      logger.info("{}", queueProcessorThreads.keySet());
       throw new IllegalArgumentException(
           String.format("Slot %s is already initialized", newSlot.toString()));
     }
@@ -162,37 +181,10 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
         Thread.ofVirtual().name("AgmtSlot" + newSlot).unstarted(queueProcessor);
     this.queueProcessorThreads.put(newSlot, newQueueProcessorThread);
     this.queueProcessors.put(newSlot, queueProcessor);
-    newQueueProcessorThread.start();
-  }
-
-  /**
-   * Used when this replica receives a message. Guarantees that all agreementSlots from 0 up to
-   * newSeqNum have an inputQueue and agreementSlotProcessor.
-   */
-  public void createSequenceNumberEntry(SequenceNumber newSeqNum) {
-    // We have to initialize the sequence numbers from the lowest uninitialized agreementSlot
-    ReplicaId replicaId = newSeqNum.replicaIdRec();
-    AgreementSlotSequence sequence = this.replicaAgreementSlots.get(replicaId);
-
-    if (sequence == null) {
-      throw new RuntimeException(
-          String.format("Sequence for ReplicaId %s was not yet initialized. ", replicaId));
+    if (startNewThread) {
+      newQueueProcessorThread.start();
+      this.replicaAgreementSlots.get(replicaId).updateLowestUninitialized(newSlot.sequenceCounter() + 1);
     }
-
-    var createdNums =
-        sequence.batchCreateSequenceNumberUntil(
-            newSeqNum); // batch operation is more efficient due to locking
-
-    // For all created agreementSlots, create a worker thread
-    for (var seq : createdNums) {
-      initializeEmptyAgreementSlot(seq);
-    }
-  }
-
-  public Map<ReplicaId, List<AgreementSlot>> getUsedAgreementSlots() {
-    return replicaAgreementSlots.entrySet().stream()
-        .collect(
-            Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getAgreementSlotsReadOnly()));
   }
 
   /**
@@ -242,18 +234,20 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
    *
    * @param sm
    */
-  @Override
-  public void processData(SystemMessage sm) {
+  public void handleReplicaMessage(SystemMessage sm) {
     if (sm instanceof ISOSMessageWrapper isosMsg) {
       ISOSMessage payload = isosMsg.getPayload();
       SequenceNumber seqNum = payload.seqNum();
 
-      // TODO Kai: There should be check whether the newSeqNum is too large. For example, when it
-      // skips 10 slots
-
-      // Guarantee that the respective AgreementSlot is initialized (Processor thread, input queue,
-      // agreementSlot data structure)
-      createSequenceNumberEntry(seqNum);
+      var thread = this.queueProcessorThreads.get(seqNum);
+      if (thread == null) {
+        logger.error("Invalid Sequence Number {}. Throwing away message", seqNum);
+        return;
+      }
+      try {
+        thread.start();
+      } catch (IllegalThreadStateException ignored) {
+      }
 
       // If the received request from a replica is a depPropose with a request, deserialize the
       // payload / update the cache before
@@ -262,6 +256,7 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
           if (depPropose.request() == null) {
             logger.warn(
                 "Request of received DepProposeWithRequest is null. Throwing message away.");
+            // TODO Kai: this should be done differently
             return;
           }
 
@@ -284,9 +279,6 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       logger.error("invalid message passed to processData (not a ISOSWrapperMessage)");
     }
   }
-
-  @Override
-  public void verifyPending() {}
 
   /**
    * Request received from Client
@@ -318,11 +310,12 @@ public class AgreementSlotManager implements MessageHandler, RequestReceiver {
       // and deserializing it here, so that
       r.updateDeserializedCommandCache(clientPayloadDeserializer);
 
-      // when we receive a new request, we create a new entry in our own sequence
+      // when we receive a new request, we set the request for the latest entry in th AgreementSlots
       SequenceNumber newSlot =
-          this.replicaAgreementSlots.get(ownReplicaId).createLowestUnusedSequenceNumberEntry(r);
-      // then initialize the agreement slot with the thread
-      this.initializeEmptyAgreementSlot(newSlot);
+          this.replicaAgreementSlots.get(ownReplicaId).createLowestSeqNumEntry(r);
+
+      // Start the thread
+      this.queueProcessorThreads.get(newSlot).start();
 
     } catch (IOException | ClassNotFoundException e) {
       logger.error(

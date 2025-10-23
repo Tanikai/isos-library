@@ -1,5 +1,6 @@
 package isos.consensus;
 
+import isos.communication.MessageSender;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
@@ -36,10 +37,11 @@ class AgreementSlotManagerWaitForDepsTest {
             ownReplicaId,
             timeoutConfig,
             otherReplicaIds,
-            100,
+            10,
             mock(ConflictChecker.class),
             mock(ExecutableRequestReceiver.class),
             mock(ClientPayloadDeserializer.class),
+            mock(MessageSender.class),
             1,
             4);
 
@@ -48,7 +50,6 @@ class AgreementSlotManagerWaitForDepsTest {
     for (int i = 0; i < numDeps; i++) {
       SequenceNumber seq = SequenceNumber.of(i, 0);
       waitDepSet.add(seq);
-      manager.createSequenceNumberEntry(seq);
     }
 
     CountDownLatch waitStarted = new CountDownLatch(1);
@@ -76,7 +77,7 @@ class AgreementSlotManagerWaitForDepsTest {
           new DepProposeMessage(
               seq, seq.replicaIdRec(), "hash123", new DependencySet(), new HashSet<>());
       var wrapper = new ISOSMessageWrapper(new DepProposeWithRequest(msg, request), seq.replicaId());
-      manager.processData(wrapper);
+      manager.handleReplicaMessage(wrapper);
     }
 
     waiter.join(2000);

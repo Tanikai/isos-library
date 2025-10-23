@@ -29,46 +29,51 @@ public class AgreementSlotSequence {
 
   private final AgreementSlot[] slots;
 
-  private int size;
+  private int lowestUninitialized;
   private final int length;
-  private Lock addEntryLock;
+  private final Lock addEntryLock;
 
   public AgreementSlotSequence(ReplicaId replicaId, int sequenceLength) {
     this.replicaId = replicaId; // required to return SequenceNumber
     this.slots = new AgreementSlot[sequenceLength];
-    this.size = 0;
+    this.lowestUninitialized = 0;
     this.length = sequenceLength;
     this.addEntryLock = new ReentrantLock();
+
+    for (int i = 0; i < sequenceLength; i++) {
+      this.slots[i] = new AgreementSlot(SequenceNumber.of(replicaId, i));
+    }
   }
 
-  private void createDefaultEntry(SequenceNumber seqNum) {
-    this.slots[seqNum.sequenceCounter()] = new AgreementSlot(seqNum);
+  public void updateLowestUninitialized(int nextFreeSlot) {
+    this.lowestUninitialized = Math.max(this.lowestUninitialized, nextFreeSlot);
   }
 
-  private void createDefaultEntryWithRequest(SequenceNumber seqNum, OrderedClientRequest r) {
-    this.slots[seqNum.sequenceCounter()] = new AgreementSlot(seqNum, r);
+  public int getLowestUninitialized() {
+    return this.lowestUninitialized;
   }
 
-  public int size() {
-    return this.size;
+  public int length() {
+    return this.length;
   }
 
   /**
    * Used when a new ClientRequest arrives to the current replica.
    *
-   * Requirement: To start the fast path, the coordinator [that received a request from the client]
-   * selects its agreement slot with the lowest unused sequence number (see paper sec. B).
+   * <p>Requirement: To start the fast path, the coordinator [that received a request from the
+   * client] selects its agreement slot with the lowest unused sequence number (see paper sec. B).
    *
    * @return Sequence number of newly created entry
    */
-  public SequenceNumber createLowestUnusedSequenceNumberEntry(OrderedClientRequest r) {
+  public SequenceNumber createLowestSeqNumEntry(OrderedClientRequest r) {
     try {
       this.addEntryLock.lock();
       // get sequence number for new slot
       SequenceNumber result = getLowestUnusedSequenceNumber();
       // initialize new slot with default AgreementSlot record
-      createDefaultEntryWithRequest(result, r);
-      size++;
+
+      this.slots[result.sequenceCounter()].setRequest(r);
+      lowestUninitialized++;
 
       return result;
     } finally {
@@ -76,36 +81,8 @@ public class AgreementSlotSequence {
     }
   }
 
-  /**
-   * Used when this replica receives DepPropose message from another replica.
-   *
-   * Initializes the agreement slots Used for sequences of *other* replicas. To create new sequence
-   * numbers of the *current* replica, see {@link #createLowestUnusedSequenceNumberEntry(OrderedClientRequest)}.
-   *
-   * @param seqNum Target sequence number (inclusive)
-   * @return List of newly created sequence Numbers
-   */
-  public List<SequenceNumber> batchCreateSequenceNumberUntil(SequenceNumber seqNum) {
-    try {
-      this.addEntryLock.lock();
-      SequenceNumber start = getLowestUnusedSequenceNumber();
-      var resultList = new LinkedList<SequenceNumber>();
-
-      for (int i = start.sequenceCounter(); i < seqNum.sequenceCounter() + 1; i++) {
-        var newSeqNum = SequenceNumber.of(this.replicaId.value(), i);
-        createDefaultEntry(newSeqNum);
-        resultList.add(newSeqNum);
-        size++;
-      }
-
-      return resultList;
-    } finally {
-      this.addEntryLock.unlock();
-    }
-  }
-
-  public SequenceNumber getLowestUnusedSequenceNumber() {
-    return SequenceNumber.of(this.replicaId.value(), size);
+  private SequenceNumber getLowestUnusedSequenceNumber() {
+    return SequenceNumber.of(this.replicaId.value(), lowestUninitialized);
   }
 
   /**
@@ -114,11 +91,11 @@ public class AgreementSlotSequence {
    * @return
    */
   public List<AgreementSlot> getAgreementSlotsReadOnly() {
-    if (this.size == 0) {
+    if (this.lowestUninitialized == 0) {
       return Collections.unmodifiableList(new LinkedList<>());
     }
 
-    return Collections.unmodifiableList(Arrays.asList(this.slots).subList(0, size));
+    return Collections.unmodifiableList(Arrays.asList(this.slots).subList(0, lowestUninitialized));
   }
 
   /**
@@ -136,7 +113,7 @@ public class AgreementSlotSequence {
               seqNum.replicaId(), this.replicaId.value()));
     }
 
-    if (seqNum.sequenceCounter() > size) {
+    if (seqNum.sequenceCounter() > lowestUninitialized) {
       throw new IndexOutOfBoundsException(
           String.format("SequenceNumber %d was not yet initialized", seqNum.sequenceCounter()));
     }
@@ -144,11 +121,8 @@ public class AgreementSlotSequence {
     this.slots[seqNum.sequenceCounter()] = newValue;
   }
 
-  public AgreementSlot getAgreementSlotValue(SequenceNumber seqNum) throws IndexOutOfBoundsException {
-    if (seqNum.sequenceCounter() >= this.size) {
-      throw new IndexOutOfBoundsException();
-    }
-
+  public AgreementSlot getAgreementSlotValue(SequenceNumber seqNum)
+      throws IndexOutOfBoundsException {
     return this.slots[seqNum.sequenceCounter()];
   }
 }
