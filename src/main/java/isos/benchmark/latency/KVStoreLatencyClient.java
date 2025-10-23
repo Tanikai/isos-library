@@ -30,7 +30,7 @@ public class KVStoreLatencyClient {
   // Result data
   private int failureCount = 0;
   private final LinkedList<Boolean> wasWriteRequest;
-  private final LinkedList<Long> latencies; // -1 if it was failure
+  private final LinkedList<Integer> latencies; // -1 if it was failure
 
   public KVStoreLatencyClient(int clientId, int writeRatioPercent, int conflictRatioPercent) {
     this.logger = LoggerFactory.getLogger(String.format("Client%d", clientId));
@@ -53,6 +53,14 @@ public class KVStoreLatencyClient {
     }
   }
 
+  /**
+   * Blocking operation to run the requests.
+   *
+   * @param requestCount
+   * @throws IOException
+   * @throws InterruptedException
+   * @throws ClassNotFoundException
+   */
   public void runRequests(int requestCount)
       throws IOException, InterruptedException, ClassNotFoundException {
 
@@ -65,22 +73,22 @@ public class KVStoreLatencyClient {
           // Write
           wasWriteRequest.add(true);
           var latency = executeRequest(key, "asdf");
-          latencies.add(latency);
+          latencies.add((int) latency);
         } else {
           // Read
           wasWriteRequest.add(false);
           var latency = executeRequest(key, null);
-          latencies.add(latency);
+          latencies.add((int) latency);
         }
       } catch (TimeoutException e) {
         logger.warn("Timeout reached for request {} of client {}", i, this.clientId);
         this.failureCount++;
-        latencies.add(-1L);
+        latencies.add(-1);
       } catch (QuorumNotReachedException e) {
         logger.warn(
             "Quorum of same replies was not reached for request {} of client {}", i, this.clientId);
         this.failureCount++;
-        latencies.add(-1L);
+        latencies.add(-1);
       }
     }
     logger.info("Client {} is done!", this.clientId);
@@ -101,7 +109,7 @@ public class KVStoreLatencyClient {
     return TimeUnit.NANOSECONDS.toMillis(endTime - startTime);
   }
 
-  public List<Map.Entry<Long, Boolean>> getBenchmarkResult() throws IllegalStateException {
+  public List<LatencyBenchmarkResult> getBenchmarkResult() throws IllegalStateException {
     var writeRequestSize = wasWriteRequest.size();
     var latenciesSize = latencies.size();
     if (writeRequestSize != latenciesSize) {
@@ -111,7 +119,7 @@ public class KVStoreLatencyClient {
               writeRequestSize, latenciesSize));
     }
     return IntStream.range(0, latenciesSize)
-        .mapToObj((i -> Map.entry(latencies.get(i), wasWriteRequest.get(i))))
+        .mapToObj((i -> new LatencyBenchmarkResult(latencies.get(i), wasWriteRequest.get(i))))
         .collect(Collectors.toList());
   }
 }

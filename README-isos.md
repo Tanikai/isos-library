@@ -160,7 +160,9 @@ Client (one instance per region):
   --clientCount=5 \
   --requestCount=10 \
   --writeRatioPercent=10 \
-  --conflictRatioPercent=10
+  --conflictRatioPercent=10 \
+  --outputDir="./benchmark_out/" \
+  --benchmarkName="Optimized_Ver1"
 ```
 
 #### Throughput
