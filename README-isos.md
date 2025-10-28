@@ -150,6 +150,8 @@ One replica in one of each region, manually:
 ./smartrun.sh isos.benchmark.kvstore.KVStoreReplica 0
 ```
 
+When running the script manually, be sure to use the correct replicaID that is
+
 #### Latency 
 
 Client (one instance per region):
@@ -195,13 +197,26 @@ Then, run the YCSB database replicas with:
 Run the YCSB client with:
 
 ```shell
-./ycsb_client.sh isos.benchmark.ycsb.IsosYcsbClient isos_1
+./ycsb_client.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w
+```
+
+Then SSH into a client VPS and run the YCSB client command manually.
+
+#### Remote Replicas and clients
+
+Alternatively, for remote execution:
+
+```shell
+./ssh-quad-replica.sh replica_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbServer ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3
+```
+
+```shell
+./ssh-quad-replica.sh client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w ubuntu@client0 ubuntu@client1 ubuntu@client2 ubuntu@client3
 ```
 
 ## Evaluation
 
 Evaluation is done with a Jupyter Notebook written in Python.
-
 
 ```shell
 cd evaluation
@@ -209,6 +224,8 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Select the new virtual env and run the commands in the Jupyter notebook.
 
 ## Documentation of Thread Names
 

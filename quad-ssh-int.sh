@@ -1,45 +1,27 @@
 #!/bin/bash
 
-# Runs four replica instances with IDs 0-3 in their own respective directories.
+# Runs four SSH sessions
 
-if (( $# < 6 )); then
-  echo "Usage: $0 <scriptname> <classpath> <host0> <host1> <host2> <host3>"
-  echo "Example: $0 smartrun.sh isos.benchmark.kvstore.KVStoreReplica ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3"
-  echo "Example: $0 client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3"
-  exit 1
+if [ $# -ne 4 ]; then
+  echo "Usage: $0 <host0> <host1> <host2> <host3>"
+  echo "Example: $0 ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3"
+  exit
 fi
 
 SESSION_NAME="quad-setup-ssh"
 BASE_DIR="/home/ubuntu/isos"
 HOST_DIR="./"
 
-SCRIPTNAME="$1"
-args=("$@")
-count=${#args[@]}
-middle_args=("${args[@]:1:count-5}")
-SCRIPT_ARGS="${middle_args[*]}"
-last_four=("${args[@]: -4}")
-
-echo "Script args: $SCRIPT_ARGS"
-
-HOST_0="${last_four[0]}"
-HOST_1="${last_four[1]}"
-HOST_2="${last_four[2]}"
-HOST_3="${last_four[3]}"
-
-echo "Hosts: $HOST_0, $HOST_1, $HOST_2, $HOST_3"
+HOST_0="$1"
+HOST_1="$2"
+HOST_2="$3"
+HOST_3="$4"
 
 # Replica IDs
 REP_0="0"
 REP_1="1"
 REP_2="2"
 REP_3="3"
-
-# Command that is executed in each SSH session
-REMOTE_0="cd $BASE_DIR && ./$SCRIPTNAME $SCRIPT_ARGS $REP_0"
-REMOTE_1="cd $BASE_DIR && ./$SCRIPTNAME $SCRIPT_ARGS $REP_1"
-REMOTE_2="cd $BASE_DIR && ./$SCRIPTNAME $SCRIPT_ARGS $REP_2"
-REMOTE_3="cd $BASE_DIR && ./$SCRIPTNAME $SCRIPT_ARGS $REP_3"
 
 # Connect via SSH to remotes
 CMD_0="ssh -t $HOST_0"
@@ -76,19 +58,10 @@ tmux select-layout -t $SESSION_NAME tiled
 # Select the first pane (top-left)
 tmux select-pane -t $SESSION_NAME:0.0
 
-echo "Waiting 5 seconds for SSH connections to establish..."
-sleep 5
-
 PANE_0="${SESSION_NAME}:0.0"
 PANE_1="${SESSION_NAME}:0.1"
 PANE_2="${SESSION_NAME}:0.2"
 PANE_3="${SESSION_NAME}:0.3"
-
-# Run the commands
-tmux send-keys -t "$PANE_0" "$REMOTE_0" C-m
-tmux send-keys -t "$PANE_1" "$REMOTE_1" C-m
-tmux send-keys -t "$PANE_2" "$REMOTE_2" C-m
-tmux send-keys -t "$PANE_3" "$REMOTE_3" C-m
 
 # Attach to the session
 tmux attach-session -t $SESSION_NAME

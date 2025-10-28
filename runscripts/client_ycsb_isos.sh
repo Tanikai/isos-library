@@ -16,13 +16,18 @@
 
 CLASSNAME="$1"
 WORKLOAD="$2"
+CLIENT_ID="$3"
+
+# Each instance of YCSB can have up to 10.000 client IDs
+CLIENT_ID_START=$((CLIENT_ID * 10000))
 
 java  -Djava.security.properties="./config/java.security" \
   -Dlogback.configurationFile="./config/logback.xml" \
   -cp ./lib/*:./bin/ com.yahoo.ycsb.Client \
-  -threads 10 \
-  -P config/ycsb_workloads/isos_1 \
+  -threads 50 \
+  -P "config/ycsb_workloads/$WORKLOAD" \
   -p measurementtype=timeseries \
+  -p smart-initkey="$CLIENT_ID_START" \
   -p timeseries.granularity=1000 \
   -db $CLASSNAME \
   -s

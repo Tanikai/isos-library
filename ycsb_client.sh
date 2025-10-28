@@ -2,7 +2,7 @@
 
 if [ $# -lt 2 ]; then
   echo "Usage: $0 <classpath> <workload name>"
-  echo "Example: $0 isos.benchmark.ycsb.IsosYcsbClient isos_1"
+  echo "Example: $0 isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w"
   exit 1
 fi
 

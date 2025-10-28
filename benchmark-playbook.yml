@@ -2,6 +2,7 @@
 - name: Deploy ISOS to servers
   hosts: all
   become: yes
+  gather_facts: no
 
   vars:
     app_src_dir: build/install/library
