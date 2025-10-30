@@ -123,11 +123,11 @@ the `build/install/library` directory. This directory is synchronized to the
 replicas via ansible.
 
 To build ISOS, install its dependencies and deploy the current build, run the
-following commands:
+following commands. They have to be repeated every time you do a code change:
 
 ```shell
-./gradlew installDist
-ansible-playbook -i inventory.yml benchmark-playbook.yml --private-key ~/.ssh/my_custom_key
+./gradlew installDist && \
+    ansible-playbook -i inventory.yml benchmark-playbook.yml --private-key ~/.ssh/my_custom_key
 ```
 
 ### KV Store

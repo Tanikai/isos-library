@@ -3,15 +3,11 @@
 # Runs four replica instances with IDs 0-3 in their own respective directories.
 
 if (( $# < 6 )); then
-  echo "Usage: $0 <scriptname> <classpath> <host0> <host1> <host2> <host3>"
+  echo "Usage: $0 <scriptname> <classpath> <other arguments for script> <host0> <host1> <host2> <host3>"
   echo "Example: $0 smartrun.sh isos.benchmark.kvstore.KVStoreReplica ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3"
   echo "Example: $0 client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3"
   exit 1
 fi
-
-SESSION_NAME="quad-setup-ssh"
-BASE_DIR="/home/ubuntu/isos"
-HOST_DIR="./"
 
 SCRIPTNAME="$1"
 args=("$@")
@@ -19,6 +15,11 @@ count=${#args[@]}
 middle_args=("${args[@]:1:count-5}")
 SCRIPT_ARGS="${middle_args[*]}"
 last_four=("${args[@]: -4}")
+
+SAFE_SCRIPT_NAME="${SCRIPTNAME//./-}"
+SESSION_NAME="quad-setup-ssh-$SAFE_SCRIPT_NAME"
+BASE_DIR="/home/ubuntu/isos"
+HOST_DIR="./"
 
 echo "Script args: $SCRIPT_ARGS"
 
