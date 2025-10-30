@@ -29,7 +29,7 @@ import java.util.function.BiPredicate;
 public class MessagingExample extends Thread {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     if (args.length < 1) {
       System.out.println("Use: java MessagingExample <processId>");
       System.exit(-1);
@@ -45,7 +45,7 @@ public class MessagingExample extends Thread {
 
   private final ISOSApplication app;
 
-  public MessagingExample(int replicaId, String configHome, KeyLoader loader) {
+  public MessagingExample(int replicaId, String configHome, KeyLoader loader) throws Exception {
     super(String.format("ReplicaId %d", replicaId));
 
     this.conflictChecker = (r1, r2) -> true; // all requests conflict with each other

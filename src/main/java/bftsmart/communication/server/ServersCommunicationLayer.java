@@ -144,9 +144,14 @@ public class ServersCommunicationLayer extends Thread {
     context.init(kmf.getKeyManagers(), trustMgrFactory.getTrustManagers(), new SecureRandom());
 
     SSLServerSocketFactory serverSocketFactory = context.getServerSocketFactory();
-    this.serverSocketSSLTLS =
-        (SSLServerSocket)
-            serverSocketFactory.createServerSocket(myPort, 100, InetAddress.getByName(myAddress));
+    try {
+      this.serverSocketSSLTLS =
+          (SSLServerSocket)
+              serverSocketFactory.createServerSocket(myPort, 100, InetAddress.getByName(myAddress));
+    } catch (Exception e) {
+      logger.error("Could not bind socket to own address {}", myAddress);
+      throw e;
+    }
 
     serverSocketSSLTLS.setEnabledCipherSuites(
         this.configManager.getStaticConf().getEnabledCiphers());
@@ -166,23 +171,6 @@ public class ServersCommunicationLayer extends Thread {
     SecretKeyFactory fac = TOMUtil.getSecretFactory();
     PBEKeySpec spec = TOMUtil.generateKeySpec(SECRET.toCharArray());
     selfPwd = fac.generateSecret(spec);
-
-    // Try connecting if a member of the current view. Otherwise, wait until the Join has been
-    // processed!
-    // FIXME Kai: remove controller from server communication layer
-    // FIXME Kai: How to remove controller from here?
-
-    // For every
-    //        if (controller.isInCurrentView()) {
-    //          int[] initialV = controller.getCurrentViewAcceptors();
-    //          for (int j : initialV) {
-    //            if (j != me) {
-    //              getConnection(j);
-    //            }
-    //          }
-    //        }
-
-    start();
   }
 
   /**
@@ -274,29 +262,10 @@ public class ServersCommunicationLayer extends Thread {
   public void updateConnections() {
     connectionsLock.lock();
     try {
-      // FIXME Kai: remove controller from server communication layer
-
-      // TODO Kai: do we need to remove unused connections? can't we keep them alive and use a
-      // getter function to get all IDs for current
-
-      //         // remove connections to replicas that are not in the current view
-      //          Iterator<Integer> it = this.connections.keySet().iterator();
-      //          List<Integer> toRemove = new LinkedList<>();
-      //          while (it.hasNext()) {
-      //            int rm = it.next();
-      //            if (!this.controller.isCurrentViewMember(rm)) {
-      //              toRemove.add(rm);
-      //            }
-      //          }
-      //          for (Integer integer : toRemove) {
-      //            this.connections.remove(integer).shutdown();
-      //          }
-
       int[] newV = configManager.getCurrentViewIds();
       logger.info("Update view connections: {}", Arrays.toString(newV));
       for (int i : newV) {
         if (i != me) {
-          logger.info("Connecting to replica: {}", i);
           getOrCreateConnection(i);
         }
       }
@@ -331,7 +300,7 @@ public class ServersCommunicationLayer extends Thread {
    * used initially during startup when the replicas have to be started manually. After that,
    * **especially after view change**, connections should be updated with another method.
    */
-  public void waitUntilViewConnected() {
+  public void awaitViewConnected() throws InterruptedException {
     Set<Integer> targetViewIds = new HashSet<>();
     for (int i : this.configManager.getCurrentViewIds()) {
       if (i != me) targetViewIds.add(i); // connect to everyone else but self
@@ -348,6 +317,13 @@ public class ServersCommunicationLayer extends Thread {
         logger.error("Interrupted while waiting for connections", ex);
       }
     }
+
+    for (var replicaId : targetViewIds) {
+      var conn = this.connections.get(replicaId);
+      logger.info("Await connection to replica {}", replicaId);
+      conn.awaitInitialConnectionDone();
+    }
+
     logger.info("Connected to initial replicas: {}", this.connections.keySet());
   }
 
@@ -430,18 +406,15 @@ public class ServersCommunicationLayer extends Thread {
     try {
       connectionsLock.lock();
       if (this.connections.get(remoteId) == null) {
-        // This must never happen!!!
-        // first time that this connection is being established
-        // System.out.println("THIS DOES NOT HAPPEN....."+remoteId);
-        logger.warn("Received new connection before it was initialized internally. Should not happen, accepting anyway");
-        this.connections.put(
-            remoteId, new ServerConnection(configManager, newSocket, remoteId, inQueue));
+        logger.info("Received new connection before it was initialized internally.");
+        var newConn = new ServerConnection(configManager, newSocket, remoteId, inQueue);
+        this.connections.put(remoteId, newConn);
         return;
       }
 
       // reconnection
       logger.info("Accept connection from replica {}", remoteId);
-      this.connections.get(remoteId).connectToReplica(newSocket, false);
+      this.connections.get(remoteId).acceptConnection(newSocket);
     } finally {
       connectionsLock.unlock();
     }

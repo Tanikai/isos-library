@@ -95,6 +95,7 @@ public class ServerCommunicationSystem extends Thread implements MessageSender {
 
     serversConn = new ServersCommunicationLayer(configManager, inQueue);
     serversConn.initialize();
+    serversConn.start();
 
     // ******* EDUARDO BEGIN **************//
     clientsConn =
@@ -151,8 +152,8 @@ public class ServerCommunicationSystem extends Thread implements MessageSender {
   }
 
   /** Retry to establish connections to replicas that are not connected yet. */
-  public void waitUntilViewConnected() {
-    serversConn.waitUntilViewConnected();
+  public void awaitViewConnected() throws InterruptedException {
+    serversConn.awaitViewConnected();
   }
 
   /**

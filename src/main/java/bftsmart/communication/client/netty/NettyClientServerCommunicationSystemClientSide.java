@@ -17,6 +17,7 @@ package bftsmart.communication.client.netty;
 import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.CommunicationSystemClientSide;
 import bftsmart.communication.client.ReplyReceiver;
+import bftsmart.communication.server.PingHandler;
 import bftsmart.communication.server.PingMessage;
 import bftsmart.communication.server.ServerConnection;
 import bftsmart.configuration.ConfigurationManager;
@@ -142,6 +143,10 @@ public class NettyClientServerCommunicationSystemClientSide
 
           if (!future.isSuccess()) {
             logger.error("Failed to connect to {}", replicaId);
+            throw new RuntimeException(
+                String.format(
+                    "Not able to connect to replica %d with IP %s",
+                    replicaId, configManager.getStaticConf().getRemoteAddress(replicaId)));
           }
         } catch (Exception ex) {
           logger.error("Failed to initialize MAC engine", ex);
@@ -306,7 +311,7 @@ public class NettyClientServerCommunicationSystemClientSide
               if (this.pingTargets == null) {
                 return;
               }
-              var pingNonce = ServerConnection.generateSecureNonce(16);
+              var pingNonce = PingHandler.generateSecureNonce(16);
               var pingNanos = System.nanoTime();
               var msg = new PingMessage(this.clientId, pingNonce, false);
               this.send(false, this.pingTargets, msg, pingTargets.size());

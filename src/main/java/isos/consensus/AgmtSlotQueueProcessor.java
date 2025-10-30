@@ -165,9 +165,9 @@ public class AgmtSlotQueueProcessor implements Runnable {
         try {
           if (!this.stepPrecondHolds(msg.msgType())) {
             logger.warn(
-                    "Step mismatch when processing {}, current step {}",
-                    msg.msgType(),
-                    this.slot.getStep());
+                "Step mismatch when processing {}, current step {}",
+                msg.msgType(),
+                this.slot.getStep());
             // Defer processing of messages if preconditions do not hold.
             if (msg.msgType() != ISOSMessageType.DEP_PROPOSE_WITH_REQ) {
               this.bufferedMessages.bufferMessage(msg);
@@ -319,7 +319,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
    */
   private void handleTimeoutMessage(TimeoutMessage timeoutMessage) {
     // We have to check whether the timeout was already canceled by a previous message or not
-    logger.debug("Handle {} timeout", timeoutMessage.timeoutType());
     var timeoutType = timeoutMessage.timeoutType();
     var currentState = this.timeoutStates.get(timeoutType);
     if (currentState.equals(TimeoutState.CANCELED)) {
@@ -336,19 +335,33 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
+    logger.warn(
+        "Timeout {} expired for slot {}", timeoutMessage.timeoutType(), this.slot.getSeqNum());
+
     switch (timeoutMessage.timeoutType()) {
       case PROPOSE:
         {
           /** Pseudocode Line 68, 69 */
-          // TODO Kai: Why are we sending this without the request? (defined in the pseudocode)
           var depPropose = new DepProposeWithRequest(this.slot.getDepPropose(), null);
           var msg = new ISOSMessageWrapper(depPropose, this.ownReplicaId.value());
+
+          logger.warn(
+              "Received DepVerify messages from {}, but did not reach {} msgs with same hash. FollowerQuorum: {}",
+              this.slot.getDepVerifys().keySet().toArray(),
+              2 * this.maxFaults,
+              this.slot.getDepPropose().followerQuorum().toArray());
 
           this.msgSender.broadcastToReplicas(false, msg);
         }
         break;
       case COMMIT:
         {
+          logger.warn(
+              "Received DepCommit messages from {}, but did not reach {} msgs for quorum size {}.",
+              this.bufferedMessages.getDepCommits().stream()
+                  .map(DepCommitMessage::logicalSender)
+                  .toArray(),
+              2 * this.maxFaults + 1);
           /** Pseudocode Line 70, 71 */
           this.moveSelfToNewView(ViewNumber.increaseViewNumber(this.slot.getViewNumber()));
         }
@@ -417,7 +430,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     var timeout = this.currentTimeouts.get(timeoutType);
     if (timeout == null) {
-      logger.info("Tried to timeout of type {}, but doesn't exist", timeoutType);
+      logger.debug("Tried to cancel timeout of type {}, but doesn't exist", timeoutType);
       return;
     }
     this.incomingQueue.addFirst(new TimeoutMessage(timeoutType, this.seqNum, this.ownReplicaId));
@@ -524,7 +537,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Step precondition checked in separate method
 
     var depPropose = depProposeWithR.depPropose();
-    var request = depProposeWithR.request();
+    OrderedClientRequest request = depProposeWithR.request(); // Request can be null!
 
     // Line 22: assert F is valid fast-path quorum
     // TODO Kai: what is a valid fast-path quorum?
@@ -580,6 +593,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // if we are in the Follower quorum, send a DepPropose message
       if (depPropose.followerQuorum().contains(this.ownReplicaId)) {
+        logger.info("Self is included in follower quorum, broadcast DepVerify");
         var depVerify =
             new DepVerifyMessage(
                 this.slot.getSeqNum(), this.ownReplicaId, depPropose.calculateHash(), depSet);
@@ -591,21 +605,13 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // New step -> handle DepVerify that were buffered
       this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
     } else {
-      logger.error("Received DepPropose message without request! Is this valid?");
+      logger.info(
+          "Received DepPropose message without request, propose timeout reached in replica {}",
+          depProposeWithR.logicalSender());
     }
   }
 
   private void handleDepVerify(DepVerifyMessage depVerify) {
-    // Line 53: if we receive DepVerify from f+1 replicas, start commit timeout
-    // Note: In this case, we assume that we have received f+1 *valid* DepVerify messages.
-    // The pseudocode is ambiguous in this case, whether we should count DepVerify messages that
-    // are not valid, e.g., due to a hash mismatch.
-    if (this.slot.reachedDepVerifyQuorum(this.maxFaults + 1)) {
-      // Start commit timeout if it wasn't started yet
-      if (this.timeoutStates.get(ISOSTimeoutType.COMMIT) == TimeoutState.NULL) {
-        this.startTimeout(ISOSTimeoutType.COMMIT);
-      }
-    }
 
     if (!slot.getDepPropose().calculateHash().equals(depVerify.depProposeHash())) {
       logger.error(
@@ -641,6 +647,17 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Add received DepVerify
     this.slot.setDepVerify(depVerify.followerId(), depVerify);
 
+    // Line 53: if we receive DepVerify from f+1 replicas, start commit timeout
+    // Note: In this case, we assume that we have received f+1 *valid* DepVerify messages.
+    // The pseudocode is ambiguous in this case, whether we should count DepVerify messages that
+    // are not valid, e.g., due to a hash mismatch.
+    if (this.slot.reachedDepVerifyQuorum(this.maxFaults + 1)) {
+      // Start commit timeout if it wasn't started yet
+      if (this.timeoutStates.get(ISOSTimeoutType.COMMIT) == TimeoutState.NULL) {
+        this.startTimeout(ISOSTimeoutType.COMMIT);
+      }
+    }
+
     if (!this.slot.reachedDepVerifyQuorum(2 * this.maxFaults)) {
       logger.debug("Did not reach quorum of DepVerify messages yet in slot {}", this.seqNum);
       return;
@@ -654,7 +671,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     if (!fpVerified) {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
-      logger.info(
+      logger.warn(
           "At least 1 dependency is not reported by at least f+1 followers. Enter reconciliation path.");
       var depVerifyHash = this.slot.getDepVerifyHashCached();
       enterReconciliationPath(depVerifyHash);
@@ -991,7 +1008,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // the same view as us currently.
 
     if (!this.slot.reachedViewChangeQuorum(this.slot.getViewNumber(), 2 * maxFaults + 1)) {
-      logger.info(
+      logger.debug(
           "We have not reached a quorum of ViewChange messages for the view {} yet, stop processing",
           this.slot.getViewNumber());
       return;
@@ -1214,7 +1231,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private void handleExecMessage(ExecMessage exec) {
     // We have to reach a f+1 quorum
     if (this.slot.getExec() == null) {
-      logger.info(
+      logger.debug(
           "Received Exec, but did already forward message to execution. Throwing message away");
       return;
     }
@@ -1235,6 +1252,5 @@ public class AgmtSlotQueueProcessor implements Runnable {
   }
 
   // endregion
-
 
 }

@@ -48,10 +48,15 @@ public class MessagingReplica extends Thread {
 
     // start listening for messages
     this.scs.start();
-    logger.info("Wait until view is connected");
-    this.scs.waitUntilViewConnected();
 
     // wait until everyone is connected
+    logger.info("Wait until view is connected");
+    try {
+      this.scs.awaitViewConnected();
+    } catch (InterruptedException e) {
+      throw new RuntimeException("Interrupted while awaiting view connection.");
+    }
+
     // send message to all replicas
     var receivers = this.configManager.getStaticConf().getInitialView();
     logger.info("Sending message to replicas {}", receivers);
@@ -109,7 +114,8 @@ public class MessagingReplica extends Thread {
       var responsePayload = ("This is the reply").getBytes();
       var receivers = new int[1];
       receivers[0] = sender;
-      this.scs.sendToClients(receivers, new ClientMessageWrapper(sm.getSender(), 0, responsePayload));
+      this.scs.sendToClients(
+          receivers, new ClientMessageWrapper(sm.getSender(), 0, responsePayload));
     }
   }
 

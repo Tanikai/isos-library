@@ -219,8 +219,12 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
           // Because the Dependency Graph can contain slots that are already executed, we have to
           // filter out the already executed ones
           // Ordering of vertices in the SCC for request execution is done in the execute function
-          logger.info("Normal case: execute SCC with sequence numbers {}", scc);
-          this.execute(scc.stream().filter(element -> !this.executed.contains(element)).toList());
+          var notExecutedInScc = scc.stream().filter(element -> !this.executed.contains(element)).toList();
+          if (notExecutedInScc.isEmpty()) {
+            continue;
+          }
+          logger.info("Normal case: execute unexecuted {} from SCC {}", notExecutedInScc, scc);
+          this.execute(notExecutedInScc);
           didExecuteAgreementSlots = true;
         }
 
@@ -273,9 +277,13 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
         try {
           // Line 186
           var firstSCC = SCCs.getFirst();
-          logger.info("Unblock case: execute only first SCC with sequence numbers {}", firstSCC);
-          this.execute(
-              firstSCC.stream().filter(element -> !this.executed.contains(element)).toList());
+
+          var notExecutedInScc = firstSCC.stream().filter(element -> !this.executed.contains(element)).toList();
+          if (notExecutedInScc.isEmpty()) {
+            continue;
+          }
+          logger.info("Unblock case: execute unexecuted {} only from first SCC {}", notExecutedInScc, firstSCC);
+          this.execute(notExecutedInScc);
 
           // After we have executed a single case for the unblock, we can return
           return;

@@ -29,7 +29,7 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
 
   private final Map<K, V> kvState;
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     if (args.length < 1) {
       System.err.println("Use: java isos.benchmark.kvstore.KVStoreReplica <processId>");
       System.exit(-1);
@@ -39,7 +39,7 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
     replica.start();
   }
 
-  public KVStoreReplica(int replicaId, String configHome, KeyLoader loader) {
+  public KVStoreReplica(int replicaId, String configHome, KeyLoader loader) throws Exception {
     this.configManager = new ConfigurationManager(replicaId, configHome, loader);
     this.app =
         new ISOSApplication(

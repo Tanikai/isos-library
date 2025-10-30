@@ -183,7 +183,9 @@ public class AgreementSlotManager implements RequestReceiver {
     this.queueProcessors.put(newSlot, queueProcessor);
     if (startNewThread) {
       newQueueProcessorThread.start();
-      this.replicaAgreementSlots.get(replicaId).updateLowestUninitialized(newSlot.sequenceCounter() + 1);
+      this.replicaAgreementSlots
+          .get(replicaId)
+          .updateLowestUninitialized(newSlot.sequenceCounter() + 1);
     }
   }
 
@@ -249,18 +251,24 @@ public class AgreementSlotManager implements RequestReceiver {
       } catch (IllegalThreadStateException ignored) {
       }
 
+      logger.debug("Received {} message from replica {}", payload.msgType(), sm.getSender());
+
       // If the received request from a replica is a depPropose with a request, deserialize the
       // payload / update the cache before
       if (payload instanceof DepProposeWithRequest depPropose) {
         try {
-          if (depPropose.request() == null) {
+          if (depPropose.request() != null) {
+            depPropose.request().updateDeserializedCommandCache(clientPayloadDeserializer);
+          }
+          if (sm.getSender() != depPropose.logicalSender().value()) {
+            // Request of depPropose can be null if it was broadcasted when the propose timeout
+            // expired
             logger.warn(
-                "Request of received DepProposeWithRequest is null. Throwing message away.");
-            // TODO Kai: this should be done differently
-            return;
+                "Received DepPropose with mismatching physical ({}) and logical ({}) sender. DepPropose timeout expired?",
+                sm.getSender(),
+                depPropose.logicalSender().value());
           }
 
-          depPropose.request().updateDeserializedCommandCache(clientPayloadDeserializer);
         } catch (IOException | ClassNotFoundException e) {
           logger.error(
               "Error while decoding client request: {}. Throwing received DepProposeWithRequest away.",

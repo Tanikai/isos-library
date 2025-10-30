@@ -26,14 +26,16 @@ public class IsosYcsbServer {
 
   public static void main(String[] args) throws Exception {
     if (args.length == 1) {
-      var dbServer = new IsosYcsbServer(Integer.parseInt(args[0]));
+      int clientId = Integer.parseInt(args[0]);
+      System.out.println("Starting IsosYcsbServer with clientId " + clientId);
+      var dbServer = new IsosYcsbServer(clientId);
       dbServer.start();
     } else {
       System.out.println("Usage: java isos.benchmark.ycsb.IsosYcsbServer <replica id>");
     }
   }
 
-  public IsosYcsbServer(int replicaId) {
+  public IsosYcsbServer(int replicaId) throws Exception {
     this.configManager = new ConfigurationManager(replicaId, "", null);
     this.mTables = new TreeMap<>();
 

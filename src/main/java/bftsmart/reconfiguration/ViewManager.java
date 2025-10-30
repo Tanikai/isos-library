@@ -140,14 +140,9 @@ public class ViewManager {
         byte[] data = bOut.toByteArray();
 
         for (Integer i : targets) {
-            try {
-                if (i.intValue() != id) {
-                    getConnection(i.intValue()).send(data);
-                }
-            } catch (InterruptedException ex) {
-               // ex.printStackTrace();
-                logger.error("Failed to send data to target", ex);
-            }
+              if (i.intValue() != id) {
+                  getConnection(i.intValue()).send(data);
+              }
         }
     }
 

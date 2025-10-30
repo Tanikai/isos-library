@@ -5,7 +5,6 @@ import bftsmart.communication.ServerCommunicationSystem;
 import bftsmart.communication.SystemMessage;
 import bftsmart.configuration.ConfigurationManager;
 import isos.communication.ClientMessageWrapper;
-import isos.communication.MessageSender;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.dependency.TrivialConflictChecker;
@@ -87,7 +86,8 @@ public class ISOSApplication implements MessageHandler {
       ConfigurationManager configManager,
       ClientPayloadDeserializer deserializer,
       BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict,
-      ExecuteInApplication executor) {
+      ExecuteInApplication executor)
+      throws Exception {
     this.configManager = configManager;
     this.timeoutConf =
         new TimeoutConfiguration(
@@ -106,12 +106,7 @@ public class ISOSApplication implements MessageHandler {
     var maxFaults = configManager.getStaticConf().getF();
     var replicaCount = configManager.getStaticConf().getN();
 
-    try {
-      this.scs = new ServerCommunicationSystem(configManager, this);
-    } catch (Exception e) {
-      throw new RuntimeException(
-          "Could not initialize ServerCommunicationSystem: " + e.getMessage());
-    }
+    this.scs = new ServerCommunicationSystem(configManager, this);
 
     this.agrSlotManager =
         new AgreementSlotManager(
@@ -145,7 +140,11 @@ public class ISOSApplication implements MessageHandler {
   public void start() {
     this.scs.start();
     logger.info("Wait until other replicas are connected");
-    this.scs.waitUntilViewConnected();
+    try {
+      this.scs.awaitViewConnected();
+    } catch (InterruptedException e) {
+      throw new RuntimeException("Interrupted while awaiting view connection.");
+    }
   }
 
   public ServerCommunicationSystem debug_getSCS() {

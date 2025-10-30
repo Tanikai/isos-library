@@ -32,6 +32,7 @@ import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -45,10 +46,9 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author alysson
  */
-public class ServerConnection {
+public class ServerConnection implements ByteArraySender {
   private final Logger logger;
 
-  private static final long POLL_TIME = 5000;
   private final ConfigurationManager configManager;
   private SSLSocket socket;
   private DataOutputStream socketOutStream = null;
@@ -56,13 +56,9 @@ public class ServerConnection {
   private final ReplicaId ownReplicaId;
   private final int remoteId;
 
-  // Determining Round Trip Time (RTT)
-  // We are using Exponentially Weighted Moving Average (EWMA), used in TCP
-  // TODO Kai: maybe larger alpha due to low count of ping messages?
-  private static final double ALPHA = 0.125;
-  private final AtomicLong ewmaMillis = new AtomicLong(-1);
-  private byte[] lastPingNonce;
-  private long lastPingNanos;
+  private final CountDownLatch initialConnectionDone;
+
+  private final PingHandler pingHandler;
   private final Thread pingThread;
 
   // Sender
@@ -90,6 +86,12 @@ public class ServerConnection {
   private SSLSocketFactory socketFactory;
   private static final String SECRET = "MySeCreT_2hMOygBwY";
 
+  /**
+   * @param configManager
+   * @param socket
+   * @param remoteId
+   * @param inQueue
+   */
   public ServerConnection(
       ConfigurationManager configManager,
       SSLSocket socket,
@@ -102,21 +104,14 @@ public class ServerConnection {
     this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
     this.inQueue = inQueue;
     this.outQueue = new LinkedBlockingQueue<>(this.configManager.getStaticConf().getOutQueueSize());
+    this.initialConnectionDone = new CountDownLatch(1);
 
     this.logger =
         LoggerFactory.getLogger(
             String.format("ServerConnection %d<->%d", this.ownReplicaId.value(), remoteId));
 
-    logger.info(
-        "Create ServerConnection {} -> {}",
-        this.configManager.getStaticConf().getProcessId(),
-        remoteId);
-
-    connectToReplica(socket, false);
-
     // ******* EDUARDO BEGIN **************//
     this.useSenderThread = this.configManager.getStaticConf().isUseSenderThread();
-
     if (useSenderThread && (this.configManager.getStaticConf().getTTPId() != remoteId)) {
       this.msgSender = new SenderThread();
       this.msgSender.start();
@@ -124,8 +119,7 @@ public class ServerConnection {
       sendLock = new ReentrantLock();
     }
 
-    // TODO Kai: Is TTP relevant for ISOS or not?
-
+    // TTP is not relevant for ISOS
     //    if (!this.controller.getStaticConf().isTheTTP()) {
     //      if (this.controller.getStaticConf().getTTPId() == remoteId) {
     //        // Uma thread "diferente" para as msgs recebidas da TTP
@@ -135,68 +129,21 @@ public class ServerConnection {
     //      }
     //    }
 
-    // New Version
-    if (!this.configManager.getStaticConf().isTheTTP()) {
-      this.msgReceiver = new ReceiverThread();
-      this.msgReceiver.start();
-    }
+    // ReceiverThread is created and started only when the initial connection was successful
+
     // ******* EDUARDO END **************//
 
-    this.pingThread =
-        Thread.ofVirtual()
-            .start(
-                () -> {
-                  try {
-                    long initialDelayMs = ThreadLocalRandom.current().nextInt(5000);
-                    Thread.sleep(initialDelayMs);
-                  } catch (InterruptedException e) {
-                    logger.error(
-                        "Interrupted while waiting initial delay ms for ping message, exiting");
-                    return;
-                  }
-                  byte[] msgBytes;
-                  while (doWork && !Thread.currentThread().isInterrupted()) {
-                    // We want to generate a secure nonce to
-                    lastPingNonce = generateSecureNonce(16);
-                    lastPingNanos = System.nanoTime();
-                    var msg = new PingMessage(this.ownReplicaId.value(), lastPingNonce, false);
+    this.pingHandler = new PingHandler(this.ownReplicaId.value(), this.remoteId, this);
+    this.pingThread = Thread.ofVirtual().unstarted(this.pingHandler);
 
-                    try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                        ObjectOutputStream oos = new ObjectOutputStream(bos)) {
-                      oos.writeObject(msg);
-                      msgBytes = bos.toByteArray();
-                    } catch (IOException e) {
-                      logger.error("IOException while serializing ping message.");
-                      return;
-                    }
-
-                    try {
-                      this.send(msgBytes);
-                    } catch (InterruptedException e) {
-                      logger.error("Interrupted while waiting to send bytes to remote, exiting");
-                      return;
-                    }
-
-                    try {
-                      // we can sleep
-                      // TODO Kai: make ping delay configurable
-                      Thread.sleep(3000);
-                    } catch (InterruptedException e) {
-                      logger.error(
-                          "Interrupted while waiting timeout to send next ping message, exiting");
-                      return;
-                    }
-                  }
-
-                  logger.info("Stopped pingThread");
-                });
-  }
-
-  public static byte[] generateSecureNonce(int lengthBytes) {
-    SecureRandom secureRandom = new SecureRandom();
-    byte[] nonceBytes = new byte[lengthBytes];
-    secureRandom.nextBytes(nonceBytes);
-    return nonceBytes;
+    // socket is null if it was created by waitUntilViewConnected. Socket is a valid socket if
+    // we already have received a connection request before ServerConnection was initialized by
+    // waitUntilViewConnected
+    if (socket != null) {
+      acceptConnection(socket);
+    } else {
+      this.initialConnectToReplica();
+    }
   }
 
   /**
@@ -211,7 +158,7 @@ public class ServerConnection {
   }
 
   public long getCurrentPingMillis() {
-    return this.ewmaMillis.get();
+    return this.pingHandler.getCurrentPingMillis();
   }
 
   /** Stop message sending and reception. */
@@ -224,7 +171,7 @@ public class ServerConnection {
   }
 
   /** Used to send packets to the remote server. */
-  public final void send(byte[] data) throws InterruptedException {
+  public final void send(byte[] data) {
     // should send be blocking / throw error if disconnected?
     if (useSenderThread) {
       //      logger.info("Send with senderThread");
@@ -273,18 +220,22 @@ public class ServerConnection {
 
           return;
         } catch (IOException ex) {
-          logger.info("IO Exception while sendBytes: {}", ex.getMessage());
+          logger.warn("IO Exception while sendBytes: {}", ex.getMessage());
           closeSocket();
-          waitAndConnect();
+          waitAndReconnect();
           abort = true;
         }
       } else {
-        logger.info(
+        logger.warn(
             "SendBytes: Socket {} or outStream {} is null", this.socket, this.socketOutStream);
-        waitAndConnect();
+        waitAndReconnect();
         abort = true;
       }
     } while (doWork);
+  }
+
+  public void awaitInitialConnectionDone() throws InterruptedException {
+    this.initialConnectionDone.await();
   }
 
   /**
@@ -296,52 +247,58 @@ public class ServerConnection {
     return this.configManager.getStaticConf().getProcessId() > remoteId;
   }
 
-  /**
-   * (Re-)establish connection between peers.
-   *
-   * @param newSocket null to create new connection, non-null if connection of other replica was
-   *     accepted (only used if processId is less than remoteId)
-   */
-  protected void connectToReplica(SSLSocket newSocket, boolean isReconnect) {
-    if (socket != null && socket.isConnected()) {
-      logger.info("Reconnect called, but already connected");
-      return; // do nothing if current socket is already connected
-    }
-
-    // else, reconnect
+  public void acceptConnection(SSLSocket receivedSocket) {
+    connectLock.lock();
     try {
-      connectLock.lock();
+      this.socket = receivedSocket;
+      this.newSocketConnected();
+    } finally {
+      connectLock.unlock();
+    }
+  }
 
-      if (isToConnect() || isReconnect) { // if I should connect, create a new connection
+  /** */
+  private void reconnectToReplica() {
+    connectLock.lock();
+    try {
+      if (socket != null && socket.isConnected()) {
+        logger.info("ReconnectToReplica called, but already connected");
+        return; // do nothing if current socket is already connected
+      }
+      logger.warn(
+          "ReconnectToReplica called, initiating new connection regardless of connection order");
+
+      initiateSecureConnection();
+      // OutputStream initialization is done in this method
+    } finally {
+      connectLock.unlock();
+    }
+  }
+
+  /**
+   * Do the initial connection to the replica, if it is the one that should initiate the connection.
+   */
+  public void initialConnectToReplica() {
+    connectLock.lock();
+    try {
+      if (socket != null && socket.isConnected()) {
+        logger.info("connectToReplica called, but already connected");
+        return; // do nothing if current socket is already connected
+      }
+
+      // Initiate the connection
+      if (isToConnect()) {
+        // if I should connect, or we need a reconnect, create a new connection
         logger.info(
             "I (Replica {}) should connect to Replica {}",
             this.configManager.getStaticConf().getProcessId(),
             remoteId);
-        ssltlsCreateConnection();
+
+        initiateSecureConnection();
       } else {
-        logger.info("Remote has higher process ID, use Socket from received connection request.");
-        // Save socket from accepted connection
-        socket = newSocket;
-
-        if (socket == null) {
-          logger.warn(
-              "Connection to remote should be established by {}, but newSocket is null",
-              this.remoteId);
-        }
-      }
-
-      // After establishing the connection (independent from who initiated), create an Output- and
-      // InputStream
-      if (socket != null) {
-        try {
-          socketOutStream = new DataOutputStream(socket.getOutputStream());
-          socketInStream = new DataInputStream(socket.getInputStream());
-
-          // authKey = null;
-          // authenticateAndEstablishAuthKey();
-        } catch (IOException ex) {
-          logger.error("Failed to authenticate to replica", ex);
-        }
+        logger.info(
+            "Connection to remote should be established by {}. Ready to accept incoming connection request",
+            this.remoteId);
       }
     } finally {
       // always unlock connectLock
@@ -349,33 +306,68 @@ public class ServerConnection {
     }
   }
 
-  private void closeSocket() {
-    connectLock.lock();
+  /** Called when a new Socket was connected and the */
+  private void newSocketConnected() {
+    if (socket == null) {
+      logger.error(
+          "NewSocketConnected called, even though socket is null. {}",
+          (Object) Thread.currentThread().getStackTrace());
+      return;
+    }
+    try {
+      socketOutStream = new DataOutputStream(socket.getOutputStream());
+      socketInStream = new DataInputStream(socket.getInputStream());
 
-    if (socket != null) {
-      logger.info(
-          "Close Socket {} -> {}",
-          this.configManager.getStaticConf().getProcessId(),
-          this.remoteId);
-      try {
-        socketOutStream.flush();
-        socket.close();
-      } catch (IOException ex) {
-        logger.debug("Error closing socket to {}", remoteId);
-      } catch (NullPointerException npe) {
-        logger.debug("Socket already closed");
+      // authKey = null;
+      // authenticateAndEstablishAuthKey();
+
+      // When initially connecting to the socket, start the messageReceiver for handling
+      // received messages.
+      if (!this.configManager.getStaticConf().isTheTTP() && this.msgReceiver == null) {
+        this.msgReceiver = new ReceiverThread();
+        this.msgReceiver.start();
       }
 
-      socket = null;
-      socketOutStream = null;
-      socketInStream = null;
-    }
+      try {
+        this.pingThread.start();
+      } catch (IllegalThreadStateException ignored) {
+      }
 
-    connectLock.unlock();
+      this.initialConnectionDone.countDown();
+    } catch (IOException ex) {
+      logger.error("Failed to authenticate to replica", ex);
+    }
+  }
+
+  private void closeSocket() {
+    connectLock.lock();
+    try {
+      if (socket != null) {
+        logger.info(
+            "Close Socket {} -> {}",
+            this.configManager.getStaticConf().getProcessId(),
+            this.remoteId);
+        try {
+          socketOutStream.flush();
+          socket.close();
+        } catch (IOException ex) {
+          logger.debug("Error closing socket to {}", remoteId);
+        } catch (NullPointerException npe) {
+          logger.debug("Socket already closed");
+        }
+
+        socket = null;
+        socketOutStream = null;
+        socketInStream = null;
+      }
+    } finally {
+      connectLock.unlock();
+    }
   }
 
   /** Waits 1s and then tries to reconnect. */
-  private void waitAndConnect() {
+  private void waitAndReconnect() {
+    logger.info("Start reconnect loop");
     if (doWork) {
       try {
         Thread.sleep(2000);
@@ -384,7 +376,7 @@ public class ServerConnection {
       }
 
       outQueue.clear();
-      connectToReplica(null, true);
+      reconnectToReplica();
     }
   }
 
@@ -429,14 +421,14 @@ public class ServerConnection {
       while (doWork) {
         // if socket of connection is null
         if (socket == null) {
-          logger.info("ReceiverThread: socket is null, reconnecting");
-          waitAndConnect();
+          logger.warn("ReceiverThread: socket is null, reconnecting");
+          waitAndReconnect();
           continue;
         }
 
         if (socketInStream == null) {
-          logger.info("ReceiverThread: inStream is null, reconnecting");
-          waitAndConnect();
+          logger.warn("ReceiverThread: inStream is null, reconnecting");
+          waitAndReconnect();
           continue;
         }
 
@@ -465,37 +457,15 @@ public class ServerConnection {
           // If we receive a ping message, do not forward it to other processes
           if (sm instanceof PingMessage pm) {
             // Is it a response to a previous ping message from us, or a ping message from remote?
-
             if (pm.isResponse()) {
-              // nonce has to match with our nonce
-              if (!Arrays.equals(lastPingNonce, pm.getNonce())) {
-                logger.error(
-                    "Nonce mismatch with sent ping and received pong message, stop processing pong message");
-              }
-
-              // Nonce matches -> we now calculate the ping
-              long roundTripNanos = System.nanoTime() - lastPingNanos;
-              long roundTripMillis =
-                  TimeUnit.MILLISECONDS.convert(roundTripNanos, TimeUnit.NANOSECONDS);
-
-              long currentEwma = ewmaMillis.get();
-              if (currentEwma == -1) {
-                ewmaMillis.set(roundTripMillis);
-              } else {
-                long newEwma = (long) ((ALPHA * roundTripMillis) + ((1.0 - ALPHA) * currentEwma));
-                ewmaMillis.set(newEwma);
-
-                logger.debug("Updated ewma fron {} ms to {} ms", currentEwma, newEwma);
-              }
-
+              // We received a response to a previous ping message
+              pingHandler.handlePingResponse(pm);
             } else {
               // We received a ping and have to send a response
               var response = new PingMessage(ownReplicaId.value(), pm.getNonce(), true);
               var responseBytes = PingMessage.toByteArray(response);
               send(responseBytes);
             }
-
-            // do not process PingMessage further
             continue;
           }
 
@@ -514,34 +484,26 @@ public class ServerConnection {
                 sm);
           }
         } catch (ClassNotFoundException ex) {
-          logger.info("Invalid message received. Ignoring!");
+          logger.error("Class was not found for deserialization; {}", ex.getMessage());
         } catch (IOException ex) {
           if (doWork) {
-            logger.info("Closing socket and reconnecting: {}", ex.getMessage());
+            logger.warn("Closing socket and reconnecting: {}", ex.getMessage());
             closeSocket();
-            waitAndConnect();
+            waitAndReconnect();
           }
         } catch (Exception ex) {
-          logger.info("Processing message failed. Ignoring!");
+          logger.error("Processing message failed, throwing message away: {}", ex.getMessage());
         }
       }
     }
   }
-
-  // ******* EDUARDO BEGIN: special thread for receiving messages indicating the entrance into the
-  // system, coming from the TTP **************//
-  // Simply pass the messages to the replica, indicating its entry into the system
-  // TODO: Ask eduardo why a new thread is needed!!!
-  // TODO 2: Remove all duplicated code
-
-  // ******* EDUARDO END **************//
 
   /**
    * Deal with the creation of SSL/TLS connection.
    *
    * @author Tulio A. Ribeiro
    */
-  public void ssltlsCreateConnection() {
+  public void initiateSecureConnection() {
     generateSecretKey();
 
     String algorithm = Security.getProperty("ssl.KeyManagerFactory.algorithm");
@@ -590,15 +552,15 @@ public class ServerConnection {
       this.socket.setTcpNoDelay(true);
       this.socket.setEnabledCipherSuites(this.configManager.getStaticConf().getEnabledCiphers());
 
+      // IMPORTANT: Only _after_ the handshake is completed, create the OutputStreams and start the
+      // MsgReceiver and Ping Threads
       this.socket.addHandshakeCompletedListener(
-          new HandshakeCompletedListener() {
-            @Override
-            public void handshakeCompleted(HandshakeCompletedEvent event) {
-              logger.info(
-                  "SSL/TLS handshake complete!, Id:{}" + "  ## CipherSuite: {}.",
-                  remoteId,
-                  event.getCipherSuite());
-            }
+          event -> {
+            logger.info(
+                "SSL/TLS handshake complete!, Id:{}" + "  ## CipherSuite: {}.",
+                remoteId,
+                event.getCipherSuite());
+            this.newSocketConnected();
           });
 
       this.socket.startHandshake();

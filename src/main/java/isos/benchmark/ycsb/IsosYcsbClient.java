@@ -58,7 +58,7 @@ public class IsosYcsbClient extends DB {
     this.ownClientId = initId + counter.addAndGet(1);
     this.client = new ISOSClient(this.ownClientId);
     this.logger = LoggerFactory.getLogger(String.format("IsosYcsbClient %d", this.ownClientId));
-    logger.info("YCSBKVClient. Initiated client id {}", this.ownClientId);
+    logger.info("Initiated client id {}", this.ownClientId);
     // TODO Kai: when we init, do we have to store the client in a map?
   }
 
