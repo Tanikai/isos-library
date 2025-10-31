@@ -45,7 +45,7 @@ public record SequenceNumber(int replicaId, int sequenceCounter)
 
   @Override
   public String toString() {
-    return String.format("%d.%d", this.replicaId, this.sequenceCounter);
+    return this.replicaId + "." + this.sequenceCounter;
   }
 
   public static SequenceNumber nextSequenceNumber(SequenceNumber current) {

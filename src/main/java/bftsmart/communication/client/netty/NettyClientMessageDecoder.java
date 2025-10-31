@@ -159,7 +159,7 @@ public class NettyClientMessageDecoder extends ByteToMessageDecoder {
       if (!isClient) {
         sessionMapLock.readLock().lock();
         if (!sessionTable.containsKey(sm.getSender())) {
-          logger.info("Add sender {} to sessions", sm.getSender());
+          logger.debug("Add sender {} to sessions", sm.getSender());
           sessionMapLock.readLock().unlock();
 
           NettyClientServerSession cs =

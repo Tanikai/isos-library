@@ -325,6 +325,13 @@ public class AgreementSlotManager implements RequestReceiver {
       SequenceNumber newSlot =
           this.replicaAgreementSlots.get(ownReplicaId).createLowestSeqNumEntry(r);
 
+      if (newSlot.sequenceCounter() % 100 == 0) {
+        logger.info(
+            "---------- Reached {} client requests for replica {}",
+            newSlot.sequenceCounter() + 1,
+            this.ownReplicaId);
+      }
+
       // Start the thread
       this.queueProcessorThreads.get(newSlot).start();
 

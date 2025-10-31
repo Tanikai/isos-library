@@ -180,7 +180,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
         try {
           if (!this.stepPrecondHolds(msg.msgType())) {
-            logger.warn(
+            logger.debug(
                 "Step mismatch when processing {}, current step {}",
                 msg.msgType(),
                 this.slot.getStep());
@@ -528,7 +528,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     }
 
     if (!bufferedMessages.isEmpty()) {
-      logger.info(
+      logger.debug(
           "Buffer contains {} messages of type {}. Process messages.",
           bufferedMessages.size(),
           msgType);
@@ -609,7 +609,6 @@ public class AgmtSlotQueueProcessor implements Runnable {
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // if we are in the Follower quorum, send a DepPropose message
       if (depPropose.followerQuorum().contains(this.ownReplicaId)) {
-        logger.info("Self is included in follower quorum, broadcast DepVerify");
         var depVerify =
             new DepVerifyMessage(
                 this.slot.getSeqNum(), this.ownReplicaId, depPropose.calculateHash(), depSet);
@@ -688,7 +687,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
       logger.warn(
-          "At least 1 dependency is not reported by at least f+1 followers. Enter reconciliation path.");
+          "At least 1 dependency is not reported by at least f+1 followers. DepPropose conflicts: {}. DepVerify conflicts: {}. Enter reconciliation path.",
+          this.slot.getDepPropose().depSet().dependencies(),
+          this.slot.getDepVerifys().entrySet().stream()
+              .map(
+                  entry ->
+                      Map.entry(entry.getKey().value(), entry.getValue().depSet().dependencies())).toList());
       var depVerifyHash = this.slot.getDepVerifyHashCached();
       enterReconciliationPath(depVerifyHash);
       return;
@@ -807,11 +811,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // TODO Kai: do we need to check for other conditions of the quorum? Same hash?
     if (!this.bufferedMessages.prepareQuorumSizeReached(
         this.slot.getViewNumber(), (2 * this.maxFaults) + 1)) {
-      logger.info(
+      logger.debug(
           "Received prepare message for view {}, but quorum not reached yet.",
           this.slot.getViewNumber());
       return;
     }
+
+    logger.info(
+        "Received 2f+1 prepare messages for view {}, enter RP_PREPARED step",
+        this.slot.getViewNumber());
 
     this.slot.setStep(AgreementSlotPhase.RP_PREPARED);
     var commitMsg =
@@ -851,13 +859,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     if (!this.bufferedMessages.commitQuorumSizeReached(
         this.slot.getViewNumber(), (2 * this.maxFaults) + 1)) {
-      logger.info(
+      logger.debug(
           "Received commit message for view {}, but quorum not reached yet.",
           this.slot.getViewNumber());
       return;
     }
 
-    logger.info("We have reached 2f+1 RpCommit messages for view {}!", this.slot.getViewNumber());
+    logger.info(
+        "We have reached 2f+1 RpCommit messages for view {}! Slot is committed by reconciliation path",
+        this.slot.getViewNumber());
 
     this.slot.setStep(AgreementSlotPhase.RP_COMMITTED);
     // Line 83

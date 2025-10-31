@@ -215,7 +215,6 @@ public class NettyClientServerCommunicationSystemServerSide
 
   @Override
   public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-
     if (this.closed) {
       closeChannelAndEventLoop(ctx.channel());
       return;
@@ -223,7 +222,7 @@ public class NettyClientServerCommunicationSystemServerSide
 
     if (cause instanceof ClosedChannelException) logger.info("Client connection closed.");
     else if (cause instanceof IOException) {
-      logger.error("Impossible to connect to client. (Connection reset by peer)");
+      logger.debug("Impossible to connect to client. (Connection reset by peer)");
     } else {
       logger.error("Connection problem.", cause);
     }
@@ -270,7 +269,7 @@ public class NettyClientServerCommunicationSystemServerSide
       closeChannelAndEventLoop(ctx.channel());
       return;
     }
-    logger.info("Session created, active clients={}", sessionReplicaToClient.size());
+    logger.debug("Session created, active clients={}", sessionReplicaToClient.size());
   }
 
   @Override
@@ -289,7 +288,7 @@ public class NettyClientServerCommunicationSystemServerSide
         NettyClientServerSession value = m.getValue();
         if (ctx.channel().equals(value.getChannel())) {
           int key = m.getKey();
-          logger.info("Close session of replica {}", key);
+          logger.debug("Close session of client {}", key);
           toRemove(key);
           break;
         }
@@ -298,7 +297,7 @@ public class NettyClientServerCommunicationSystemServerSide
       clientIdToSessionMapLock.writeLock().unlock();
     }
 
-    logger.info("Session Closed, active clients={}", sessionReplicaToClient.size());
+    logger.debug("Session Closed, active clients={}", sessionReplicaToClient.size());
   }
 
   public synchronized void toRemove(Integer key) {
@@ -307,7 +306,7 @@ public class NettyClientServerCommunicationSystemServerSide
           "SessionReplicaToClient: Key:{}, Value:{}", cli, sessionReplicaToClient.get(cli));
     }
 
-    logger.info("Removing client channel with ID = " + key);
+    logger.debug("Removing client channel with ID = " + key);
     sessionReplicaToClient.remove(key);
   }
 
@@ -354,7 +353,7 @@ public class NettyClientServerCommunicationSystemServerSide
           sessionReplicaToClient.get(target).getChannel().writeAndFlush(wrapperMsg);
 
         } else {
-          logger.warn(
+          logger.debug(
               "Client not in sessionReplicaToClient({}):{}, waiting and retrying.",
               target,
               sessionReplicaToClient.containsKey(target));
@@ -369,27 +368,27 @@ public class NettyClientServerCommunicationSystemServerSide
           // client may then fail to gather enough responses and run in a timeout. In this fix we
           // periodically retry to send that response
 
-          if (wrapperMsg.retry > 0) {
-            int retryAfterMillis =
-                (int)
-                    (1000
-                        * // Double retry-timeout every time while approaching client's
-                        // invokeOrdered
-                        // timeout
-                        ((double) configManager.getStaticConf().getClientInvokeOrderedTimeout()
-                            * Math.pow(2, -1 * wrapperMsg.retry)));
-            wrapperMsg.retry = wrapperMsg.retry - 1;
-            ClientMessageWrapper finalSm = wrapperMsg;
-            TimerTask timertask =
-                new TimerTask() {
-                  @Override
-                  public void run() {
-                    retrySend(targets, finalSm, serializeClassHeaders);
-                  }
-                };
-            Timer timer = new Timer("retry");
-            timer.schedule(timertask, retryAfterMillis);
-          }
+//          if (wrapperMsg.retry > 0) {
+//            int retryAfterMillis =
+//                (int)
+//                    (1000
+//                        * // Double retry-timeout every time while approaching client's
+//                        // invokeOrdered
+//                        // timeout
+//                        ((double) configManager.getStaticConf().getClientInvokeOrderedTimeout()
+//                            * Math.pow(2, -1 * wrapperMsg.retry)));
+//            wrapperMsg.retry = wrapperMsg.retry - 1;
+//            ClientMessageWrapper finalSm = wrapperMsg;
+//            TimerTask timertask =
+//                new TimerTask() {
+//                  @Override
+//                  public void run() {
+//                    retrySend(targets, finalSm, serializeClassHeaders);
+//                  }
+//                };
+//            Timer timer = new Timer("retry");
+//            timer.schedule(timertask, retryAfterMillis);
+//          }
         }
         clientIdToSessionMapLock.readLock().unlock();
       }

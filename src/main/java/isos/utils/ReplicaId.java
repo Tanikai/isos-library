@@ -13,6 +13,11 @@ public record ReplicaId(int value) implements Serializable, Comparable<ReplicaId
     return Integer.compare(this.value, o.value());
   }
 
+  @Override
+  public String toString() {
+    return "ReplicaId(" + this.value + ")";
+  }
+
   /**
    * Factory method for ReplicaId instances. Allows for cached maps.
    *

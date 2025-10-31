@@ -174,14 +174,14 @@ public class ISOSApplication implements MessageHandler {
       // clientLocalTimestamp. Because it is contained in the request that is propagated by the
       // coordinator in the initial DepPropose, every replica knows the clientLocalTimestamp and
       // use it as the sequenceNumber of the ClientMessageWrapper.
-      logger.info("Send reply {} to client {}", reply, originalRequest.clientId());
+      logger.debug("Send reply {} to client {}", reply, originalRequest.clientId());
       this.scs.sendToClients(
           new int[] {originalRequest.clientId()},
           new ClientMessageWrapper(
               this.ownReplicaId.value(), originalRequest.clientLocalTimestamp(), replyBytes));
 
     } catch (IOException e) {
-      logger.warn("Failed to serialize OrderedClientReply for client response", e);
+      logger.error("Failed to serialize OrderedClientReply for client response", e);
     }
   }
 

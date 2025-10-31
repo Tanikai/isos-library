@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Kai Anter
  */
 public class IsosYcsbClient extends DB {
-  private final static AtomicLong requestCounter = new AtomicLong(0);
+  private static final AtomicLong requestCounter = new AtomicLong(0);
 
   private Logger logger;
   private static AtomicInteger counter = new AtomicInteger();
@@ -86,7 +86,9 @@ public class IsosYcsbClient extends DB {
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
       var completedRequests = IsosYcsbClient.counter.addAndGet(1);
-      logger.info("INSERT: Received reply, total completed requests: {}", completedRequests);
+      if (completedRequests % 10 == 0) {
+        logger.info("INSERT: Received reply, total completed requests: {}", completedRequests);
+      }
       return replyMsg.getResult();
     } catch (Exception e) {
       logger.error("INSERT: Exception {}", e.getMessage());
@@ -105,7 +107,9 @@ public class IsosYcsbClient extends DB {
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
       var completedRequests = IsosYcsbClient.counter.addAndGet(1);
-      logger.info("READ: Received reply, total completed requests: {}", completedRequests);
+      if (completedRequests % 10 == 0) {
+        logger.info("READ: Received reply, total completed requests: {}", completedRequests);
+      }
       return replyMsg.getResult();
     } catch (Exception e) {
       logger.error("READ: Exception {}", e.getMessage());
@@ -137,7 +141,9 @@ public class IsosYcsbClient extends DB {
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
       var completedRequests = IsosYcsbClient.counter.addAndGet(1);
-      logger.info("UPDATE: Received reply, total completed requests: {}", completedRequests);
+      if (completedRequests % 10 == 0) {
+        logger.info("UPDATE: Received reply, total completed requests: {}", completedRequests);
+      }
       return replyMsg.getResult();
     } catch (Exception e) {
       logger.error("UPDATE: Exception {}", e.getMessage());

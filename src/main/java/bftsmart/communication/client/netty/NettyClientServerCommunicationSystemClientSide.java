@@ -156,7 +156,7 @@ public class NettyClientServerCommunicationSystemClientSide
       logger.error("Failed to initialize secret key factory", ex);
     }
 
-    logger.info("Connected to initial view: {}", replicaIdToSession.keySet());
+    logger.info("Client {} is connected to initial view: {}", this.clientId, replicaIdToSession.keySet());
   }
 
   // TODO Kai: is this even needed for the communication channel? Can't this be solved somehow else?
@@ -324,17 +324,17 @@ public class NettyClientServerCommunicationSystemClientSide
             0,
             PING_PERIOD_MS,
             TimeUnit.MILLISECONDS);
-    logger.debug("Scheduled ping task");
 
-    logger.info("Wait for all pings to return");
     try {
-      boolean latchReached = this.remainingPings.await(3000, TimeUnit.MILLISECONDS);
+      // TODO Kai: should be configurable
+      boolean latchReached = this.remainingPings.await(10000, TimeUnit.MILLISECONDS);
       if (latchReached) {
         logger.info(
-            "Received ping answers from all replicas. Can proceed to send application requests to replicas.");
+            "Client {} received ping answers from all replicas. Start sending requests to replicas.", this.clientId);
       } else {
         logger.warn(
-            "Did not receive ping answers from all replicas before reaching timeout. Some replicas might be missing replica->client connections, which prevents sending answers to clients.");
+            "Only received pings from {} before reaching timeout. Remaining replicas might be missing replica->client connections, which prevents sending answers to clients.",
+            this.replicaPingMillis.entrySet());
       }
     } catch (InterruptedException e) {
       logger.warn("Interrupted while waiting for remaining pings: {}", e.getMessage());

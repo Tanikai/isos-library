@@ -47,7 +47,6 @@ public class YCSBClient extends DB {
         int initId = Integer.valueOf((String) props.get("smart-initkey"));
         myId = initId + counter.addAndGet(1);
         proxy = new ServiceProxy(myId);
-        System.out.println("YCSBKVClient. Initiated client id: " + myId);
     }
 
     @Override

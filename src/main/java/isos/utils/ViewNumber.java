@@ -21,6 +21,11 @@ public record ViewNumber(int value) implements Serializable, Comparable<ViewNumb
     return Integer.compare(this.value, other.value);
   }
 
+  @Override
+  public String toString() {
+    return "ViewNum(" + this.value + ")";
+  }
+
   public static ViewNumber defaultViewNumber() {
     return ViewNumber.of(-1);
   }
