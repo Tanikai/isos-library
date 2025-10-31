@@ -64,16 +64,30 @@ public class TOMConfiguration extends Configuration {
   private boolean sameBatchSize;
   private boolean fairbatch;
   private String bindAddress;
-  /**
-   * Time after which the request times out at the client side
-   */
-  private int clientInvokeOrderedTimeout; // in seconds
+
+  // ISOS Replica
   private int agreementSlotSequenceLength;
   /**
    * Delta is the maximum one-way delay between replicas.
    */
   private int initialIsosTimeoutDeltaMillis;
+
+  private double pingEwmaAlpha;
+  private int replicaPingIntervalMillis;
   private int executionWindowSize;
+
+  // Replica Optimizations
+  private boolean viewNumberCacheMapEnabled;
+  private boolean sequenceNumberCacheMapEnabled;
+  private boolean replicaIdCacheMapEnabled;
+
+  // ISOS Client
+  /**
+   * Time after which the request times out at the client side
+   */
+  private int clientInvokeOrderedTimeout; // in seconds
+  private int clientPingIntervalMillis;
+  private int initialWaitForPingsTimeoutMillis;
 
   /* Tulio Ribeiro*/
   // private Boolean ssltls=true;
@@ -452,6 +466,55 @@ public class TOMConfiguration extends Configuration {
         executionWindowSize = Integer.parseInt(s);
       }
 
+      s = configs.remove("system.isos.client.pingIntervalMillis");
+      if (s == null) {
+        clientPingIntervalMillis = 5000;
+      } else {
+        clientPingIntervalMillis = Integer.parseInt(s);
+      }
+
+      s = configs.remove("system.isos.replica.pingEwmaAlpha");
+      if (s == null) {
+        pingEwmaAlpha = 0.125;
+      } else {
+        pingEwmaAlpha = Double.parseDouble(s);
+      }
+
+      s = configs.remove("system.isos.replica.pingIntervalMillis");
+      if (s == null) {
+        replicaPingIntervalMillis = 3000;
+      } else {
+        replicaPingIntervalMillis = Integer.parseInt(s);
+      }
+
+      s = configs.remove("system.isos.client.initialWaitForPingsTimeoutMillis");
+      if (s == null) {
+        initialWaitForPingsTimeoutMillis = 10000;
+      } else {
+        initialWaitForPingsTimeoutMillis = Integer.parseInt(s);
+      }
+
+      s = configs.remove("system.isos.replica.opt.viewNumberCacheMapEnabled");
+      if (s == null) {
+        viewNumberCacheMapEnabled = false;
+      } else {
+        viewNumberCacheMapEnabled = Boolean.parseBoolean(s);
+      }
+
+      s = configs.remove("system.isos.replica.opt.sequenceNumberCacheMapEnabled");
+      if (s == null) {
+        sequenceNumberCacheMapEnabled = false;
+      } else {
+        sequenceNumberCacheMapEnabled = Boolean.parseBoolean(s);
+      }
+
+      s = configs.remove("system.isos.replica.opt.replicaIdCacheMapEnabled");
+      if (s == null) {
+        replicaIdCacheMapEnabled = false;
+      } else {
+        replicaIdCacheMapEnabled = Boolean.parseBoolean(s);
+      }
+
     } catch (Exception e) {
       logger.error("Could not parse system configuration file", e);
     }
@@ -668,5 +731,33 @@ public class TOMConfiguration extends Configuration {
 
   public int getExecutionWindowSize() {
     return executionWindowSize;
+  }
+
+  public int getClientPingIntervalMillis() {
+    return clientPingIntervalMillis;
+  }
+
+  public int getReplicaPingIntervalMillis() {
+    return replicaPingIntervalMillis;
+  }
+
+  public double getPingEwmaAlpha() {
+    return pingEwmaAlpha;
+  }
+
+  public int getInitialWaitForPingsTimeoutMillis() {
+    return initialWaitForPingsTimeoutMillis;
+  }
+
+  public boolean isViewNumberCacheMapEnabled() {
+    return viewNumberCacheMapEnabled;
+  }
+
+  public boolean isSequenceNumberCacheMapEnabled() {
+    return sequenceNumberCacheMapEnabled;
+  }
+
+  public boolean isReplicaIdCacheMapEnabled() {
+    return replicaIdCacheMapEnabled;
   }
 }

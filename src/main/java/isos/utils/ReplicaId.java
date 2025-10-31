@@ -5,8 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public record ReplicaId(int value) implements Serializable, Comparable<ReplicaId> {
-  // TODO Kai: make configurable
-  private static final ReplicaIdStrategy instanceStrategy = new ReplicaIdCacheMapStrategy();
+  private static ReplicaIdStrategy instanceStrategy = new ReplicaIdNewInstanceStrategy();
 
   @Override
   public int compareTo(ReplicaId o) {
@@ -28,20 +27,24 @@ public record ReplicaId(int value) implements Serializable, Comparable<ReplicaId
     return instanceStrategy.getInstance(value);
   }
 
+  public static void setInstanceStrategy(ReplicaIdStrategy newStrategy) {
+    instanceStrategy = newStrategy;
+  }
+
   // Instance strategies for ReplicaIds
 
-  private interface ReplicaIdStrategy {
+  public interface ReplicaIdStrategy {
     ReplicaId getInstance(int value);
   }
 
-  private static class ReplicaIdNewInstanceStrategy implements ReplicaIdStrategy {
+  public static class ReplicaIdNewInstanceStrategy implements ReplicaIdStrategy {
     @Override
     public ReplicaId getInstance(int value) {
       return new ReplicaId(value);
     }
   }
 
-  private static class ReplicaIdCacheMapStrategy implements ReplicaIdStrategy {
+  public static class ReplicaIdCacheMapStrategy implements ReplicaIdStrategy {
     private final ConcurrentMap<Integer, ReplicaId> replicaIdCache = new ConcurrentHashMap<>();
 
     @Override

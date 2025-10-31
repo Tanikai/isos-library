@@ -1,6 +1,5 @@
 package bftsmart.communication.server;
 
-import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,7 +8,6 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.security.SecureRandom;
 import java.util.Arrays;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -17,34 +15,37 @@ import java.util.concurrent.atomic.AtomicLong;
 public class PingHandler implements Runnable {
   private final Logger logger;
 
-  private int ownReplicaId;
-  private ByteArraySender msgSender;
+  private final int ownReplicaId;
+  private final ByteArraySender msgSender;
+  private final int pingIntervalMillis;
 
   // Determining Round Trip Time (RTT)
   // We are using Exponentially Weighted Moving Average (EWMA), used in TCP
   // TODO Kai: maybe larger alpha due to low count of ping messages?
-  private static final double ALPHA = 0.125;
+  private final double ewmaAlpha;
   private final AtomicLong ewmaMillis = new AtomicLong(-1);
   private byte[] lastPingNonce;
   private long lastPingNanos;
 
-  public PingHandler(int ownReplicaId, int remoteReplicaId, ByteArraySender msgSender) {
+  public PingHandler(int ownReplicaId, int remoteReplicaId, ByteArraySender msgSender, double ewmaAlpha, Integer pingIntervalMillis) {
     this.ownReplicaId = ownReplicaId;
     this.msgSender = msgSender;
     this.logger =
         LoggerFactory.getLogger(
             String.format("PingHandler %d->%d", this.ownReplicaId, remoteReplicaId));
+    this.pingIntervalMillis = pingIntervalMillis;
+    this.ewmaAlpha = ewmaAlpha;
   }
 
   @Override
   public void run() {
-    try {
-      long initialDelayMs = ThreadLocalRandom.current().nextInt(5000);
-      Thread.sleep(initialDelayMs);
-    } catch (InterruptedException e) {
-      logger.error("Interrupted while waiting initial delay ms for ping message, exiting");
-      return;
-    }
+//    try {
+//      long initialDelayMs = ThreadLocalRandom.current().nextInt(5000);
+//      Thread.sleep(initialDelayMs);
+//    } catch (InterruptedException e) {
+//      logger.error("Interrupted while waiting initial delay ms for ping message, exiting");
+//      return;
+//    }
 
     byte[] msgBytes;
     while (!Thread.currentThread().isInterrupted()) {
@@ -65,9 +66,7 @@ public class PingHandler implements Runnable {
       msgSender.send(msgBytes);
 
       try {
-        // we can sleep
-        // TODO Kai: make ping delay configurable
-        Thread.sleep(3000);
+        Thread.sleep(pingIntervalMillis);
       } catch (InterruptedException e) {
         logger.error("Interrupted while waiting timeout to send next ping message, exiting");
         return;
@@ -92,7 +91,7 @@ public class PingHandler implements Runnable {
     if (currentEwma == -1) {
       ewmaMillis.set(roundTripMillis);
     } else {
-      long newEwma = (long) ((ALPHA * roundTripMillis) + ((1.0 - ALPHA) * currentEwma));
+      long newEwma = (long) ((ewmaAlpha * roundTripMillis) + ((1.0 - ewmaAlpha) * currentEwma));
       ewmaMillis.set(newEwma);
 
       logger.debug("Updated ewma fron {} ms to {} ms", currentEwma, newEwma);

@@ -8,6 +8,7 @@ import isos.communication.ClientMessageWrapper;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.dependency.TrivialConflictChecker;
+import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecuteInApplication;
@@ -21,6 +22,7 @@ import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
+import isos.utils.ViewNumber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +91,7 @@ public class ISOSApplication implements MessageHandler {
       ExecuteInApplication executor)
       throws Exception {
     this.configManager = configManager;
+    this.initializeOptimizations();
     this.timeoutConf =
         new TimeoutConfiguration(
             this.configManager.getStaticConf().getInitialIsosTimeoutDeltaMillis());
@@ -134,6 +137,31 @@ public class ISOSApplication implements MessageHandler {
             executor,
             this.configManager.getStaticConf().getMaxBatchSize());
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
+  }
+
+  private void initializeOptimizations() {
+    var c = this.configManager.getStaticConf();
+
+    if (c.isViewNumberCacheMapEnabled()) {
+      logger.info("OPT: ViewNumberCacheMap is enabled");
+      ViewNumber.setInstanceStrategy(new ViewNumber.ViewNumberCacheMapStrategy());
+    } else {
+      logger.info("OPT: ViewNumberCacheMap is disabled");
+    }
+
+    if (c.isReplicaIdCacheMapEnabled()) {
+      logger.info("OPT: ReplicaIdCacheMap is enabled");
+      ReplicaId.setInstanceStrategy(new ReplicaId.ReplicaIdCacheMapStrategy());
+    } else {
+      logger.info("OPT: ReplicaIdCacheMap is disabled");
+    }
+
+    if (c.isSequenceNumberCacheMapEnabled()) {
+      logger.info("OPT: SequenceNumberCacheMap is enabled");
+      SequenceNumber.setInstanceStrategy(new SequenceNumber.SequenceNumberCacheMapStrategy());
+    } else {
+      logger.info("OPT: SequenceNumberCacheMap is disabled");
+    }
   }
 
   /** Starts the application by connecting to the replicas first. */

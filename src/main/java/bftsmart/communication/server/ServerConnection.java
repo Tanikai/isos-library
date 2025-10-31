@@ -133,7 +133,13 @@ public class ServerConnection implements ByteArraySender {
 
     // ******* EDUARDO END **************//
 
-    this.pingHandler = new PingHandler(this.ownReplicaId.value(), this.remoteId, this);
+    this.pingHandler =
+        new PingHandler(
+            this.ownReplicaId.value(),
+            this.remoteId,
+            this,
+            this.configManager.getStaticConf().getPingEwmaAlpha(),
+            this.configManager.getStaticConf().getReplicaPingIntervalMillis());
     this.pingThread = Thread.ofVirtual().unstarted(this.pingHandler);
 
     // socket is null if it was created by waitUntilViewConnected. Socket is a valid socket if

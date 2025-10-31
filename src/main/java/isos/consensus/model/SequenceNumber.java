@@ -14,12 +14,10 @@ import java.util.concurrent.ConcurrentMap;
  */
 public record SequenceNumber(int replicaId, int sequenceCounter)
     implements Comparable<SequenceNumber>, Serializable {
-  // TODO Kai: Make Strategy configurable by configuration file
   // Potential Issue: this strategy is only used when the developer needs a new sequence number
   // instance. When a new SequenceNumber is created during deserialization of received messages,
   // a new instance is created.
-  private static final SequenceNumberStrategy instanceStrategy =
-      new SequenceNumberCacheMapStrategy();
+  private static SequenceNumberStrategy instanceStrategy = new SequenceNumberNewInstanceStrategy();
 
   public SequenceNumber(ReplicaId replicaId, int sequenceCounter) {
     this(replicaId.value(), sequenceCounter);
@@ -71,18 +69,22 @@ public record SequenceNumber(int replicaId, int sequenceCounter)
     return instanceStrategy.getInstance(replicaId, sequenceNumber);
   }
 
-  private interface SequenceNumberStrategy {
+  public static void setInstanceStrategy(SequenceNumberStrategy newStrategy) {
+    instanceStrategy = newStrategy;
+  }
+
+  public interface SequenceNumberStrategy {
     SequenceNumber getInstance(int replicaId, int sequenceNumber);
   }
 
-  private static class SequenceNumberNewInstanceStrategy implements SequenceNumberStrategy {
+  public static class SequenceNumberNewInstanceStrategy implements SequenceNumberStrategy {
     @Override
     public SequenceNumber getInstance(int replicaId, int sequenceNumber) {
       return new SequenceNumber(replicaId, sequenceNumber);
     }
   }
 
-  private static class SequenceNumberCacheMapStrategy implements SequenceNumberStrategy {
+  public static class SequenceNumberCacheMapStrategy implements SequenceNumberStrategy {
     private final ConcurrentMap<Long, SequenceNumber> sequenceNumberCache =
         new ConcurrentHashMap<>();
 

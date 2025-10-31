@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public record ViewNumber(int value) implements Serializable, Comparable<ViewNumber> {
-  private static final ViewNumberStrategy instanceStrategy = new ViewNumberCacheMapStrategy();
+  private static ViewNumberStrategy instanceStrategy = new ViewNumberNewInstanceStrategy();
 
   /** Default ViewNumber starts with -1. */
   public ViewNumber() {
@@ -34,18 +34,22 @@ public record ViewNumber(int value) implements Serializable, Comparable<ViewNumb
     return instanceStrategy.getInstance(viewNumber);
   }
 
+  public static void setInstanceStrategy(ViewNumberStrategy newStrategy) {
+    instanceStrategy = newStrategy;
+  }
+
   private interface ViewNumberStrategy {
     ViewNumber getInstance(int viewNumber);
   }
 
-  private static class ViewNumberNewInstanceStrategy implements ViewNumberStrategy {
+  public static class ViewNumberNewInstanceStrategy implements ViewNumberStrategy {
     @Override
     public ViewNumber getInstance(int viewNumber) {
       return new ViewNumber(viewNumber);
     }
   }
 
-  private static class ViewNumberCacheMapStrategy implements ViewNumberStrategy {
+  public static class ViewNumberCacheMapStrategy implements ViewNumberStrategy {
     private final ConcurrentMap<Integer, ViewNumber> viewNumberCache = new ConcurrentHashMap<>();
 
     @Override

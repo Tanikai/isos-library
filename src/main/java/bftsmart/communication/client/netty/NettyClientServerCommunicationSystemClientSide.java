@@ -19,7 +19,6 @@ import bftsmart.communication.client.CommunicationSystemClientSide;
 import bftsmart.communication.client.ReplyReceiver;
 import bftsmart.communication.server.PingHandler;
 import bftsmart.communication.server.PingMessage;
-import bftsmart.communication.server.ServerConnection;
 import bftsmart.configuration.ConfigurationManager;
 import bftsmart.tom.util.TOMUtil;
 import io.netty.bootstrap.Bootstrap;
@@ -84,11 +83,11 @@ public class NettyClientServerCommunicationSystemClientSide
   private List<ReplicaId> pingTargets;
   // Compared to the ping implementation in ServerConnection, we have only a single
   // NettyClientServerSystem that communicates with all replicas.
-  private ConcurrentHashMap<ReplicaId, byte[]> lastPingNonces;
-  private ConcurrentHashMap<ReplicaId, Long> lastPingNanos;
-  private ConcurrentHashMap<ReplicaId, Long> replicaPingMillis;
+  private final ConcurrentHashMap<ReplicaId, byte[]> lastPingNonces;
+  private final ConcurrentHashMap<ReplicaId, Long> lastPingNanos;
+  private final ConcurrentHashMap<ReplicaId, Long> replicaPingMillis;
   private CountDownLatch remainingPings;
-  private int PING_PERIOD_MS = 10000;
+  private final int clientPingInterval;
 
   private SecretKeyFactory secretKeyFactory;
 
@@ -114,13 +113,13 @@ public class NettyClientServerCommunicationSystemClientSide
     this.lastPingNanos = new ConcurrentHashMap<>();
     this.replicaPingMillis = new ConcurrentHashMap<>();
 
+    this.configManager = configManager;
+    this.clientPingInterval = this.configManager.getStaticConf().getClientPingIntervalMillis();
+
+    /* Tulio Ribeiro */
+    privKey = configManager.getStaticConf().getPrivateKey();
     try {
       this.secretKeyFactory = TOMUtil.getSecretFactory();
-
-      this.configManager = configManager;
-
-      /* Tulio Ribeiro */
-      privKey = configManager.getStaticConf().getPrivateKey();
 
       this.listener = new SyncListener();
       this.replicaIdToSession = new ConcurrentHashMap<>();
@@ -156,7 +155,8 @@ public class NettyClientServerCommunicationSystemClientSide
       logger.error("Failed to initialize secret key factory", ex);
     }
 
-    logger.info("Client {} is connected to initial view: {}", this.clientId, replicaIdToSession.keySet());
+    logger.info(
+        "Client {} is connected to initial view: {}", this.clientId, replicaIdToSession.keySet());
   }
 
   // TODO Kai: is this even needed for the communication channel? Can't this be solved somehow else?
@@ -322,15 +322,18 @@ public class NettyClientServerCommunicationSystemClientSide
               }
             },
             0,
-            PING_PERIOD_MS,
+            clientPingInterval,
             TimeUnit.MILLISECONDS);
 
     try {
-      // TODO Kai: should be configurable
-      boolean latchReached = this.remainingPings.await(10000, TimeUnit.MILLISECONDS);
+      boolean latchReached =
+          this.remainingPings.await(
+              this.configManager.getStaticConf().getInitialWaitForPingsTimeoutMillis(),
+              TimeUnit.MILLISECONDS);
       if (latchReached) {
         logger.info(
-            "Client {} received ping answers from all replicas. Start sending requests to replicas.", this.clientId);
+            "Client {} received ping answers from all replicas. Start sending requests to replicas.",
+            this.clientId);
       } else {
         logger.warn(
             "Only received pings from {} before reaching timeout. Remaining replicas might be missing replica->client connections, which prevents sending answers to clients.",
