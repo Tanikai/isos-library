@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -83,6 +84,7 @@ class AgmtSlotQueueProcessorTest {
             seqNum,
             incomingQueue,
             timeoutConfig,
+            new ScheduledThreadPoolExecutor(1),
             msgSenderMock,
             slot,
             conflictChecker,
@@ -193,6 +195,7 @@ class AgmtSlotQueueProcessorTest {
             seqNum,
             incomingQueue,
             timeoutConfig,
+            new ScheduledThreadPoolExecutor(1),
             msgSenderMock,
             slot,
             conflictChecker,
@@ -259,10 +262,8 @@ class AgmtSlotQueueProcessorTest {
 
     // Create
     List<PrepareMessage> prepares = new LinkedList<>();
-    prepares.add(
-        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
-    prepares.add(
-        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
+    prepares.add(new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
+    prepares.add(new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(prepares);
 
     verify(msgSenderMock, timeout(500).times(2)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -332,6 +333,7 @@ class AgmtSlotQueueProcessorTest {
             seqNum,
             incomingQueue,
             timeoutConfig,
+            new ScheduledThreadPoolExecutor(1),
             msgSenderMock,
             slot,
             conflictChecker,
@@ -396,8 +398,7 @@ class AgmtSlotQueueProcessorTest {
     assertEquals(seqNum, execMessage.seqNum());
     assertEquals(clientRequest, execMessage.clientRequest());
     assertEquals(
-        new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)),
-        execMessage.depSet());
+        new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)), execMessage.depSet());
   }
 
   @Test
@@ -429,6 +430,7 @@ class AgmtSlotQueueProcessorTest {
             seqNum,
             incomingQueue,
             timeoutConfig,
+            new ScheduledThreadPoolExecutor(1),
             msgSenderMock,
             slot,
             conflictChecker,
@@ -478,10 +480,8 @@ class AgmtSlotQueueProcessorTest {
 
     // Create the remaining prepare messages
     List<PrepareMessage> prepares = new LinkedList<>();
-    prepares.add(
-        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
-    prepares.add(
-        new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
+    prepares.add(new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[0], depVerifysHash));
+    prepares.add(new PrepareMessage(seqNum, ViewNumber.of(-1), otherReplicaIds[1], depVerifysHash));
     incomingQueue.addAll(prepares);
 
     verify(msgSenderMock, timeout(500).times(3)).broadcastToReplicas(eq(true), msgCaptor.capture());
@@ -530,6 +530,7 @@ class AgmtSlotQueueProcessorTest {
             seqNum,
             incomingQueue,
             timeoutConfig,
+            new ScheduledThreadPoolExecutor(1),
             msgSenderMock,
             slot,
             conflictChecker,

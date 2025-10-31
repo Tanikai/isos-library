@@ -47,6 +47,7 @@ public class AgreementSlotManager implements RequestReceiver {
   private final Map<SequenceNumber, Thread> queueProcessorThreads;
   private final Map<SequenceNumber, AgmtSlotQueueProcessor> queueProcessors;
   // Starting and reacting to timeouts happens inside the QueueProcessor
+  private final ScheduledExecutorService timeoutExecutor;
   private final TimeoutConfiguration timeoutConfig;
 
   /** Callbacks for threads to communicate with services */
@@ -86,6 +87,7 @@ public class AgreementSlotManager implements RequestReceiver {
       int replicaCount) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
+    this.timeoutExecutor = new ScheduledThreadPoolExecutor(4);
     this.agreementSlotSequenceLength = agreementSlotSequenceLength;
     this.replicaAgreementSlots = new ConcurrentHashMap<>();
     this.queueProcessorInputQueue = new HashMap<>();
@@ -166,11 +168,12 @@ public class AgreementSlotManager implements RequestReceiver {
     // The QueueProcessor directly updates the fields in the AgreementSlot object.
     var queueProcessor =
         new AgmtSlotQueueProcessor(
-            ownReplicaId,
+            this.ownReplicaId,
             newSlot,
             inputQueue,
-            timeoutConfig,
-            msgSender,
+            this.timeoutConfig,
+            this.timeoutExecutor,
+            this.msgSender,
             slot,
             this.conflictChecker,
             this::waitForDeps,

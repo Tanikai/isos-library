@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
@@ -55,6 +56,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
             seqNum,
             incomingQueue,
             timeoutConfig,
+            new ScheduledThreadPoolExecutor(1),
             msgSender,
             slot,
             conflictChecker,

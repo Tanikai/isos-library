@@ -99,11 +99,28 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private final int maxFaults;
   private final int replicaCount;
 
+  /**
+   * @param ownReplicaId
+   * @param seqNum
+   * @param incomingQueue
+   * @param timeoutConfig
+   * @param timeoutExecutor The timeoutExecutor is passed as an argument, because they use platform
+   *     threads instead of virtual threads, thus leading to an OutOfMemory-Exception if enough
+   *     AgmtSlotQueueProcessors are created.
+   * @param msgSender
+   * @param slot
+   * @param conflictChecker
+   * @param dependencyWait
+   * @param requestExecutor
+   * @param maxFaults
+   * @param replicaCount
+   */
   public AgmtSlotQueueProcessor(
       ReplicaId ownReplicaId,
       SequenceNumber seqNum,
       BlockingDeque<ISOSMessage> incomingQueue,
       TimeoutConfiguration timeoutConfig,
+      ScheduledExecutorService timeoutExecutor,
       MessageSender msgSender,
       AgreementSlot slot,
       ConflictChecker conflictChecker,
@@ -121,8 +138,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Timeouts
     this.timeoutConfig = timeoutConfig;
-    this.timeoutExecutor =
-        new ScheduledThreadPoolExecutor(2); // TODO Kai: how to determine the corePoolSize?
+    this.timeoutExecutor = timeoutExecutor;
     this.currentTimeouts = new HashMap<>();
     this.timeoutStates = new ConcurrentHashMap<>();
 
