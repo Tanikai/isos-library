@@ -191,16 +191,20 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
       if (cause instanceof QuorumNotReachedException exNotReached) {
         logger.error(
             "We have not reached enough identical replies to form a quorum. The request has to be repeated.");
+        this.currentRequestContext = null;
         throw exNotReached;
       } else if (cause instanceof TimeoutException exTimeout) {
         logger.error("Timeout reached for request. The request has to be repeated.");
         // rethrow exception
+        this.currentRequestContext = null;
         throw exTimeout;
       } else {
         logger.error("Unknown Exception thrown by Future: {}", cause.getMessage());
+        this.currentRequestContext = null;
       }
     } catch (Exception e) {
       logger.error("Generic error while handling the request: {}", e.getMessage());
+      this.currentRequestContext = null;
     }
     //
     return null;
