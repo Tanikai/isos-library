@@ -1,15 +1,15 @@
 
 replicas:
   hosts:
-    replica1:
+    replica0:
       ansible_user: ubuntu
       ansible_host: 192.168.178.10
-    replica2:
+    replica1:
       ansible_user: ubuntu
       ansible_host: 192.168.178.11
-    replica3:
+    replica2:
       ansible_user: ubuntu
       ansible_host: 192.168.178.12
-    replica4:
+    replica3:
       ansible_user: ubuntu
       ansible_host: 192.168.178.13

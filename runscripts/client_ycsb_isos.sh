@@ -16,7 +16,12 @@
 
 CLASSNAME="$1"
 WORKLOAD="$2"
-CLIENT_ID="$3"
+BENCHMARK_NAME="$3"
+CLIENT_ID="$4"
+
+echo "Create benchmark out directory..."
+
+mkdir -p "/home/ubuntu/benchmark_out/ycsb_${BENCHMARK_NAME}/"
 
 # Each instance of YCSB can have up to 10.000 client IDs
 CLIENT_ID_START=$((CLIENT_ID * 10000))
@@ -24,9 +29,10 @@ CLIENT_ID_START=$((CLIENT_ID * 10000))
 java  -Djava.security.properties="./config/java.security" \
   -Dlogback.configurationFile="./config/logback.xml" \
   -cp ./lib/*:./bin/ com.yahoo.ycsb.Client \
-  -threads 50 \
+  -threads 15 \
   -P "config/ycsb_workloads/$WORKLOAD" \
   -p measurementtype=timeseries \
+  -p exportfile="/home/ubuntu/benchmark_out/ycsb_${BENCHMARK_NAME}/ycsb_${BENCHMARK_NAME}_${CLIENT_ID}.csv" \
   -p smart-initkey="$CLIENT_ID_START" \
   -p timeseries.granularity=1000 \
   -db $CLASSNAME \

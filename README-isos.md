@@ -11,7 +11,7 @@ networking stack.
 
 - Formatting: `google-java-format`
 
-### Running locally 
+### Running locally
 
 First, compile the project and copy it into four separate directories with the
 `copy-library.sh` script. After that run four replicas with the
@@ -79,7 +79,7 @@ git checkout v2.0
 The required dependencies and files for running ISOS can be automatically
 installed to replicas with [Ansible](https://docs.ansible.com/). The control
 node (the pc that manages the deployment) accesses the managed nodes (the
-replicas) via SSH. 
+replicas) via SSH.
 
 [Here is the documentation to install Ansible on your machine.](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html).
 It has to be a UNIX-like OS, which means that WSL has to be used on Windows.
@@ -91,16 +91,16 @@ Create a `inventory.yml` file that contains the IP addresses of the replicas:
 ```yaml
 replicas:
   hosts:
-    replica1:
+    replica0:
       ansible_user: ubuntu
       ansible_host: 192.168.178.10
-    replica2:
+    replica1:
       ansible_user: ubuntu
       ansible_host: 192.168.178.11
-    replica3:
+    replica2:
       ansible_user: ubuntu
       ansible_host: 192.168.178.12
-    replica4:
+    replica3:
       ansible_user: ubuntu
       ansible_host: 192.168.178.13
 ```
@@ -152,7 +152,7 @@ One replica in one of each region, manually:
 
 When running the script manually, be sure to use the correct replicaID that is
 
-#### Latency 
+#### Latency
 
 Client (one instance per region):
 
@@ -163,7 +163,7 @@ Client (one instance per region):
   --requestCount=10 \
   --writeRatioPercent=10 \
   --conflictRatioPercent=10 \
-  --outputDir="./benchmark_out/" \
+  --outputDir="/home/ubuntu/benchmark_out/" \
   --benchmarkName="Optimized_Ver1"
 ```
 
@@ -177,41 +177,57 @@ Client (one instance per region):
   --clientCount=5 \
   --requestCount=10 \
   --writeRatioPercent=10 \
-  --conflictRatioPercent=10
+  --conflictRatioPercent=10 \
+  --outputDir="/home/ubuntu/benchmark_out/" \
+  --benchmarkName="Optimized_Ver1"
 ```
 
 ### YCSB
 
-First, build and copy files into directories with:
-
-```shell
-./copy-library.sh
-```
-
-Then, run the YCSB database replicas with:
-
-```shell
-./quad-replica.sh replica_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbServer
-```
-
-Run the YCSB client with:
-
-```shell
-./ycsb_client.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w
-```
-
-Then SSH into a client VPS and run the YCSB client command manually.
+First, build the project and copy the files using the `copy_library.sh` script
+for local running or the `benchmark-playbook.yml` for remote running.
 
 #### Remote Replicas and clients
 
-Alternatively, for remote execution:
+Run the YCSB replicas in each region:
 
 ```shell
 ./ssh-quad-replica.sh replica_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbServer ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3
 ```
 
+Then, run a client node in each region with the following command:
+
 ```shell
-./ssh-quad-replica.sh client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w ubuntu@client0 ubuntu@client1 ubuntu@client2 ubuntu@client3
+./ssh-quad-replica.sh client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w trivial_implementation ubuntu@client0 ubuntu@client1 ubuntu@client2 ubuntu@client3
+```
+
+Meaning of arguments:
+
+1. YCSB Script name
+2. YCSB Java Class Binding
+3. Workload name from `config/ycsb_workloads/` directory
+4. Benchmark name (for result collection)
+5. Remaining four arguments: Username and Hostname for remote client nodes
+
+#### Local remote and clients
+
+```shell
+./quad-replica.sh replica_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbServer
+```
+
+Then SSH into a client VPS and run the YCSB client command manually:
+
+```shell
+./client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w trivial_implementation {CLIENT_ID}
+```
+
+### Collecting Benchmark Results
+
+Collecting the benchmark results into the `evaluation/data` directory is done
+with an Ansible playbook as well:
+
+```shell
+ansible-playbook -i inventory.yml collect-playbook.yml --private-key ~/.ssh/my_custom_key
 ```
 
 ## Evaluation
