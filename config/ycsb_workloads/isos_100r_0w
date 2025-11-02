@@ -40,5 +40,3 @@ insertproportion=0
 requestdistribution=zipfian
 
 #maxexecutiontime=30
-
-smart-initkey=1000
