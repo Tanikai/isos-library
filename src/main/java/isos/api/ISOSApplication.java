@@ -103,6 +103,7 @@ public class ISOSApplication implements MessageHandler {
 
     this.sccFinder =
         SccFinderFactory.createSccFinder(this.configManager.getStaticConf().getSccStrategy());
+    logger.info("OPT: SccFinder Strategy: {}", this.configManager.getStaticConf().getSccStrategy());
 
     // Conflicts
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
@@ -113,6 +114,9 @@ public class ISOSApplication implements MessageHandler {
             this.sccFinder,
             this.defaultConflict,
             this.applicationConflict);
+    logger.info(
+        "OPT: ConflictChecker Strategy: {}",
+        this.configManager.getStaticConf().getCompactDepSetStrategy());
 
     var maxFaults = configManager.getStaticConf().getF();
     var replicaCount = configManager.getStaticConf().getN();
@@ -139,6 +143,9 @@ public class ISOSApplication implements MessageHandler {
         DepGraphBuilderFactory.createDependencyGraphBuilder(
             this.configManager.getStaticConf().getDepGraphExecutionStrategy(),
             this.configManager.getStaticConf().getExecutionWindowSize());
+    logger.info(
+        "OPT: DepGraphBuilder Strategy: {}",
+        this.configManager.getStaticConf().getDepGraphExecutionStrategy());
 
     this.executionManager =
         new ExecutionManager(

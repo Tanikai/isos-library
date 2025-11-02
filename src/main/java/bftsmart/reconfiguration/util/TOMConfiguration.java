@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 
 public class TOMConfiguration extends Configuration {
 
-  private Logger logger = LoggerFactory.getLogger(this.getClass());
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   protected int n;
   protected int f;
@@ -542,7 +542,8 @@ public class TOMConfiguration extends Configuration {
         sccStrategy = SccStrategy.parse(s);
       }
     } catch (Exception e) {
-      logger.error("Could not parse system configuration file", e);
+      System.err.println("Could not parse system configuration file: " + e);
+//      logger.error("Could not parse system configuration file", e);
     }
   }
 
