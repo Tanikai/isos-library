@@ -7,17 +7,20 @@ import bftsmart.configuration.ConfigurationManager;
 import isos.communication.ClientMessageWrapper;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.dependency.ConflictChecker;
+import isos.consensus.dependency.ConflictCheckerFactory;
 import isos.consensus.dependency.TrivialConflictChecker;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecuteInApplication;
+import isos.execution.graph.builder.DepGraphBuilderFactory;
 import isos.execution.manager.ExecutionManager;
 import isos.execution.manager.ISOSExecutionManager;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.execution.scc.SccFinder;
+import isos.execution.scc.SccFinderFactory;
 import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
@@ -98,13 +101,18 @@ public class ISOSApplication implements MessageHandler {
     this.deserializer = deserializer;
     this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
 
-    this.sccFinder = new TarjanSCC();
+    this.sccFinder =
+        SccFinderFactory.createSccFinder(this.configManager.getStaticConf().getSccStrategy());
 
     // Conflicts
     this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
     this.applicationConflict = applicationConflict;
     this.conflictChecker =
-        new TrivialConflictChecker(this.sccFinder, this.defaultConflict, this.applicationConflict);
+        ConflictCheckerFactory.createConflictChecker(
+            this.configManager.getStaticConf().getCompactDepSetStrategy(),
+            this.sccFinder,
+            this.defaultConflict,
+            this.applicationConflict);
 
     var maxFaults = configManager.getStaticConf().getF();
     var replicaCount = configManager.getStaticConf().getN();
@@ -128,8 +136,10 @@ public class ISOSApplication implements MessageHandler {
 
     // Request Execution
     this.dependencyGraphBuilder =
-        new TrivialDependencyGraphBuilder(
+        DepGraphBuilderFactory.createDependencyGraphBuilder(
+            this.configManager.getStaticConf().getDepGraphExecutionStrategy(),
             this.configManager.getStaticConf().getExecutionWindowSize());
+
     this.executionManager =
         new ExecutionManager(
             this.dependencyGraphBuilder,

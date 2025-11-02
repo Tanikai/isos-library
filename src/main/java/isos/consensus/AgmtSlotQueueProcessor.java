@@ -901,7 +901,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Move to new view v_s_j+1
     var previousViewNum = this.slot.getViewNumber();
-    logger.info("Move from view {} to new view {}", previousViewNum, newViewNum);
+    logger.error("AgreementSlot has to move from view {} to new view {}", previousViewNum, newViewNum);
 
     // If propose timeout is active, trigger its expiry (i.e., timeout logic should be executed now)
     this.triggerTimeoutExpiry(ISOSTimeoutType.PROPOSE);

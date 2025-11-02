@@ -15,6 +15,9 @@
 package bftsmart.reconfiguration.util;
 
 import bftsmart.tom.util.KeyLoader;
+import isos.consensus.dependency.CompactDepSetStrategy;
+import isos.execution.graph.optimizations.DepGraphExecutionStrategy;
+import isos.execution.scc.SccStrategy;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,6 +83,9 @@ public class TOMConfiguration extends Configuration {
   private boolean viewNumberCacheMapEnabled;
   private boolean sequenceNumberCacheMapEnabled;
   private boolean replicaIdCacheMapEnabled;
+  private CompactDepSetStrategy compactDepSetStrategy;
+  private DepGraphExecutionStrategy depGraphExecutionStrategy;
+  private SccStrategy sccStrategy;
 
   // ISOS Client
   /**
@@ -515,6 +521,26 @@ public class TOMConfiguration extends Configuration {
         replicaIdCacheMapEnabled = Boolean.parseBoolean(s);
       }
 
+      s = configs.remove("system.isos.replica.opt.compactDepSet.strategy");
+      if (s == null) {
+          compactDepSetStrategy = CompactDepSetStrategy.TRIVIAL;
+      } else {
+        compactDepSetStrategy = CompactDepSetStrategy.parse(s);
+      }
+
+      s = configs.remove("system.isos.replica.opt.depGraphExecution.strategy");
+      if (s == null) {
+        depGraphExecutionStrategy = DepGraphExecutionStrategy.TRIVIAL;
+      } else {
+        depGraphExecutionStrategy = DepGraphExecutionStrategy.parse(s);
+      }
+
+      s = configs.remove("system.isos.replica.opt.scc.strategy");
+      if (s == null) {
+        sccStrategy = SccStrategy.SEQUENTIAL_TARJAN;
+      } else {
+        sccStrategy = SccStrategy.parse(s);
+      }
     } catch (Exception e) {
       logger.error("Could not parse system configuration file", e);
     }
@@ -759,5 +785,17 @@ public class TOMConfiguration extends Configuration {
 
   public boolean isReplicaIdCacheMapEnabled() {
     return replicaIdCacheMapEnabled;
+  }
+
+  public CompactDepSetStrategy getCompactDepSetStrategy() {
+    return compactDepSetStrategy;
+  }
+
+  public DepGraphExecutionStrategy getDepGraphExecutionStrategy() {
+    return depGraphExecutionStrategy;
+  }
+
+  public SccStrategy getSccStrategy() {
+    return sccStrategy;
   }
 }
