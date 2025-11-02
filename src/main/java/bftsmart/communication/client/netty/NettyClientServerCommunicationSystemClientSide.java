@@ -155,7 +155,7 @@ public class NettyClientServerCommunicationSystemClientSide
       logger.error("Failed to initialize secret key factory", ex);
     }
 
-    logger.info(
+    logger.debug(
         "Client {} is connected to initial view: {}", this.clientId, replicaIdToSession.keySet());
   }
 
@@ -278,10 +278,9 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   @Override
-  public void setPingTargets(List<ReplicaId> targets) {
+  public void setPingTargets(List<ReplicaId> targets) throws InterruptedException {
     this.pingTargets = targets;
-    // After starting the ping task, it waits until we have an initial ping for all
-    // First, wait all sessions are included
+    // After starting the ping task, it waits until we have an initial ping for all replicas
     this.startPingTaskAndWait();
   }
 
@@ -291,7 +290,7 @@ public class NettyClientServerCommunicationSystemClientSide
   }
 
   /** Starts the ping task */
-  private void startPingTaskAndWait() {
+  private void startPingTaskAndWait() throws InterruptedException {
     logger.debug("Try to start ping task");
     if (this.pingTask != null && !this.pingTask.isCancelled()) {
       logger.debug("Ping task is already started");
@@ -325,22 +324,18 @@ public class NettyClientServerCommunicationSystemClientSide
             clientPingInterval,
             TimeUnit.MILLISECONDS);
 
-    try {
-      boolean latchReached =
-          this.remainingPings.await(
-              this.configManager.getStaticConf().getInitialWaitForPingsTimeoutMillis(),
-              TimeUnit.MILLISECONDS);
-      if (latchReached) {
-        logger.info(
-            "Client {} received ping answers from all replicas. Start sending requests to replicas.",
-            this.clientId);
-      } else {
-        logger.warn(
-            "Only received pings from {} before reaching timeout. Remaining replicas might be missing replica->client connections, which prevents sending answers to clients.",
-            this.replicaPingMillis.entrySet());
-      }
-    } catch (InterruptedException e) {
-      logger.warn("Interrupted while waiting for remaining pings: {}", e.getMessage());
+    boolean latchReached =
+        this.remainingPings.await(
+            this.configManager.getStaticConf().getInitialWaitForPingsTimeoutMillis(),
+            TimeUnit.MILLISECONDS);
+    if (latchReached) {
+      logger.debug(
+          "Client {} received ping answers from all replicas. Start sending requests to replicas.",
+          this.clientId);
+    } else {
+      logger.warn(
+          "Only received pings from {} before reaching timeout. Remaining replicas might be missing replica->client connections, which prevents sending answers to clients.",
+          this.replicaPingMillis.entrySet());
     }
   }
 

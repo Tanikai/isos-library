@@ -35,6 +35,8 @@ import java.util.concurrent.*;
 public class AgreementSlotManager implements RequestReceiver {
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
+  private final int SEQUENCE_LOG_INTERVAL = 100;
+
   /** State Storage */
   private final ReplicaId ownReplicaId;
 
@@ -279,13 +281,13 @@ public class AgreementSlotManager implements RequestReceiver {
               e.getMessage());
           return;
         }
-      }
 
-      if (seqNum.sequenceCounter() % 100 == 0) {
-        logger.info(
-            "---------- Reached sequence number {} for replica {}",
-            seqNum.sequenceCounter(),
-            seqNum.replicaId());
+        if (seqNum.sequenceCounter() % SEQUENCE_LOG_INTERVAL == 0) {
+          logger.info(
+              "---------- Reached DepPropose sequence number {} for replica {}",
+              seqNum.sequenceCounter(),
+              seqNum.replicaId());
+        }
       }
 
       var queue = this.queueProcessorInputQueue.get(seqNum);
@@ -333,7 +335,7 @@ public class AgreementSlotManager implements RequestReceiver {
       SequenceNumber newSlot =
           this.replicaAgreementSlots.get(ownReplicaId).createLowestSeqNumEntry(r);
 
-      if (newSlot.sequenceCounter() % 100 == 0) {
+      if (newSlot.sequenceCounter() % SEQUENCE_LOG_INTERVAL == 0) {
         logger.info(
             "---------- Reached {} client requests for replica {}",
             newSlot.sequenceCounter() + 1,

@@ -31,7 +31,7 @@ public interface CommunicationSystemClientSide {
 
   void setReplyReceiver(ReplyReceiver trr);
 
-  void setPingTargets(List<ReplicaId> targets);
+  void setPingTargets(List<ReplicaId> targets) throws InterruptedException;
 
   Map<ReplicaId, Long> getCurrentPings();
 

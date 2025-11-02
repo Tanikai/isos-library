@@ -37,6 +37,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class IsosYcsbClient extends DB {
   private static final AtomicLong requestCounter = new AtomicLong(0);
 
+  private final int REQUEST_LOG_INTERVAL = 50;
+
   private final int STATUS_OK = 0;
   private final int STATUS_ERR = -1;
   private final int STATUS_CLIENT_ERR = -2;
@@ -60,9 +62,9 @@ public class IsosYcsbClient extends DB {
       throw new RuntimeException("double initialized");
     }
     this.ownClientId = initId + counter.addAndGet(1);
-    this.client = new ISOSClient(this.ownClientId);
     this.logger = LoggerFactory.getLogger(String.format("IsosYcsbClient %d", this.ownClientId));
-//    logger.info("Initiated client id {}", this.ownClientId);
+
+    this.client = new ISOSClient(this.ownClientId);
   }
 
   /** Called once per DB instance; there is one DB instance per client thread. */
@@ -89,7 +91,7 @@ public class IsosYcsbClient extends DB {
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
       var completedRequests = IsosYcsbClient.counter.addAndGet(1);
-      if (completedRequests % 10 == 0) {
+      if (completedRequests % REQUEST_LOG_INTERVAL == 0) {
         logger.info("INSERT: Received reply, total completed requests: {}", completedRequests);
       }
 
@@ -121,7 +123,7 @@ public class IsosYcsbClient extends DB {
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
       var completedRequests = IsosYcsbClient.counter.addAndGet(1);
-      if (completedRequests % 10 == 0) {
+      if (completedRequests % REQUEST_LOG_INTERVAL == 0) {
         logger.info("READ: Received reply, total completed requests: {}", completedRequests);
       }
 
@@ -166,7 +168,7 @@ public class IsosYcsbClient extends DB {
       YCSBMessage replyMsg = YCSBMessage.getObject(reply.response());
       assert replyMsg != null;
       var completedRequests = IsosYcsbClient.counter.addAndGet(1);
-      if (completedRequests % 10 == 0) {
+      if (completedRequests % REQUEST_LOG_INTERVAL == 0) {
         logger.info("UPDATE: Received reply, total completed requests: {}", completedRequests);
       }
 

@@ -74,7 +74,11 @@ public class ISOSClient implements ReplyReceiver, Closeable, AutoCloseable {
 
     this.completedSequenceNumbers = new ConcurrentHashMap<>();
 
-    this.ccs.setPingTargets(this.currentOverallView);
+    try {
+      this.ccs.setPingTargets(this.currentOverallView);
+    } catch (InterruptedException e) {
+      logger.warn("Interrupted while setting ping targets: {}", e.getMessage());
+    }
   }
 
   public void close() {
