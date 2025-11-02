@@ -77,8 +77,8 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
    * @return
    */
   private boolean doesCommandConflict(OrderedClientRequest r1, OrderedClientRequest r2) {
-    KVMessage<K, V> cmd1 = r1.getDeserializedCommandCache();
-    KVMessage<K, V> cmd2 = r2.getDeserializedCommandCache();
+    KVMessage<K, V> cmd1 = r1.getDeserializedCommand();
+    KVMessage<K, V> cmd2 = r2.getDeserializedCommand();
 
     // TODO Kai: conflict rules for keySet, size? Do they conflict with all requests?
 
@@ -105,7 +105,7 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
    * @param r
    */
   private void executeClientRequest(OrderedClientRequest r) {
-    KVMessage<K, V> cmd = r.getDeserializedCommandCache();
+    KVMessage<K, V> cmd = r.getDeserializedCommand();
 
     OrderedClientReply response;
     try {

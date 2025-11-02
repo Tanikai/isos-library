@@ -99,6 +99,7 @@ public class ISOSApplication implements MessageHandler {
         new TimeoutConfiguration(
             this.configManager.getStaticConf().getInitialIsosTimeoutDeltaMillis());
     this.deserializer = deserializer;
+
     this.ownReplicaId = ReplicaId.of(configManager.getStaticConf().getProcessId());
 
     this.sccFinder =
@@ -178,6 +179,14 @@ public class ISOSApplication implements MessageHandler {
       SequenceNumber.setInstanceStrategy(new SequenceNumber.SequenceNumberCacheMapStrategy());
     } else {
       logger.info("OPT: SequenceNumberCacheMap is disabled");
+    }
+
+    if (c.isDeserializedCommandCacheEnabled()) {
+      logger.info("OPT: DeserializedCommandCache is enabled");
+      OrderedClientRequest.setDeserializedCommandCacheEnabled(true);
+    } else {
+      logger.info("OPT: DeserializedCommandCache is disabled");
+      OrderedClientRequest.setDeserializedCommandCacheEnabled(false);
     }
   }
 

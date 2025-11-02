@@ -26,6 +26,9 @@ public class OrderedClientRequest implements ClientRequest, Serializable {
   private final long clientLocalTimestamp;
 
   private transient Object deserializedCommand = null;
+  private transient ClientPayloadDeserializer deserializer;
+
+  private static boolean deserializedCommandCacheEnabled = false;
 
   public OrderedClientRequest(int clientId, byte[] command, long clientLocalTimestamp) {
     Objects.requireNonNull(command);
@@ -47,17 +50,30 @@ public class OrderedClientRequest implements ClientRequest, Serializable {
   }
 
   @SuppressWarnings("unchecked")
-  public <T> T getDeserializedCommandCache() throws IllegalStateException {
-    if (deserializedCommand == null) {
-      throw new IllegalStateException("Command has not been deserialized yet!");
+  public <T> T getDeserializedCommand() throws IllegalStateException {
+    if (OrderedClientRequest.deserializedCommandCacheEnabled) {
+      if (deserializedCommand == null) {
+        throw new IllegalStateException("Command has not been deserialized yet!");
+      }
+      return (T) deserializedCommand;
+    } else {
+      // This is not recommended, but included to benchmark the effect of caching the deserialized
+      // command
+      try {
+        return (T) this.deserializer.deserializePayload(this.command);
+      } catch (Exception e) {
+        throw new IllegalStateException(e.getMessage());
+      }
     }
-
-    return (T) deserializedCommand;
   }
 
   public <T> void updateDeserializedCommandCache(ClientPayloadDeserializer<T> deserializer)
       throws IOException, ClassNotFoundException {
-    this.deserializedCommand = deserializer.deserializePayload(this.command);
+    if (OrderedClientRequest.deserializedCommandCacheEnabled) {
+      this.deserializedCommand = deserializer.deserializePayload(this.command);
+    } else {
+      this.deserializer = deserializer;
+    }
   }
 
   /**
@@ -112,5 +128,9 @@ public class OrderedClientRequest implements ClientRequest, Serializable {
         + ", clientLocalTimestamp="
         + clientLocalTimestamp
         + '}';
+  }
+
+  public static void setDeserializedCommandCacheEnabled(boolean isEnabled) {
+    OrderedClientRequest.deserializedCommandCacheEnabled = isEnabled;
   }
 }

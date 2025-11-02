@@ -86,6 +86,7 @@ public class TOMConfiguration extends Configuration {
   private CompactDepSetStrategy compactDepSetStrategy;
   private DepGraphExecutionStrategy depGraphExecutionStrategy;
   private SccStrategy sccStrategy;
+  private boolean deserializedCommandCacheEnabled;
 
   // ISOS Client
   /**
@@ -541,6 +542,14 @@ public class TOMConfiguration extends Configuration {
       } else {
         sccStrategy = SccStrategy.parse(s);
       }
+
+      s = configs.remove("system.isos.replica.opt.deserializedCommandCacheEnabled");
+      if (s == null) {
+        deserializedCommandCacheEnabled = false;
+      } else {
+        deserializedCommandCacheEnabled = Boolean.parseBoolean(s);
+      }
+
     } catch (Exception e) {
       System.err.println("Could not parse system configuration file: " + e);
 //      logger.error("Could not parse system configuration file", e);
@@ -798,5 +807,9 @@ public class TOMConfiguration extends Configuration {
 
   public SccStrategy getSccStrategy() {
     return sccStrategy;
+  }
+
+  public boolean isDeserializedCommandCacheEnabled() {
+    return deserializedCommandCacheEnabled;
   }
 }

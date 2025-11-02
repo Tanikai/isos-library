@@ -64,8 +64,8 @@ public class IsosYcsbServer {
   }
 
   private boolean conflict(OrderedClientRequest r1, OrderedClientRequest r2) {
-    YCSBMessage cmd1 = r1.getDeserializedCommandCache();
-    YCSBMessage cmd2 = r2.getDeserializedCommandCache();
+    YCSBMessage cmd1 = r1.getDeserializedCommand();
+    YCSBMessage cmd2 = r2.getDeserializedCommand();
 
     // If both commands are read, they do not conflict
     if (cmd1.getType().equals(YCSBMessage.Type.READ)
@@ -83,7 +83,7 @@ public class IsosYcsbServer {
   }
 
   private void executeClientRequest(OrderedClientRequest r) {
-    YCSBMessage command = r.getDeserializedCommandCache();
+    YCSBMessage command = r.getDeserializedCommand();
     YCSBMessage reply = YCSBMessage.newErrorMessage("Undefined response");
     String table = command.getTable();
     String key = command.getKey();

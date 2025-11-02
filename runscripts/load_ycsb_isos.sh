@@ -16,12 +16,12 @@
 
 echo "Load the database with initial records..."
 
-mkdir -p "/home/ubuntu/benchmark_out/ycsb_${BENCHMARK_NAME}/"
-
 CLASSNAME="$1"
 WORKLOAD="$2"
 BENCHMARK_NAME="$3"
 CLIENT_ID="$4"
+
+mkdir -p "/home/ubuntu/benchmark_out/ycsb_${BENCHMARK_NAME}/"
 
 # Each instance of YCSB can have up to 10.000 client IDs
 CLIENT_ID_START=$((CLIENT_ID * 10000))
