@@ -37,6 +37,10 @@ import java.util.concurrent.atomic.AtomicLong;
 public class IsosYcsbClient extends DB {
   private static final AtomicLong requestCounter = new AtomicLong(0);
 
+  private final int STATUS_OK = 0;
+  private final int STATUS_ERR = -1;
+  private final int STATUS_CLIENT_ERR = -2;
+
   private Logger logger;
   private static AtomicInteger counter = new AtomicInteger();
   private int ownClientId = -1;
@@ -58,8 +62,7 @@ public class IsosYcsbClient extends DB {
     this.ownClientId = initId + counter.addAndGet(1);
     this.client = new ISOSClient(this.ownClientId);
     this.logger = LoggerFactory.getLogger(String.format("IsosYcsbClient %d", this.ownClientId));
-    logger.info("Initiated client id {}", this.ownClientId);
-    // TODO Kai: when we init, do we have to store the client in a map?
+//    logger.info("Initiated client id {}", this.ownClientId);
   }
 
   /** Called once per DB instance; there is one DB instance per client thread. */
@@ -89,10 +92,21 @@ public class IsosYcsbClient extends DB {
       if (completedRequests % 10 == 0) {
         logger.info("INSERT: Received reply, total completed requests: {}", completedRequests);
       }
-      return replyMsg.getResult();
+
+      if (replyMsg.getErrorMsg() != null && !replyMsg.getErrorMsg().isEmpty()) {
+        logger.error("INSERT: Error message {}", replyMsg.getErrorMsg());
+        return STATUS_ERR;
+      }
+
+      if (replyMsg.getResult() != 0) {
+        logger.error("Received unsuccessful result value {}, reason unknown", replyMsg.getResult());
+        return STATUS_ERR;
+      }
+
+      return STATUS_OK;
     } catch (Exception e) {
       logger.error("INSERT: Exception {}", e.getMessage());
-      return -1;
+      return STATUS_CLIENT_ERR;
     }
   }
 
@@ -110,10 +124,21 @@ public class IsosYcsbClient extends DB {
       if (completedRequests % 10 == 0) {
         logger.info("READ: Received reply, total completed requests: {}", completedRequests);
       }
-      return replyMsg.getResult();
+
+      if (replyMsg.getErrorMsg() != null && !replyMsg.getErrorMsg().isEmpty()) {
+        logger.error("READ: Error message {}", replyMsg.getErrorMsg());
+        return STATUS_ERR;
+      }
+
+      if (replyMsg.getResult() != 0) {
+        logger.error("Received unsuccessful result value {}, reason unknown", replyMsg.getResult());
+        return STATUS_ERR;
+      }
+
+      return STATUS_OK;
     } catch (Exception e) {
       logger.error("READ: Exception {}", e.getMessage());
-      return -1;
+      return STATUS_CLIENT_ERR;
     }
   }
 
@@ -144,10 +169,21 @@ public class IsosYcsbClient extends DB {
       if (completedRequests % 10 == 0) {
         logger.info("UPDATE: Received reply, total completed requests: {}", completedRequests);
       }
-      return replyMsg.getResult();
+
+      if (replyMsg.getErrorMsg() != null && !replyMsg.getErrorMsg().isEmpty()) {
+        logger.error("UPDATE: Error message {}", replyMsg.getErrorMsg());
+        return STATUS_ERR;
+      }
+
+      if (replyMsg.getResult() != 0) {
+        logger.error("Received unsuccessful result value {}, reason unknown", replyMsg.getResult());
+        return STATUS_ERR;
+      }
+
+      return STATUS_OK;
     } catch (Exception e) {
       logger.error("UPDATE: Exception {}", e.getMessage());
-      return -1;
+      return STATUS_CLIENT_ERR;
     }
   }
 }

@@ -6,6 +6,8 @@ import bftsmart.demo.ycsb.YCSBTable;
 import isos.api.ISOSApplication;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -19,6 +21,8 @@ import java.util.TreeMap;
  * @author Kai Anter
  */
 public class IsosYcsbServer {
+
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private final TreeMap<String, YCSBTable> mTables;
   private final ISOSApplication app;
@@ -126,9 +130,13 @@ public class IsosYcsbServer {
               mTables.put(table, new YCSBTable());
             }
             mTables.get(table).put(key, command.getValues());
-            reply = YCSBMessage.newUpdateResponse(1);
+            reply = YCSBMessage.newUpdateResponse(0);
           }
         }
+      }
+
+      default -> {
+        logger.error("Unknown command type {}", command.getType());
       }
     }
 

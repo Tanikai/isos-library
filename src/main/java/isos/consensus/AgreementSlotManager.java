@@ -263,6 +263,7 @@ public class AgreementSlotManager implements RequestReceiver {
           if (depPropose.request() != null) {
             depPropose.request().updateDeserializedCommandCache(clientPayloadDeserializer);
           }
+
           if (sm.getSender() != depPropose.logicalSender().value()) {
             // Request of depPropose can be null if it was broadcasted when the propose timeout
             // expired
@@ -278,6 +279,13 @@ public class AgreementSlotManager implements RequestReceiver {
               e.getMessage());
           return;
         }
+      }
+
+      if (seqNum.sequenceCounter() % 100 == 0) {
+        logger.info(
+            "---------- Reached sequence number {} for replica {}",
+            seqNum.sequenceCounter(),
+            seqNum.replicaId());
       }
 
       var queue = this.queueProcessorInputQueue.get(seqNum);

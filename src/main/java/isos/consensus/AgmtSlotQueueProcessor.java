@@ -686,7 +686,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     if (!fpVerified) {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
-      logger.warn(
+      logger.info(
           "At least 1 dependency is not reported by at least f+1 followers. DepPropose conflicts: {}. DepVerify conflicts: {}. Enter reconciliation path.",
           this.slot.getDepPropose().depSet().dependencies(),
           this.slot.getDepVerifys().entrySet().stream()
