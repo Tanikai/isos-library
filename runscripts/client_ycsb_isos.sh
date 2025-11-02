@@ -19,8 +19,6 @@ WORKLOAD="$2"
 BENCHMARK_NAME="$3"
 CLIENT_ID="$4"
 
-echo "Create benchmark out directory..."
-
 mkdir -p "/home/ubuntu/benchmark_out/ycsb_${BENCHMARK_NAME}/"
 
 # Each instance of YCSB can have up to 10.000 client IDs

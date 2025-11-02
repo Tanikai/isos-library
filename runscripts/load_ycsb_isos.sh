@@ -16,6 +16,8 @@
 
 echo "Load the database with initial records..."
 
+mkdir -p "/home/ubuntu/benchmark_out/ycsb_${BENCHMARK_NAME}/"
+
 CLASSNAME="$1"
 WORKLOAD="$2"
 BENCHMARK_NAME="$3"
