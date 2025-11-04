@@ -6,7 +6,8 @@ import isos.execution.CommittedCommand;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.scc.SccFinder;
 import isos.execution.scc.SccUtils;
-import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
+
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiPredicate;
@@ -18,22 +19,22 @@ public class TrivialConflictChecker implements ConflictChecker {
    * Own representation of current agreement slots of all replicas. Kept in sync via
    * addClientRequest, overwriteClientRequest, and updateCommitedRequest.
    */
-  private final Map<SequenceNumber, OrderedClientRequest> agreementSlots;
+  private final Map<SequenceNumber, ClientRequestContainer> agreementSlots;
 
   private final Map<SequenceNumber, Set<SequenceNumber>> currentDependencyGraph;
 
   private final SccFinder sccFinder;
 
   // Conflict predicates
-  BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
-  BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
+  BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict;
+  BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict;
 
   private final ReentrantLock graphLock;
 
   public TrivialConflictChecker(
       SccFinder sccFinder,
-      BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict,
-      BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict) {
+      BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict,
+      BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict) {
     this.agreementSlots = new HashMap<>();
     this.currentDependencyGraph = new HashMap<>();
     this.sccFinder = sccFinder;
@@ -44,7 +45,7 @@ public class TrivialConflictChecker implements ConflictChecker {
   }
 
   @Override
-  public void addClientRequest(SequenceNumber slot, OrderedClientRequest r, DependencySet deps) {
+  public void addClientRequest(SequenceNumber slot, ClientRequestContainer r, DependencySet deps) {
     this.graphLock.lock();
     try {
       this.agreementSlots.put(slot, r);
@@ -55,7 +56,7 @@ public class TrivialConflictChecker implements ConflictChecker {
   }
 
   @Override
-  public void overwriteClientRequest(SequenceNumber slot, OrderedClientRequest r) {
+  public void overwriteClientRequest(SequenceNumber slot, ClientRequestContainer r) {
     this.graphLock.lock();
     try {
       this.agreementSlots.put(slot, r);
@@ -86,7 +87,7 @@ public class TrivialConflictChecker implements ConflictChecker {
    * @return All agreement slots that have a DepPropose message (i.e. non-null)
    */
   @Override
-  public DependencySet getCompactDependencySet(SequenceNumber seqNum, OrderedClientRequest r) {
+  public DependencySet getCompactDependencySet(SequenceNumber seqNum, ClientRequestContainer r) {
     this.graphLock.lock();
     try {
       // Requirement: For the dependency set, the coordinator takes all known requests from both its

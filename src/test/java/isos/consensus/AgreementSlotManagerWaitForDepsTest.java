@@ -8,6 +8,7 @@ import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -43,7 +44,10 @@ class AgreementSlotManagerWaitForDepsTest {
             mock(ClientPayloadDeserializer.class),
             mock(MessageSender.class),
             1,
-            4);
+            4,
+            1,
+            10000,
+            1000);
 
     // We are waiting for the first agreement slot of each of the 4 replicas
     Set<SequenceNumber> waitDepSet = new HashSet<>();
@@ -70,13 +74,15 @@ class AgreementSlotManagerWaitForDepsTest {
     assertTrue(waiter.isAlive(), "waitForDeps should be blocking before deps complete");
 
     OrderedClientRequest request = mock(OrderedClientRequest.class);
+    var container = new ClientRequestContainer(Set.of(request));
 
     // Complete each dependency by passing a DepProposeMessage with matching SequenceNumber
     for (SequenceNumber seq : waitDepSet) {
       DepProposeMessage msg =
           new DepProposeMessage(
               seq, seq.replicaIdRec(), "hash123", new DependencySet(), new HashSet<>());
-      var wrapper = new ISOSMessageWrapper(new DepProposeWithRequest(msg, request), seq.replicaId());
+      var wrapper =
+          new ISOSMessageWrapper(new DepProposeWithRequest(msg, container), seq.replicaId());
       manager.handleReplicaMessage(wrapper);
     }
 

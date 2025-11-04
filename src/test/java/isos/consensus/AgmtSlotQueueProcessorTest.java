@@ -6,6 +6,7 @@ import isos.consensus.model.*;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepCommitMessage;
@@ -65,15 +66,16 @@ class AgmtSlotQueueProcessorTest {
     var seqNum = SequenceNumber.of(ownReplicaId, 1);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var clientRequestHash = clientRequest.calculateHash();
+    var container = new ClientRequestContainer(Set.of(clientRequest));
+    var clientRequestHash = container.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(SequenceNumber.of(ownReplicaId, 0)));
 
-    // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
+    // by initially setting a clientRequests, we communicate to the Queue Processor that it is the
     // coordinator
-    var slot = new AgreementSlot(seqNum, clientRequest);
+    var slot = new AgreementSlot(seqNum, container);
 
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
         .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
@@ -101,7 +103,7 @@ class AgmtSlotQueueProcessorTest {
     // called
     verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), msgCaptor.capture());
 
-    // When the queueProcessor handles the clientRequest, it should broadcast the DepPropose and
+    // When the queueProcessor handles the clientRequests, it should broadcast the DepPropose and
     // client request
     var wrapper = msgCaptor.getValue();
     var depProposeWithRequest = (DepProposeWithRequest) wrapper.getPayload();
@@ -157,7 +159,7 @@ class AgmtSlotQueueProcessorTest {
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
-    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(container, execMessage.clientRequest());
     assertEquals(finalDepSet, execMessage.depSet());
 
     // After a request has been forwarded to execution, we are done!
@@ -174,7 +176,8 @@ class AgmtSlotQueueProcessorTest {
     var seqNum = SequenceNumber.of(ownReplicaId, 1);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var clientRequestHash = clientRequest.calculateHash();
+    var container = new ClientRequestContainer(List.of(clientRequest));
+    var clientRequestHash = container.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
@@ -182,9 +185,9 @@ class AgmtSlotQueueProcessorTest {
             new DependencySet(
                 SequenceNumber.of(ownReplicaId, 0), SequenceNumber.of(otherReplicaIds[0], 0)));
 
-    // by initially setting a clientRequest, we communicate to the Queue Processor that it is the
+    // by initially setting a clientRequests, we communicate to the Queue Processor that it is the
     // coordinator
-    var slot = new AgreementSlot(seqNum, clientRequest);
+    var slot = new AgreementSlot(seqNum, container);
 
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
         .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
@@ -212,7 +215,7 @@ class AgmtSlotQueueProcessorTest {
     // called
     verify(msgSenderMock, timeout(500)).broadcastToReplicas(eq(false), msgCaptor.capture());
 
-    // When the queueProcessor handles the clientRequest, it should broadcast the DepPropose and
+    // When the queueProcessor handles the clientRequests, it should broadcast the DepPropose and
     // client request
     var wrapper = msgCaptor.getValue();
     var depProposeWithRequest = (DepProposeWithRequest) wrapper.getPayload();
@@ -296,7 +299,7 @@ class AgmtSlotQueueProcessorTest {
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
-    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(container, execMessage.clientRequest());
     assertEquals(depSetUnion, execMessage.depSet());
   }
 
@@ -314,11 +317,12 @@ class AgmtSlotQueueProcessorTest {
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var clientRequestHash = clientRequest.calculateHash();
+    var container = new ClientRequestContainer(List.of(clientRequest));
+    var clientRequestHash = container.calculateHash();
     var depPropose =
         new DepProposeMessage(seqNum, coordinatorId, clientRequestHash, depSet, followerQuorum);
     var depProposeHash = depPropose.calculateHash();
-    var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
+    var depProposeWithRequest = new DepProposeWithRequest(depPropose, container);
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
@@ -396,7 +400,7 @@ class AgmtSlotQueueProcessorTest {
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
-    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(container, execMessage.clientRequest());
     assertEquals(
         new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)), execMessage.depSet());
   }
@@ -413,11 +417,12 @@ class AgmtSlotQueueProcessorTest {
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var clientRequestHash = clientRequest.calculateHash();
+    var container = new ClientRequestContainer(List.of(clientRequest));
+    var clientRequestHash = container.calculateHash();
     var depPropose =
         new DepProposeMessage(seqNum, coordinatorId, clientRequestHash, depSet, followerQuorum);
     var depProposeHash = depPropose.calculateHash();
-    var depProposeWithRequest = new DepProposeWithRequest(depPropose, clientRequest);
+    var depProposeWithRequest = new DepProposeWithRequest(depPropose, container);
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
@@ -505,7 +510,7 @@ class AgmtSlotQueueProcessorTest {
     verify(requestExecutorMock, timeout(500)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
-    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(container, execMessage.clientRequest());
     assertEquals(depSetUnion, execMessage.depSet());
   }
 
@@ -515,12 +520,13 @@ class AgmtSlotQueueProcessorTest {
     var otherReplicaIds = new ReplicaId[] {ReplicaId.of(1), ReplicaId.of(0), ReplicaId.of(3)};
     var seqNum = SequenceNumber.of(ownReplicaId, 2);
     var clientRequest = new OrderedClientRequest(2, "OutOfOrder".getBytes(), 0L);
+    var container = new ClientRequestContainer(List.of(clientRequest));
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(SequenceNumber.of(ownReplicaId, 0)));
 
-    var slot = new AgreementSlot(seqNum, clientRequest);
+    var slot = new AgreementSlot(seqNum, container);
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
         .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
 
@@ -580,7 +586,7 @@ class AgmtSlotQueueProcessorTest {
     verify(requestExecutorMock, timeout(1000)).forwardRequestToExecution(execCaptor.capture());
     var execMessage = execCaptor.getValue();
     assertEquals(seqNum, execMessage.seqNum());
-    assertEquals(clientRequest, execMessage.clientRequest());
+    assertEquals(container, execMessage.clientRequest());
     assertEquals(finalDepSet, execMessage.depSet());
   }
 

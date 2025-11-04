@@ -1,7 +1,7 @@
 package isos.consensus.buffer;
 
 import isos.consensus.model.DependencySet;
-import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.message.replica.ISOSMessageWithViewNumber;
@@ -120,7 +120,8 @@ public class ISOSMessageBuffer {
     if (!this.viewBufferedMessages.containsKey(currentView)) {
       return Set.of();
     }
-    Map<ReplicaId, ISOSMessageWithViewNumber> msgTypeMap = this.viewBufferedMessages.get(currentView).get(msgType);
+    Map<ReplicaId, ISOSMessageWithViewNumber> msgTypeMap =
+        this.viewBufferedMessages.get(currentView).get(msgType);
     if (msgTypeMap.isEmpty()) {
       return List.of();
     }
@@ -222,7 +223,7 @@ public class ISOSMessageBuffer {
   }
 
   public boolean execQuorumWithSameContentsReached(
-      OrderedClientRequest clientRequest, DependencySet depSet, int quorumSize) {
+      ClientRequestContainer clientRequest, DependencySet depSet, int quorumSize) {
     if (!execQuorumSizeReached(quorumSize)) {
       return false;
     }
@@ -232,7 +233,7 @@ public class ISOSMessageBuffer {
         this.execQuorum.values().stream()
             .filter(
                 msg ->
-                    clientRequest.equals(msg.clientRequest()) && depSet.equals(msg.dependencySet()))
+                    clientRequest.equals(msg.clientRequests()) && depSet.equals(msg.dependencySet()))
             .count();
 
     return sameCount >= quorumSize;

@@ -21,6 +21,7 @@ import isos.execution.scc.SccFinder;
 import isos.execution.scc.SccFinderFactory;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import org.slf4j.Logger;
@@ -29,6 +30,9 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.BiPredicate;
 
 /**
@@ -81,13 +85,13 @@ public class ISOSApplication implements MessageHandler {
 
   private final ClientPayloadDeserializer deserializer;
 
-  private final BiPredicate<OrderedClientRequest, OrderedClientRequest> defaultConflict;
-  private final BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict;
+  private final BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict;
+  private final BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict;
 
   public ISOSApplication(
       ConfigurationManager configManager,
       ClientPayloadDeserializer deserializer,
-      BiPredicate<OrderedClientRequest, OrderedClientRequest> applicationConflict,
+      BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict,
       ExecuteInApplication executor)
       throws Exception {
     this.configManager = configManager;
@@ -104,7 +108,23 @@ public class ISOSApplication implements MessageHandler {
     logger.info("OPT: SccFinder Strategy: {}", this.configManager.getStaticConf().getSccStrategy());
 
     // Conflicts
-    this.defaultConflict = (a, b) -> a.clientId() == b.clientId();
+    this.defaultConflict =
+        (a, b) -> {
+          Set<Integer> ids = new HashSet<>();
+          for (OrderedClientRequest r : a.getRequests()) {
+            ids.add(r.clientId());
+          }
+
+          // If at least 1 client ID is in both batches, the batches conflict with each other
+          for (OrderedClientRequest r2 : b.getRequests()) {
+            if (ids.contains(r2.clientId())) {
+              return true;
+            }
+          }
+
+          return false;
+        };
+
     this.applicationConflict = applicationConflict;
     this.conflictChecker =
         ConflictCheckerFactory.createConflictChecker(
@@ -132,7 +152,10 @@ public class ISOSApplication implements MessageHandler {
             deserializer,
             this.scs,
             maxFaults,
-            replicaCount);
+            replicaCount,
+            configManager.getStaticConf().getMaxBatchSize(),
+            configManager.getStaticConf().getMaxBatchSizeInBytes(),
+            configManager.getStaticConf().getBatchTimeout());
 
     this.scs.setRequestReceiver(this.agrSlotManager);
 
@@ -150,7 +173,7 @@ public class ISOSApplication implements MessageHandler {
             this.dependencyGraphBuilder,
             this.sccFinder,
             executor,
-            this.configManager.getStaticConf().getMaxBatchSize());
+            100);
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
   }
 

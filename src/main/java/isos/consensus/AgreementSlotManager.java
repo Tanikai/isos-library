@@ -1,6 +1,5 @@
 package isos.consensus;
 
-import bftsmart.communication.MessageHandler;
 import bftsmart.communication.SystemMessage;
 import bftsmart.communication.client.RequestReceiver;
 import isos.communication.ClientMessageWrapper;
@@ -13,6 +12,7 @@ import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -70,6 +70,14 @@ public class AgreementSlotManager implements RequestReceiver {
   private final int maxFaults;
   private final int replicaCount;
 
+  private final Thread proposer;
+
+  // Message batching
+  private final int batchTimeout;
+  private final int maxBatchCount;
+  private final int maxBatchBytes;
+  private final PendingRequestBuffer pendingRequests;
+
   /**
    * @param ownReplicaId The id of the current replica.
    * @param timeoutConfig
@@ -86,7 +94,10 @@ public class AgreementSlotManager implements RequestReceiver {
       ClientPayloadDeserializer clientPayloadDeserializer,
       MessageSender msgSender,
       int maxFaults,
-      int replicaCount) {
+      int replicaCount,
+      int maxBatchCount,
+      int maxBatchBytes,
+      int batchTimeout) {
     this.ownReplicaId = ownReplicaId;
     this.timeoutConfig = timeoutConfig;
     this.timeoutExecutor = new ScheduledThreadPoolExecutor(4);
@@ -101,6 +112,14 @@ public class AgreementSlotManager implements RequestReceiver {
     this.msgSender = msgSender;
     this.maxFaults = maxFaults;
     this.replicaCount = replicaCount;
+
+    // Message batching
+    this.batchTimeout = batchTimeout;
+    this.maxBatchCount = maxBatchCount;
+    this.maxBatchBytes = maxBatchBytes;
+    this.pendingRequests = new PendingRequestBuffer(batchTimeout, maxBatchCount, maxBatchBytes);
+
+    this.proposer = Thread.ofVirtual().start(this::runProposeThread);
 
     // Create agreement slot sequences for own replica and other replicas
     // Start virtual threads of own AgreementSlotSequence one by one, but start threads of other
@@ -262,8 +281,10 @@ public class AgreementSlotManager implements RequestReceiver {
       // payload / update the cache before
       if (payload instanceof DepProposeWithRequest depPropose) {
         try {
-          if (depPropose.request() != null) {
-            depPropose.request().updateDeserializedCommandCache(clientPayloadDeserializer);
+          if (depPropose.requests() != null) {
+            for (var r : depPropose.requests().getRequests()) {
+              r.updateDeserializedCommandCache(clientPayloadDeserializer);
+            }
           }
 
           if (sm.getSender() != depPropose.logicalSender().value()) {
@@ -331,23 +352,44 @@ public class AgreementSlotManager implements RequestReceiver {
       // and deserializing it here, so that
       r.updateDeserializedCommandCache(clientPayloadDeserializer);
 
-      // when we receive a new request, we set the request for the latest entry in th AgreementSlots
-      SequenceNumber newSlot =
-          this.replicaAgreementSlots.get(ownReplicaId).createLowestSeqNumEntry(r);
 
-      if (newSlot.sequenceCounter() % SEQUENCE_LOG_INTERVAL == 0) {
-        logger.info(
-            "---------- Reached {} client requests for replica {}",
-            newSlot.sequenceCounter() + 1,
-            this.ownReplicaId);
-      }
-
-      // Start the thread
-      this.queueProcessorThreads.get(newSlot).start();
-
+      // when we receive a new request, we first add it to the pending requests.
+      // set the request for the latest entry in th
+      // AgreementSlots
+      this.pendingRequests.addPendingRequest(r);
     } catch (IOException | ClassNotFoundException e) {
       logger.error(
           "Error while decoding client request: {}. Throwing client request away", e.getMessage());
+    }
+  }
+
+  private void runProposeThread() {
+    try {
+      while (!Thread.currentThread().isInterrupted()) {
+        var requests = this.pendingRequests.awaitPendingRequests();
+
+        if (requests.getRequests().length == 0) {
+            logger.warn("Batch is empty!");
+            continue;
+        }
+
+        logger.info("Propose batch with {} commands", requests.getRequests().length);
+
+        SequenceNumber newSlot =
+            this.replicaAgreementSlots.get(ownReplicaId).createLowestSeqNumEntry(requests);
+
+        if (newSlot.sequenceCounter() % SEQUENCE_LOG_INTERVAL == 0) {
+          logger.info(
+              "---------- Reached {} client requests for replica {}",
+              newSlot.sequenceCounter() + 1,
+              this.ownReplicaId);
+        }
+
+        // Start the thread
+        this.queueProcessorThreads.get(newSlot).start();
+      }
+    } catch (InterruptedException e) {
+      logger.error("Interrupted while waiting for next batch, exiting propose Thread");
     }
   }
 }

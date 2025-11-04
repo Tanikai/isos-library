@@ -5,6 +5,7 @@ import isos.consensus.model.viewchange.EmptyCertificate;
 import isos.consensus.model.viewchange.ViewChangeCertificate;
 import isos.execution.CommittedCommand;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
@@ -25,8 +26,9 @@ import java.util.stream.Collectors;
 public class AgreementSlot {
   // s_j: Agreement Slot s_j
   private SequenceNumber seqNum;
-  // Contains client ID, client-local timestamp, and command
-  private OrderedClientRequest request;
+  // Batch of 1-n client requests.
+  // Each client request contains client ID, client-local timestamp, and command
+  private ClientRequestContainer requests;
   // p: DepPropose for slot s_j includes fast path quorum F
   private DepProposeMessage depPropose;
 
@@ -74,7 +76,7 @@ public class AgreementSlot {
    *     acts as the coordinator for this agreement slot when this AgreementSlot object is passed to
    *     it. When it is null, it acts as the follower.
    */
-  public AgreementSlot(SequenceNumber seqNum, OrderedClientRequest r) {
+  public AgreementSlot(SequenceNumber seqNum, ClientRequestContainer r) {
     this(
         seqNum,
         r,
@@ -88,7 +90,7 @@ public class AgreementSlot {
 
   public AgreementSlot(
       SequenceNumber seqNum,
-      OrderedClientRequest request,
+      ClientRequestContainer requests,
       DepProposeMessage depPropose,
       AgreementSlotPhase step,
       Map<ReplicaId, ViewChangeMessage> viewChanges,
@@ -96,7 +98,7 @@ public class AgreementSlot {
       Map<ReplicaId, ViewNumber> peerViewNumbers,
       ViewChangeCertificate viewChangeCertificate) {
     this.seqNum = seqNum;
-    this.request = request;
+    this.requests = requests;
     this.depPropose = depPropose;
     this.depVerifys = new DepVerifyMap();
     this.step = step;
@@ -134,12 +136,12 @@ public class AgreementSlot {
     this.seqNum = seqNum;
   }
 
-  public OrderedClientRequest getRequest() {
-    return request;
+  public ClientRequestContainer getRequests() {
+    return requests;
   }
 
-  public void setRequest(OrderedClientRequest request) {
-    this.request = request;
+  public void setRequests(ClientRequestContainer requests) {
+    this.requests = requests;
   }
 
   public DepProposeMessage getDepPropose() {

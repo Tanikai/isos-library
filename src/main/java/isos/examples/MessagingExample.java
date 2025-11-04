@@ -12,6 +12,7 @@ import isos.execution.ExecuteInApplication;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.utils.ReplicaId;
@@ -40,7 +41,7 @@ public class MessagingExample extends Thread {
   private final int replicaId;
   private final ConfigurationManager configManager;
   private final ClientPayloadDeserializer<String> deserializer;
-  private final BiPredicate<OrderedClientRequest, OrderedClientRequest> conflictChecker;
+  private final BiPredicate<ClientRequestContainer, ClientRequestContainer> conflictChecker;
   private final ExecuteInApplication appExecutor;
 
   private final ISOSApplication app;

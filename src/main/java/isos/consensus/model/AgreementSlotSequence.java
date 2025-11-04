@@ -2,6 +2,7 @@ package isos.consensus.model;
 
 import isos.consensus.InvalidReplicaIdException;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.utils.ReplicaId;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -65,14 +66,14 @@ public class AgreementSlotSequence {
    *
    * @return Sequence number of newly created entry
    */
-  public SequenceNumber createLowestSeqNumEntry(OrderedClientRequest r) {
+  public SequenceNumber createLowestSeqNumEntry(ClientRequestContainer r) {
     try {
       this.addEntryLock.lock();
       // get sequence number for new slot
       SequenceNumber result = getLowestUnusedSequenceNumber();
       // initialize new slot with default AgreementSlot record
 
-      this.slots[result.sequenceCounter()].setRequest(r);
+      this.slots[result.sequenceCounter()].setRequests(r);
       lowestUninitialized++;
 
       return result;

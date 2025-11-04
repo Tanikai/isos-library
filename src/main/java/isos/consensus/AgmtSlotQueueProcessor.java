@@ -11,10 +11,7 @@ import isos.consensus.model.viewchange.ReconciliationPathCertificate;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ISOSMessage;
-import isos.message.replica.ISOSMessageType;
-import isos.message.replica.ISOSMessageWrapper;
-import isos.message.replica.TimeoutMessage;
+import isos.message.replica.*;
 import isos.message.replica.fast.DepCommitMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -164,7 +161,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // ClientRequest, or just a Replica Message
 
     // When we received a ClientRequest, the AgreementSlot request is already populated
-    if (this.slot.getRequest() != null) {
+    if (this.slot.getRequests() != null) {
       handleClientRequest();
     }
 
@@ -270,18 +267,20 @@ public class AgmtSlotQueueProcessor implements Runnable {
   private void handleClientRequest() {
     // We can only be coordinator of a client request if the generated SequenceNumber is our own
     assert Objects.equals(this.ownReplicaId, this.seqNum.replicaIdRec());
-    var r = slot.getRequest();
+    var r = slot.getRequests();
 
     DependencySet depSet = this.conflictChecker.getCompactDependencySet(this.seqNum, r);
     Set<ReplicaId> followerSet = msgSender.getLowestPingReplicas(2 * this.maxFaults);
     DepProposeMessage propose =
         new DepProposeMessage(seqNum, ownReplicaId, r.calculateHash(), depSet, followerSet);
 
-    DepProposeWithRequest dp =
-        new DepProposeWithRequest(propose, r); // Create wrapper message that includes the request
+    // FIXME Kai: create pending requests,
+
+    // Create wrapper message that includes the request container (1 or more requests)
+    DepProposeWithRequest dp = new DepProposeWithRequest(propose, r);
 
     this.slot.setDepPropose(propose);
-    this.slot.setRequest(r);
+    this.slot.setRequests(r);
     this.conflictChecker.addClientRequest(this.seqNum, r, depSet);
     this.slot.setStep(AgreementSlotPhase.PROPOSED);
     // we have changed the messages in the slot, so signal all waiting threads
@@ -553,14 +552,15 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Step precondition checked in separate method
 
     var depPropose = depProposeWithR.depPropose();
-    OrderedClientRequest request = depProposeWithR.request(); // Request can be null!
+    // Requests can be null, in the case of ViewChange
+    ClientRequestContainer request = depProposeWithR.requests();
 
     // Line 22: assert F is valid fast-path quorum
     // TODO Kai: what is a valid fast-path quorum?
     // Answer: Exactly 2f replicaIds, replicaIds exist,
 
     // Line 23: First propose from coordinator
-    if (this.slot.getRequest() != null) {
+    if (this.slot.getRequests() != null) {
       logger.warn("We have already received a DepPropose, skipping this message");
       return;
     }
@@ -604,7 +604,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Line 29
     if (request != null) {
       var depSet = this.conflictChecker.getCompactDependencySet(this.seqNum, request);
-      this.slot.setRequest(request);
+      this.slot.setRequests(request);
       this.conflictChecker.addClientRequest(this.seqNum, request, depSet);
       this.slot.setStep(AgreementSlotPhase.PROPOSED);
       // if we are in the Follower quorum, send a DepPropose message
@@ -692,7 +692,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
           this.slot.getDepVerifys().entrySet().stream()
               .map(
                   entry ->
-                      Map.entry(entry.getKey().value(), entry.getValue().depSet().dependencies())).toList());
+                      Map.entry(entry.getKey().value(), entry.getValue().depSet().dependencies()))
+              .toList());
       var depVerifyHash = this.slot.getDepVerifyHashCached();
       enterReconciliationPath(depVerifyHash);
       return;
@@ -746,7 +747,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var depVerifys = this.slot.getDepVerifys().values().stream().toList();
     var unionDepsFollowerQuorum = DepVerifyMessage.unionOfDependencies(depVerifys, null);
     var executeMsg =
-        new CommittedCommand(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+        new CommittedCommand(this.seqNum, this.slot.getRequests(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
     this.conflictChecker.updateCommitedRequest(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
@@ -879,7 +880,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var unionDepsFollowerQuorum =
         DepVerifyMessage.unionOfDependencies(depVerifys, this.slot.getDepPropose());
     var executeMsg =
-        new CommittedCommand(this.seqNum, this.slot.getRequest(), unionDepsFollowerQuorum);
+        new CommittedCommand(this.seqNum, this.slot.getRequests(), unionDepsFollowerQuorum);
     this.slot.setExec(executeMsg);
     this.conflictChecker.updateCommitedRequest(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);
@@ -901,7 +902,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Move to new view v_s_j+1
     var previousViewNum = this.slot.getViewNumber();
-    logger.error("AgreementSlot has to move from view {} to new view {}", previousViewNum, newViewNum);
+    logger.error(
+        "AgreementSlot has to move from view {} to new view {}", previousViewNum, newViewNum);
 
     // If propose timeout is active, trigger its expiry (i.e., timeout logic should be executed now)
     this.triggerTimeoutExpiry(ISOSTimeoutType.PROPOSE);
@@ -910,7 +912,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.cancelTimeout(ISOSTimeoutType.VIEWCHANGE);
 
     DepProposeWithRequest dp =
-        new DepProposeWithRequest(this.slot.getDepPropose(), this.slot.getRequest());
+        new DepProposeWithRequest(this.slot.getDepPropose(), this.slot.getRequests());
     List<DepVerifyMessage> dv = this.slot.getDepVerifys().values().stream().toList();
 
     // has to be 2f matching DepVerifys in both cases
@@ -1221,8 +1223,8 @@ public class AgmtSlotQueueProcessor implements Runnable {
     var vecDv = newView.depVerifys();
 
     this.slot.setDepPropose(dp.depPropose());
-    this.slot.setRequest(dp.request());
-    this.conflictChecker.overwriteClientRequest(this.seqNum, dp.request());
+    this.slot.setRequests(dp.requests());
+    this.conflictChecker.overwriteClientRequest(this.seqNum, dp.requests());
     // Line 129: Cleanup DepVerifys
     this.slot.replaceDepVerifys(vecDv);
 
@@ -1244,7 +1246,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    OrderedClientRequest dp = this.slot.getExec().clientRequest();
+    ClientRequestContainer dp = this.slot.getExec().clientRequest();
     DependencySet D = this.slot.getExec().depSet();
 
     ReplicaId[] receivers = new ReplicaId[] {queryExec.logicalSender()};
@@ -1265,13 +1267,13 @@ public class AgmtSlotQueueProcessor implements Runnable {
     this.bufferedMessages.storeExec(exec);
 
     if (!this.bufferedMessages.execQuorumWithSameContentsReached(
-        exec.clientRequest(), exec.dependencySet(), this.maxFaults + 1)) {
+        exec.clientRequests(), exec.dependencySet(), this.maxFaults + 1)) {
       logger.info("Did not reach f+1 quorum for exec messages yet.");
       return;
     }
 
     // We have reached quorum
-    var executeMsg = new CommittedCommand(this.seqNum, exec.clientRequest(), exec.dependencySet());
+    var executeMsg = new CommittedCommand(this.seqNum, exec.clientRequests(), exec.dependencySet());
     this.slot.setExec(executeMsg);
     this.conflictChecker.updateCommitedRequest(executeMsg);
     this.requestExecutor.forwardRequestToExecution(executeMsg);

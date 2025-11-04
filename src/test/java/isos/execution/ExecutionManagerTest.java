@@ -7,10 +7,12 @@ import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.execution.manager.ExecutionManager;
 import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,37 +75,40 @@ class ExecutionManagerTest {
     var seqNum = SequenceNumber.of(0, 0);
     OrderedClientRequest firstRequest =
         new OrderedClientRequest(clientId, clientCommand, clientTimestamp);
+    var firstContainer = new ClientRequestContainer(List.of(firstRequest));
 
     var depSet = new DependencySet(Set.of());
 
-    CommittedCommand committed = new CommittedCommand(seqNum, firstRequest, depSet);
+    CommittedCommand committed = new CommittedCommand(seqNum, firstContainer, depSet);
 
     manager.submitCommittedRequest(committed);
 
     OrderedClientRequest secondRequest = new OrderedClientRequest(1, clientCommand, 2000);
+    var secondContainer = new ClientRequestContainer(List.of(secondRequest));
 
     var dependencySeqNum = SequenceNumber.of(0, 1);
     OrderedClientRequest secondRequestDependency = new OrderedClientRequest(2, clientCommand, 1500);
+    var secondDependencyContainer = new ClientRequestContainer(List.of(secondRequestDependency));
 
     // Submit the command and dependency out of order to test
     manager.submitCommittedRequest(
         new CommittedCommand(
-            SequenceNumber.of(0, 2), secondRequest, new DependencySet(Set.of(dependencySeqNum))));
+            SequenceNumber.of(0, 2), secondContainer, new DependencySet(Set.of(dependencySeqNum))));
 
     Thread.sleep(1000);
 
     manager.submitCommittedRequest(
         new CommittedCommand(
-            dependencySeqNum, secondRequestDependency, new DependencySet(Set.of())));
+            dependencySeqNum, secondDependencyContainer, new DependencySet(Set.of())));
 
-    var execCaptor = ArgumentCaptor.forClass(OrderedClientRequest.class);
+    var execCaptor = ArgumentCaptor.forClass(ClientRequestContainer.class);
     verify(executor, timeout(500).times(3)).execute(execCaptor.capture());
 
     var actualValueList = execCaptor.getAllValues();
 
-    assertEquals(firstRequest, actualValueList.getFirst()); // SeqNum 0.0
-    assertEquals(secondRequestDependency, actualValueList.get(1)); // SeqNum 0.1
-    assertEquals(secondRequest, actualValueList.get(2)); // SeqNum 0.2
+    assertEquals(firstContainer, actualValueList.getFirst()); // SeqNum 0.0
+    assertEquals(secondDependencyContainer, actualValueList.get(1)); // SeqNum 0.1
+    assertEquals(secondContainer, actualValueList.get(2)); // SeqNum 0.2
 
     // Stop the thread and wait for join
     managerThread.interrupt();

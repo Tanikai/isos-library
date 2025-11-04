@@ -1,6 +1,7 @@
 package isos.message.replica.fast;
 
 import isos.consensus.model.SequenceNumber;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.message.client.OrderedClientRequest;
@@ -13,9 +14,9 @@ import java.util.Objects;
  * null.
  *
  * @param depPropose
- * @param request
+ * @param requests A container of 1-n client requests
  */
-public record DepProposeWithRequest(DepProposeMessage depPropose, OrderedClientRequest request)
+public record DepProposeWithRequest(DepProposeMessage depPropose, ClientRequestContainer requests)
     implements ISOSMessage, Serializable {
 
   @Override
@@ -38,11 +39,11 @@ public record DepProposeWithRequest(DepProposeMessage depPropose, OrderedClientR
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     DepProposeWithRequest that = (DepProposeWithRequest) o;
-    return Objects.equals(depPropose, that.depPropose) && Objects.equals(request, that.request);
+    return Objects.equals(depPropose, that.depPropose) && Objects.equals(requests, that.requests);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(depPropose, request);
+    return Objects.hash(depPropose, requests);
   }
 }

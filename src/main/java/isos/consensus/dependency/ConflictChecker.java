@@ -4,6 +4,7 @@ import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.execution.CommittedCommand;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 
 /**
  * The ConflictChecker interface is used to get the compact dependency set of a request. In the
@@ -19,7 +20,7 @@ public interface ConflictChecker {
    * @param deps Dependencies that were calculated with {@link
    *     #getCompactDependencySet(OrderedClientRequest)}
    */
-  void addClientRequest(SequenceNumber slot, OrderedClientRequest r, DependencySet deps);
+  void addClientRequest(SequenceNumber slot, ClientRequestContainer r, DependencySet deps);
 
   /**
    * Required during a view change, when a NewView message is received and a request is overwritten
@@ -31,7 +32,7 @@ public interface ConflictChecker {
    * @param slot
    * @param r
    */
-  void overwriteClientRequest(SequenceNumber slot, OrderedClientRequest r);
+  void overwriteClientRequest(SequenceNumber slot, ClientRequestContainer r);
 
   /**
    * When a request gets committed, its dependency set can change. Thus, we need a separate function
@@ -59,5 +60,5 @@ public interface ConflictChecker {
    *
    * @return
    */
-  DependencySet getCompactDependencySet(SequenceNumber seqNum, OrderedClientRequest r);
+  DependencySet getCompactDependencySet(SequenceNumber seqNum, ClientRequestContainer r);
 }

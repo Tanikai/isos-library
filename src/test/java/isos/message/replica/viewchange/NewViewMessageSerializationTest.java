@@ -3,6 +3,7 @@ package isos.message.replica.viewchange;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.message.replica.fast.DepVerifyMessage;
@@ -33,7 +34,8 @@ class NewViewMessageSerializationTest {
         new DepProposeMessage(
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
-    DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, req);
+    var container = new ClientRequestContainer(List.of(req));
+    DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, container);
     List<DepVerifyMessage> depVerifys = new ArrayList<>();
     depVerifys.add(new DepVerifyMessage(seqNum, ReplicaId.of(3), "hash", new DependencySet()));
     Set<ViewChangeMessage> viewChanges = new HashSet<>();
@@ -65,7 +67,7 @@ class NewViewMessageSerializationTest {
     assertEquals(original.viewChanges(), deserialized.viewChanges());
     DepProposeWithRequest dpDeserialized = deserialized.depPropose();
     assertEquals(dp.depPropose(), dpDeserialized.depPropose());
-    assertEquals(dp.request(), dpDeserialized.request());
+    assertEquals(dp.requests(), dpDeserialized.requests());
   }
 
   @Test
@@ -113,7 +115,8 @@ class NewViewMessageSerializationTest {
         new DepProposeMessage(
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
-    DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, req);
+    var container = new ClientRequestContainer(List.of(req));
+    DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, container);
     Set<ViewChangeMessage> viewChanges = new HashSet<>();
     viewChanges.add(new ViewChangeMessage(seqNum, viewNumber, ReplicaId.of(4), null));
 
@@ -142,6 +145,6 @@ class NewViewMessageSerializationTest {
     assertEquals(original.viewChanges(), deserialized.viewChanges());
     DepProposeWithRequest dpDeserialized = deserialized.depPropose();
     assertEquals(dp.depPropose(), dpDeserialized.depPropose());
-    assertEquals(dp.request(), dpDeserialized.request());
+    assertEquals(dp.requests(), dpDeserialized.requests());
   }
 }

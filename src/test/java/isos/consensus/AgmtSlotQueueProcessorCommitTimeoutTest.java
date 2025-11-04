@@ -5,6 +5,7 @@ import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -13,6 +14,7 @@ import isos.utils.ViewNumber;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
@@ -30,8 +32,9 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
         new DepProposeMessage(
             seqNum, coordinatorId, "hash123", new DependencySet(), new HashSet<>());
     OrderedClientRequest clientRequest = mock(OrderedClientRequest.class);
+    var container = new ClientRequestContainer(List.of(clientRequest));
     DepProposeWithRequest depProposeWithRequest =
-        new DepProposeWithRequest(depPropose, clientRequest);
+        new DepProposeWithRequest(depPropose, container);
 
     AgreementSlot slot = new AgreementSlot(seqNum);
 

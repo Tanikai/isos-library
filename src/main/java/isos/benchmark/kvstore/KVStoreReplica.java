@@ -7,6 +7,7 @@ import isos.benchmark.kvstore.model.KVMessage;
 import isos.benchmark.kvstore.model.KVCommandType;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,76 +73,92 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
   /**
    * Conflict predicate for the KV store.
    *
+   * <p>Time complexity: O(n+m), where n is length(r1), and m is length(r2)
+   *
    * @param r1
    * @param r2
    * @return
    */
-  private boolean doesCommandConflict(OrderedClientRequest r1, OrderedClientRequest r2) {
-    KVMessage<K, V> cmd1 = r1.getDeserializedCommand();
-    KVMessage<K, V> cmd2 = r2.getDeserializedCommand();
+  private boolean doesCommandConflict(ClientRequestContainer r1, ClientRequestContainer r2) {
+    HashMap<K, KVCommandType> requests = new HashMap<>();
 
-    // TODO Kai: conflict rules for keySet, size? Do they conflict with all requests?
-
-    // If two commands access different keys, they do not conflict
-    if (!cmd1.key().equals(cmd2.key())) {
-      return false;
+    for (OrderedClientRequest r : r1.getRequests()) {
+      KVMessage<K, V> cmd = r.getDeserializedCommand();
+      requests.put(cmd.key(), cmd.commandType());
     }
 
-    // Same key -> now we have to check whether read / write
-    // If both commands are GET (read), they do not conflict with each other
-    if (cmd1.commandType().equals(KVCommandType.GET)
-        && cmd2.commandType().equals(KVCommandType.GET)) {
-      return false;
+    for (OrderedClientRequest r : r2.getRequests()) {
+      KVMessage<K, V> cmd = r.getDeserializedCommand();
+      KVCommandType sameKeyCmdType = requests.get(cmd.key());
+      // If two commands access different keys, they do not conflict
+      if (sameKeyCmdType == null) {
+        continue;
+      }
+
+      // Same key -> now we have to check whether read / write
+      // If both commands are GET (read), they do not conflict with each other
+      if (cmd.commandType().equals(KVCommandType.GET) && sameKeyCmdType.equals(KVCommandType.GET)) {
+        continue;
+      }
+
+      // Else, if both of them are write, they conflict each other (different results based on
+      // execution order)
+      // If one of them is write and the other is read, they conflict as well (reads should return
+      // the
+      // current value of the write)
+      // If keys from one of each batch conflict with each other, the whole batch conflicts with
+      // each other
+      return true;
     }
 
-    // Else, if both of them are write, they conflict each other (different results based on
-    // execution order)
-    // If one of them is write and the other is read, they conflict as well (reads should return the
-    // current value of the write)
-    return true;
+    // If no commands from a batch conflict with the ones from the other batch, then the batches do
+    // not conflict with each other
+    return false;
   }
 
   /**
    * @param r
    */
-  private void executeClientRequest(OrderedClientRequest r) {
-    KVMessage<K, V> cmd = r.getDeserializedCommand();
+  private void executeClientRequest(ClientRequestContainer container) {
+    for (OrderedClientRequest r : container.getRequests()) {
+      KVMessage<K, V> cmd = r.getDeserializedCommand();
 
-    OrderedClientReply response;
-    try {
-      switch (cmd.commandType()) {
-        case GET -> {
-          KVMessage<K, V> payload =
-              new KVMessage<>(
-                  KVCommandType.GET, cmd.key(), this.kvState.getOrDefault(cmd.key(), null));
-          response = new OrderedClientReply(KVMessage.toBytes(payload));
-        }
-        case PUT -> {
-          this.kvState.put(cmd.key(), cmd.data());
+      OrderedClientReply response;
+      try {
+        switch (cmd.commandType()) {
+          case GET -> {
+            KVMessage<K, V> payload =
+                new KVMessage<>(
+                    KVCommandType.GET, cmd.key(), this.kvState.getOrDefault(cmd.key(), null));
+            response = new OrderedClientReply(KVMessage.toBytes(payload));
+          }
+          case PUT -> {
+            this.kvState.put(cmd.key(), cmd.data());
 
-          KVMessage<K, V> payload =
-              new KVMessage<>(
-                  KVCommandType.GET, cmd.key(), this.kvState.getOrDefault(cmd.key(), null));
-          response = new OrderedClientReply(KVMessage.toBytes(payload));
+            KVMessage<K, V> payload =
+                new KVMessage<>(
+                    KVCommandType.GET, cmd.key(), this.kvState.getOrDefault(cmd.key(), null));
+            response = new OrderedClientReply(KVMessage.toBytes(payload));
+          }
+          case GET_SIZE -> {
+            KVMessage<K, V> payload = new KVMessage<>(KVCommandType.GET_SIZE, this.kvState.size());
+            response = new OrderedClientReply(KVMessage.toBytes(payload));
+          }
+          case GET_KEYSET -> {
+            KVMessage<K, V> payload =
+                new KVMessage<>(KVCommandType.GET_KEYSET, new HashSet<>(this.kvState.keySet()));
+            response = new OrderedClientReply(KVMessage.toBytes(payload));
+          }
+          default -> {
+            logger.error("Unknown command type. Cannot execute client request");
+            return;
+          }
         }
-        case GET_SIZE -> {
-          KVMessage<K, V> payload = new KVMessage<>(KVCommandType.GET_SIZE, this.kvState.size());
-          response = new OrderedClientReply(KVMessage.toBytes(payload));
-        }
-        case GET_KEYSET -> {
-          KVMessage<K, V> payload =
-              new KVMessage<>(KVCommandType.GET_KEYSET, new HashSet<>(this.kvState.keySet()));
-          response = new OrderedClientReply(KVMessage.toBytes(payload));
-        }
-        default -> {
-          logger.error("Unknown command type. Cannot execute client request");
-          return;
-        }
+
+        this.app.sendClientReply(r, response);
+      } catch (Exception e) {
+        logger.error("Exception while sending client reply: {}", e.getMessage());
       }
-
-      this.app.sendClientReply(r, response);
-    } catch (Exception e) {
-      logger.error("Exception while sending client reply: {}", e.getMessage());
     }
   }
 }

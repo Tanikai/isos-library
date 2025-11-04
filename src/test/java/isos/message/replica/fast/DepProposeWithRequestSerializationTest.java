@@ -5,11 +5,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.message.client.OrderedClientRequest;
+import isos.message.replica.ClientRequestContainer;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.utils.ReplicaId;
 import java.io.*;
 import java.util.HashSet;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 class DepProposeWithRequestSerializationTest {
@@ -37,10 +40,11 @@ class DepProposeWithRequestSerializationTest {
     byte[] payload = {1, 2, 3, 4, 5};
     long timestamp = 12345;
     OrderedClientRequest request = new OrderedClientRequest(clientId, payload, timestamp);
-    DepProposeWithRequest original = new DepProposeWithRequest(depPropose, request);
+    var container = new ClientRequestContainer(List.of(request));
+    DepProposeWithRequest original = new DepProposeWithRequest(depPropose, container);
     DepProposeWithRequest deserialized = serializeAndDeserialize(original);
     assertEquals(original, deserialized);
-    assertNotNull(deserialized.request());
+    assertNotNull(deserialized.requests());
   }
 
   @Test
@@ -53,6 +57,6 @@ class DepProposeWithRequestSerializationTest {
     DepProposeWithRequest original = new DepProposeWithRequest(depPropose, null);
     DepProposeWithRequest deserialized = serializeAndDeserialize(original);
     assertEquals(original, deserialized);
-    assertNull(deserialized.request());
+    assertNull(deserialized.requests());
   }
 }
