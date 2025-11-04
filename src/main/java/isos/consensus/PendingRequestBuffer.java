@@ -13,36 +13,56 @@ public class PendingRequestBuffer {
 
   private final ConcurrentLinkedQueue<OrderedClientRequest> pendingRequests;
   private final int batchTimeout;
+  private final long batchTimeoutNanos;
   private final int maxBatchCount;
   private final int maxBatchBytes;
 
   //
   private final ScheduledExecutorService scheduledExecutor;
 
+  private long lastRequestAdded;
+
   private final ReentrantLock messagesLock = new ReentrantLock();
   private final Condition batchReadyCond = messagesLock.newCondition();
 
   public PendingRequestBuffer(int batchTimeoutMillis, int maxBatchCount, int maxBatchBytes) {
-    if (batchTimeoutMillis > 0) {
-      this.scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
-
-      this.scheduledExecutor.scheduleAtFixedRate(
-          this::notifyBatchReady, // Unblock propose thread in intervals to notify
-          batchTimeoutMillis,
-          batchTimeoutMillis,
-          TimeUnit.MILLISECONDS);
-    } else {
-      this.scheduledExecutor = null;
-    }
-
     this.pendingRequests = new ConcurrentLinkedQueue<>();
     this.maxBatchCount = maxBatchCount;
     this.maxBatchBytes = maxBatchBytes;
     this.batchTimeout = batchTimeoutMillis;
+    this.batchTimeoutNanos = TimeUnit.MILLISECONDS.toNanos(batchTimeoutMillis);
+
+    if (batchTimeoutMillis > 0) {
+      this.scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+
+      // Unblock propose thread in intervals to notify
+      this.scheduledExecutor.scheduleAtFixedRate(
+          () -> {
+            long now = System.nanoTime();
+            // If the elapsed time from the last added request is smaller than our batch timeout,
+            // wait again.
+            // Uses polling, but for high request frequencies (e.g., benchmarks), this should be
+            // more efficient than canceling and rescheduling the timeout event.
+            if ((now - lastRequestAdded) < batchTimeoutNanos) {
+              return;
+            }
+            // There is potential for a race condition between this notifyBatchReady and
+            // addPendingRequest so that notifyBatchReady is called twice, but as there is only a
+            // single consumer that is woken up and taking out the requests is done via a concurrent
+            // structure, this should be negligible.
+            this.notifyBatchReady();
+          },
+          batchTimeoutMillis / 2, // use half the timeout for maximum of 1.5x batchTimeout flushing
+          batchTimeoutMillis / 2,
+          TimeUnit.MILLISECONDS);
+    } else {
+      this.scheduledExecutor = null;
+    }
   }
 
   public void addPendingRequest(OrderedClientRequest newRequest) throws IllegalStateException {
     this.pendingRequests.add(newRequest);
+    this.lastRequestAdded = System.nanoTime();
 
     if (this.isNextBatchReady()) {
       notifyBatchReady();
@@ -87,6 +107,7 @@ public class PendingRequestBuffer {
       if (batchSize >= this.maxBatchBytes) break;
 
       var cmd = pendingRequests.poll();
+      if (cmd == null) break;
       batch.add(cmd);
       batchCount++;
       batchSize += cmd.command().length;

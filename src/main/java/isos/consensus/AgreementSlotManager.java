@@ -368,11 +368,9 @@ public class AgreementSlotManager implements RequestReceiver {
         var requests = this.pendingRequests.awaitPendingRequests();
 
         if (requests.getRequests().length == 0) {
-            logger.warn("Batch is empty!");
+            logger.warn("Proposed batch is empty!");
             continue;
         }
-
-        logger.info("Propose batch with {} commands", requests.getRequests().length);
 
         SequenceNumber newSlot =
             this.replicaAgreementSlots.get(ownReplicaId).createLowestSeqNumEntry(requests);
