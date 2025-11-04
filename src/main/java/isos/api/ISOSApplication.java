@@ -143,7 +143,7 @@ public class ISOSApplication implements MessageHandler {
     this.dependencyGraphBuilder =
         DepGraphBuilderFactory.createDependencyGraphBuilder(
             this.configManager.getStaticConf().getDepGraphExecutionStrategy(),
-            this.configManager.getStaticConf().getExecutionWindowSize());
+            this.configManager.getStaticConf().getexpansionLimitSize());
     logger.info(
         "OPT: DepGraphBuilder Strategy: {}",
         this.configManager.getStaticConf().getDepGraphExecutionStrategy());

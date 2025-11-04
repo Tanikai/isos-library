@@ -45,13 +45,13 @@ public interface DependencyGraphBuilder {
   DependencyGraph buildDependencyGraph(SequenceNumber v);
 
   /**
-   * Executed slots plus slots in execution window.
+   * Executed slots plus slots in expansion limit.
    *
    * Pseudocode: exp_k
    *
    * @return
    */
-  Set<SequenceNumber> getExpansionLimitSlots();
+  Set<SequenceNumber> getExecutionWindow();
 
   /**
    * Calculate dependency graph for slot v. Excludes slots outside the execution window.

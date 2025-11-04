@@ -18,16 +18,14 @@ import java.util.concurrent.ConcurrentMap;
  * directly interpreted as Java code, without any optimizations.
  */
 public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
-  private final Logger logger = LoggerFactory.getLogger(this.getClass());
-
   private final ConcurrentMap<SequenceNumber, Set<SequenceNumber>> committedWithDepsMap;
   private final ConcurrentMap<SequenceNumber, Boolean> executedSet;
-  private final int executionWindowSize;
+  private final int expansionLimitSize;
 
-  public TrivialDependencyGraphBuilder(int executionWindowSize) {
+  public TrivialDependencyGraphBuilder(int expansionLimitSize) {
     this.committedWithDepsMap = new ConcurrentHashMap<>();
     this.executedSet = new ConcurrentHashMap<>();
-    this.executionWindowSize = executionWindowSize;
+    this.expansionLimitSize = expansionLimitSize;
   }
 
   @Override
@@ -87,9 +85,9 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
    * @return
    */
   @Override
-  public Set<SequenceNumber> getExpansionLimitSlots() {
+  public Set<SequenceNumber> getExecutionWindow() {
     return ExecutionUtils.executedAndExecutionWindowSlots(
-        this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.executionWindowSize);
+        this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.expansionLimitSize);
   }
 
   /**
@@ -129,8 +127,6 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
     }
     Set<SequenceNumber> D = new HashSet<>();
     Set<Dependency> edges = new HashSet<>();
-
-    // TODO Kai: should we ignore sequence numbers that we have already calculated?
 
     while (!D.equals(DPrime)) {
       // Pseudocode line 156: D := D'

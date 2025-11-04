@@ -77,7 +77,7 @@ public class TOMConfiguration extends Configuration {
 
   private double pingEwmaAlpha;
   private int replicaPingIntervalMillis;
-  private int executionWindowSize;
+  private int expansionLimitSize;
 
   // Replica Optimizations
   private boolean viewNumberCacheMapEnabled;
@@ -466,11 +466,11 @@ public class TOMConfiguration extends Configuration {
         initialIsosTimeoutDeltaMillis = Integer.parseInt(s);
       }
 
-      s = (String) configs.remove("system.isos.replica.executionWindowSize");
+      s = (String) configs.remove("system.isos.replica.expansionLimitSize");
       if (s == null) {
-        executionWindowSize = 100;
+        expansionLimitSize = 100;
       } else {
-        executionWindowSize = Integer.parseInt(s);
+        expansionLimitSize = Integer.parseInt(s);
       }
 
       s = configs.remove("system.isos.client.pingIntervalMillis");
@@ -765,8 +765,8 @@ public class TOMConfiguration extends Configuration {
     return initialIsosTimeoutDeltaMillis;
   }
 
-  public int getExecutionWindowSize() {
-    return executionWindowSize;
+  public int getexpansionLimitSize() {
+    return expansionLimitSize;
   }
 
   public int getClientPingIntervalMillis() {

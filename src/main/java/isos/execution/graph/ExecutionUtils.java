@@ -22,17 +22,17 @@ public class ExecutionUtils {
    * a request.
    *
    * <p>If a replica has not yet executed slots, the set will contain future slots that might not
-   * have been committed yet (of max. executionWindowSize length). If all slots of a replica are
+   * have been committed yet (of max. expansionLimitSize length). If all slots of a replica are
    * executed, then the set will only contain the executed slots, without the execution window
    * slots.
    *
    * @param committed Committed sequence numbers / agreement slots
    * @param executed Executed sequence numbers / agreement slots
-   * @param executionWindowSize The size of the execution window.
+   * @param expansionLimitSize The size of the expansion limit
    * @return
    */
   public static Set<SequenceNumber> executedAndExecutionWindowSlots(
-          Set<SequenceNumber> committed, Set<SequenceNumber> executed, int executionWindowSize) {
+          Set<SequenceNumber> committed, Set<SequenceNumber> executed, int expansionLimitSize) {
     // We need all slots where the sequence number is smaller than the first not executed request
     // of the replica of that sequence number plus the execution window size.
     // i.e., all v, where v.sequenceCounter < exp(v.replicaId) + k
@@ -59,7 +59,7 @@ public class ExecutionUtils {
                             // number, up to the execution window (excluding)
                             entry -> {
                               // value of entry is the lower bound -> First not executed request
-                              return IntStream.range(0, entry.getValue() + executionWindowSize)
+                              return IntStream.range(0, entry.getValue() + expansionLimitSize)
                                       .mapToObj(seqCounter -> SequenceNumber.of(entry.getKey(), seqCounter));
                             })
                     .collect(Collectors.toSet());

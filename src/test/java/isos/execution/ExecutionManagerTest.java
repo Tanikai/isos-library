@@ -28,7 +28,7 @@ class ExecutionManagerTest {
                 SequenceNumber.of(1, 0),
                 SequenceNumber.of(2, 1)));
     Set<SequenceNumber> executed = Set.of(SequenceNumber.of(2, 1));
-    int executionWindowSize = 3;
+    int expansionLimitSize = 3;
 
     Set<SequenceNumber> expectedSlotsInExecutionWindow =
         Set.of(
@@ -45,7 +45,7 @@ class ExecutionManagerTest {
             SequenceNumber.of(2, 3));
 
     var actualSlots =
-        ExecutionUtils.executedAndExecutionWindowSlots(committed, executed, executionWindowSize);
+        ExecutionUtils.executedAndExecutionWindowSlots(committed, executed, expansionLimitSize);
 
     assertEquals(
         expectedSlotsInExecutionWindow.stream().sorted().toList(),
@@ -55,12 +55,12 @@ class ExecutionManagerTest {
   @Test
   void testExecutionManagerThread() throws InterruptedException {
     var executor = mock(ExecuteInApplication.class);
-    var executionWindowSize = 10;
+    var expansionLimitSize = 10;
     var batchProcessingMaxSize = 10;
     var sccFinder = new TarjanSCC();
     var manager =
         new ExecutionManager(
-            new TrivialDependencyGraphBuilder(executionWindowSize),
+            new TrivialDependencyGraphBuilder(expansionLimitSize),
             sccFinder,
             executor,
             batchProcessingMaxSize);

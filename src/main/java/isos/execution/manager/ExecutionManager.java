@@ -8,7 +8,6 @@ import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.execution.scc.SccFinder;
-import isos.execution.scc.SccUtils;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
@@ -162,7 +161,7 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
 
       // The execution window should be recalculated after SCCs are executed, because the "first
       // not executed request" might change after SCC execution.
-      Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExpansionLimitSlots();
+      Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExecutionWindow();
 
       // logger.info("Slots in window {}", slotsInWindow);
 
@@ -231,7 +230,9 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
                 scc);
           }
 
-          this.execute(notExecutedInScc);
+
+          // submit
+            this.execute(notExecutedInScc);
           didExecuteAgreementSlots = true;
         }
 
@@ -252,7 +253,7 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
       // Reset loop condition
       didExecuteAgreementSlots = false;
 
-      Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExpansionLimitSlots();
+      Set<SequenceNumber> slotsInWindow = this.depGraphBuilder.getExecutionWindow();
       Set<SequenceNumber> committedSlotsInWindowWithoutExecuted = new HashSet<>(slotsInWindow);
       committedSlotsInWindowWithoutExecuted.removeAll(this.executed);
       committedSlotsInWindowWithoutExecuted.retainAll(this.committed);
