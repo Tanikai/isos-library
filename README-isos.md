@@ -39,57 +39,10 @@ class name and the client ID:
 
 ## Configuration
 
-TODO: configuration values for ISOS
-
-```config
-# The length of 
-system.isos.replica.agreementSlotSequenceLength = 5000
-
-# Missing here :
-
-#
-system.isos.replica.initialIsosTimeoutDeltaMillis = 3000
-
-# The size of the expansion window of the 
-system.isos.replica.expansionLimitSize = 100
-
-
-# Timeout for an ordered request (in seconds)
-# Used in ISOS.
-system.client.invokeOrderedTimeout = 20
-
-
-##########################
-### ISOS Configuration ###
-##########################
-
-system.isos.client.initialWaitForPingsTimeoutMillis = 10000
-
-system.isos.client.pingIntervalMillis = 5000
-
-system.isos.replica.pingEwmaAlpha = 0.125
-system.isos.replica.pingIntervalMillis = 3000
-
-system.isos.replica.agreementSlotSequenceLength = 5000
-system.isos.replica.initialIsosTimeoutDeltaMillis = 3000
-system.isos.replica.expansionLimitSize = 100
-
-### ISOS Replica Optimizations
-system.isos.replica.opt.viewNumberCacheMapEnabled = true
-system.isos.replica.opt.sequenceNumberCacheMapEnabled = true
-system.isos.replica.opt.replicaIdCacheMapEnabled = true
-
-# "trivial", "highestPerReplica" (without quotes!)
-system.isos.replica.opt.compactDepSet.strategy = trivial
-
-# "trivial", "cached", "concurrent"
-system.isos.replica.opt.depGraphExecution.strategy = trivial
-
-# "sequentialTarjan", "concurrentTarjan"
-system.isos.replica.opt.scc.strategy = sequentialTarjan
-
-system.isos.replica.opt.deserializedCommandCacheEnabled = true
-```
+To configure ISOS for different workloads and to enable / disable certain
+optimizations, edit the `config/system.config` file. Configuration entries
+relevant to ISOS are in the `ISOS Configuration` section and are marked with
+`Used in ISOS` in all other sections.
 
 ## Profiling
 
