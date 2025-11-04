@@ -76,7 +76,7 @@ public class YCSBClient extends DB {
             Set<String> fields, HashMap<String, ByteIterator> result) {
         HashMap<String, byte[]> results = new HashMap<>();
         YCSBMessage request = YCSBMessage.newReadRequest(table, key, fields, results);
-        byte[] reply = proxy.invokeUnordered(request.getBytes());
+        byte[] reply = proxy.invokeOrdered(request.getBytes());
         YCSBMessage replyMsg = YCSBMessage.getObject(reply);
         return replyMsg.getResult();
     }

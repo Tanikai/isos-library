@@ -1,0 +1,18 @@
+---
+- name: Collect benchmark results from replicas
+  hosts: clients
+  become: yes
+  gather_facts: false
+
+  vars:
+    benchmark_remote_src_dir: /home/ubuntu/benchmark_out_smart/
+    benchmark_local_dst_dir: evaluation/data/
+
+  tasks:
+    - name: Synchronize remote benchmark directory to local machine
+      synchronize:
+        src: "{{ benchmark_remote_src_dir }}"
+        dest: "{{ benchmark_local_dst_dir }}"
+        recursive: yes
+        delete: no
+        mode: pull

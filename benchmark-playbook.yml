@@ -1,0 +1,34 @@
+---
+- name: Deploy ISOS to servers
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  vars:
+    app_src_dir: build/install/library
+    app_dst_dir: /home/ubuntu/bft-smart
+    file_owner: ubuntu
+    file_group: ubuntu
+
+  tasks:
+    - name: Create application directory
+      file:
+        path: "{{ app_dst_dir }}"
+        state: directory
+        owner: "{{ ansible_user | default('root') }}"
+        mode: "0755"
+
+    - name: Copy consensus build directory to replicas
+      synchronize: # copy is slow, synchronize uses rsync
+        src: "{{ app_src_dir }}/"
+        dest: "{{ app_dst_dir }}/"
+        recursive: yes
+        delete: yes
+
+    - name: Set ownership of synchronized files
+      ansible.builtin.file:
+        path: "{{ app_dst_dir }}"
+        owner: "{{ file_owner }}"
+        group: "{{ file_group }}"
+        recurse: true
+      become: true
