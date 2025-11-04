@@ -8,7 +8,6 @@ import isos.communication.ClientMessageWrapper;
 import isos.consensus.AgreementSlotManager;
 import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.dependency.ConflictCheckerFactory;
-import isos.consensus.dependency.TrivialConflictChecker;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.CommittedCommand;
@@ -18,10 +17,8 @@ import isos.execution.manager.ExecutionManager;
 import isos.execution.manager.ISOSExecutionManager;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.execution.graph.DependencyGraphBuilder;
-import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.execution.scc.SccFinder;
 import isos.execution.scc.SccFinderFactory;
-import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.utils.ReplicaId;
@@ -143,7 +140,7 @@ public class ISOSApplication implements MessageHandler {
     this.dependencyGraphBuilder =
         DepGraphBuilderFactory.createDependencyGraphBuilder(
             this.configManager.getStaticConf().getDepGraphExecutionStrategy(),
-            this.configManager.getStaticConf().getexpansionLimitSize());
+            this.configManager.getStaticConf().getExpansionLimitSize());
     logger.info(
         "OPT: DepGraphBuilder Strategy: {}",
         this.configManager.getStaticConf().getDepGraphExecutionStrategy());

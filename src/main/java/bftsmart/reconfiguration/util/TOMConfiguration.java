@@ -468,7 +468,7 @@ public class TOMConfiguration extends Configuration {
 
       s = (String) configs.remove("system.isos.replica.expansionLimitSize");
       if (s == null) {
-        expansionLimitSize = 100;
+        expansionLimitSize = 20;
       } else {
         expansionLimitSize = Integer.parseInt(s);
       }
@@ -765,7 +765,7 @@ public class TOMConfiguration extends Configuration {
     return initialIsosTimeoutDeltaMillis;
   }
 
-  public int getexpansionLimitSize() {
+  public int getExpansionLimitSize() {
     return expansionLimitSize;
   }
 
