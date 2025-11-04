@@ -1,14 +1,15 @@
 package isos.execution.graph.builder;
 
 import isos.execution.graph.DependencyGraphBuilder;
+import isos.execution.graph.optimizations.CachedDependencyGraphBuilder;
 import isos.execution.graph.optimizations.DepGraphExecutionStrategy;
 
 public class DepGraphBuilderFactory {
   public static DependencyGraphBuilder createDependencyGraphBuilder(
-      DepGraphExecutionStrategy strategy, int executionWindowSize) {
+      DepGraphExecutionStrategy strategy, int expansionLimitSize) {
     return switch (strategy) {
-      case TRIVIAL -> new TrivialDependencyGraphBuilder(executionWindowSize);
-      case CACHED -> null;
+      case TRIVIAL -> new TrivialDependencyGraphBuilder(expansionLimitSize);
+      case CACHED -> new CachedDependencyGraphBuilder(expansionLimitSize);
     };
   }
 }
