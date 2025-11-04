@@ -7,7 +7,7 @@ import isos.benchmark.kvstore.model.KVMessage;
 import isos.benchmark.kvstore.model.KVCommandType;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +79,7 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
    * @param r2
    * @return
    */
-  private boolean doesCommandConflict(ClientRequestContainer r1, ClientRequestContainer r2) {
+  private boolean doesCommandConflict(ClientRequestBatch r1, ClientRequestBatch r2) {
     HashMap<K, KVCommandType> requests = new HashMap<>();
 
     for (OrderedClientRequest r : r1.getRequests()) {
@@ -119,7 +119,7 @@ public class KVStoreReplica<K extends Serializable, V extends Serializable> {
   /**
    * @param r
    */
-  private void executeClientRequest(ClientRequestContainer container) {
+  private void executeClientRequest(ClientRequestBatch container) {
     for (OrderedClientRequest r : container.getRequests()) {
       KVMessage<K, V> cmd = r.getDeserializedCommand();
 

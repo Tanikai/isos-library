@@ -1,7 +1,7 @@
 package isos.consensus.dependency;
 
 import isos.execution.scc.SccFinder;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 
 import java.util.function.BiPredicate;
 
@@ -10,8 +10,8 @@ public class ConflictCheckerFactory {
   public static ConflictChecker createConflictChecker(
       CompactDepSetStrategy strategy,
       SccFinder sccFinder,
-      BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict,
-  BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict)
+      BiPredicate<ClientRequestBatch, ClientRequestBatch> defaultConflict,
+  BiPredicate<ClientRequestBatch, ClientRequestBatch> applicationConflict)
   {
     return switch (strategy) {
       case TRIVIAL -> new TrivialConflictChecker(sccFinder, defaultConflict, applicationConflict);

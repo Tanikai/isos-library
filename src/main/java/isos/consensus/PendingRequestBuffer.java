@@ -1,9 +1,8 @@
 package isos.consensus;
 
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -54,7 +53,7 @@ public class PendingRequestBuffer {
    * @return
    * @throws InterruptedException
    */
-  public ClientRequestContainer awaitPendingRequests() throws InterruptedException {
+  public ClientRequestBatch awaitPendingRequests() throws InterruptedException {
     this.messagesLock.lock();
     try {
       if (this.isNextBatchReady()) {
@@ -78,7 +77,7 @@ public class PendingRequestBuffer {
    *
    * @return
    */
-  private ClientRequestContainer getPendingRequests() {
+  private ClientRequestBatch getPendingRequests() {
     List<OrderedClientRequest> batch = new LinkedList<>();
 
     int batchCount = 0;
@@ -93,7 +92,7 @@ public class PendingRequestBuffer {
       batchSize += cmd.command().length;
     }
 
-    return new ClientRequestContainer(batch);
+    return new ClientRequestBatch(batch);
   }
 
   private boolean isNextBatchReady() {

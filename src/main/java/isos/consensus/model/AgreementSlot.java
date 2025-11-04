@@ -4,8 +4,7 @@ import isos.consensus.ViewNumberNotLargerException;
 import isos.consensus.model.viewchange.EmptyCertificate;
 import isos.consensus.model.viewchange.ViewChangeCertificate;
 import isos.execution.CommittedCommand;
-import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepVerifyMessage;
 import isos.message.replica.viewchange.ViewChangeMessage;
@@ -28,7 +27,7 @@ public class AgreementSlot {
   private SequenceNumber seqNum;
   // Batch of 1-n client requests.
   // Each client request contains client ID, client-local timestamp, and command
-  private ClientRequestContainer requests;
+  private ClientRequestBatch requests;
   // p: DepPropose for slot s_j includes fast path quorum F
   private DepProposeMessage depPropose;
 
@@ -76,7 +75,7 @@ public class AgreementSlot {
    *     acts as the coordinator for this agreement slot when this AgreementSlot object is passed to
    *     it. When it is null, it acts as the follower.
    */
-  public AgreementSlot(SequenceNumber seqNum, ClientRequestContainer r) {
+  public AgreementSlot(SequenceNumber seqNum, ClientRequestBatch r) {
     this(
         seqNum,
         r,
@@ -90,7 +89,7 @@ public class AgreementSlot {
 
   public AgreementSlot(
       SequenceNumber seqNum,
-      ClientRequestContainer requests,
+      ClientRequestBatch requests,
       DepProposeMessage depPropose,
       AgreementSlotPhase step,
       Map<ReplicaId, ViewChangeMessage> viewChanges,
@@ -136,11 +135,11 @@ public class AgreementSlot {
     this.seqNum = seqNum;
   }
 
-  public ClientRequestContainer getRequests() {
+  public ClientRequestBatch getRequests() {
     return requests;
   }
 
-  public void setRequests(ClientRequestContainer requests) {
+  public void setRequests(ClientRequestBatch requests) {
     this.requests = requests;
   }
 

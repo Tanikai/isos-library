@@ -8,7 +8,7 @@ import isos.consensus.model.TimeoutConfiguration;
 import isos.execution.ExecutableRequestReceiver;
 import isos.execution.graph.ClientPayloadDeserializer;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -74,7 +74,7 @@ class AgreementSlotManagerWaitForDepsTest {
     assertTrue(waiter.isAlive(), "waitForDeps should be blocking before deps complete");
 
     OrderedClientRequest request = mock(OrderedClientRequest.class);
-    var container = new ClientRequestContainer(Set.of(request));
+    var container = new ClientRequestBatch(Set.of(request));
 
     // Complete each dependency by passing a DepProposeMessage with matching SequenceNumber
     for (SequenceNumber seq : waitDepSet) {

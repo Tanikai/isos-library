@@ -2,8 +2,7 @@ package isos.execution;
 
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
-import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 
 /**
  * A data structure that holds information about a client command that is committed and can be
@@ -15,4 +14,4 @@ import isos.message.replica.ClientRequestContainer;
  *     and the user defined application.
  */
 public record CommittedCommand(
-        SequenceNumber seqNum, ClientRequestContainer clientRequest, DependencySet depSet) {}
+        SequenceNumber seqNum, ClientRequestBatch clientRequest, DependencySet depSet) {}

@@ -2,7 +2,7 @@ package isos.message.replica.viewchange;
 
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.utils.ReplicaId;
@@ -12,7 +12,7 @@ import java.io.Serializable;
 public record ExecMessage(
     SequenceNumber seqNum,
     ReplicaId replicaId,
-    ClientRequestContainer clientRequests,
+    ClientRequestBatch clientRequests,
     DependencySet dependencySet)
     implements ISOSMessage, Serializable {
 

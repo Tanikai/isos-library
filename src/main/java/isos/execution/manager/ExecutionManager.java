@@ -8,8 +8,7 @@ import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.execution.scc.SccFinder;
-import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +42,7 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
   /** Returns the dependencies for a given slot. */
   private final ConcurrentMap<SequenceNumber, DependencySet> deps;
 
-  private final ConcurrentMap<SequenceNumber, ClientRequestContainer> requests;
+  private final ConcurrentMap<SequenceNumber, ClientRequestBatch> requests;
 
   public ExecutionManager(
       DependencyGraphBuilder dependencyGraphBuilder,

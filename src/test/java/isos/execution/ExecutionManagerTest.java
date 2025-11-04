@@ -7,7 +7,7 @@ import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.execution.manager.ExecutionManager;
 import isos.execution.scc.TarjanSCC;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -75,7 +75,7 @@ class ExecutionManagerTest {
     var seqNum = SequenceNumber.of(0, 0);
     OrderedClientRequest firstRequest =
         new OrderedClientRequest(clientId, clientCommand, clientTimestamp);
-    var firstContainer = new ClientRequestContainer(List.of(firstRequest));
+    var firstContainer = new ClientRequestBatch(List.of(firstRequest));
 
     var depSet = new DependencySet(Set.of());
 
@@ -84,11 +84,11 @@ class ExecutionManagerTest {
     manager.submitCommittedRequest(committed);
 
     OrderedClientRequest secondRequest = new OrderedClientRequest(1, clientCommand, 2000);
-    var secondContainer = new ClientRequestContainer(List.of(secondRequest));
+    var secondContainer = new ClientRequestBatch(List.of(secondRequest));
 
     var dependencySeqNum = SequenceNumber.of(0, 1);
     OrderedClientRequest secondRequestDependency = new OrderedClientRequest(2, clientCommand, 1500);
-    var secondDependencyContainer = new ClientRequestContainer(List.of(secondRequestDependency));
+    var secondDependencyContainer = new ClientRequestBatch(List.of(secondRequestDependency));
 
     // Submit the command and dependency out of order to test
     manager.submitCommittedRequest(
@@ -101,7 +101,7 @@ class ExecutionManagerTest {
         new CommittedCommand(
             dependencySeqNum, secondDependencyContainer, new DependencySet(Set.of())));
 
-    var execCaptor = ArgumentCaptor.forClass(ClientRequestContainer.class);
+    var execCaptor = ArgumentCaptor.forClass(ClientRequestBatch.class);
     verify(executor, timeout(500).times(3)).execute(execCaptor.capture());
 
     var actualValueList = execCaptor.getAllValues();

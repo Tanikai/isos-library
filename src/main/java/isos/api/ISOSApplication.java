@@ -21,7 +21,7 @@ import isos.execution.scc.SccFinder;
 import isos.execution.scc.SccFinderFactory;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 import org.slf4j.Logger;
@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.BiPredicate;
@@ -85,13 +84,13 @@ public class ISOSApplication implements MessageHandler {
 
   private final ClientPayloadDeserializer deserializer;
 
-  private final BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict;
-  private final BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict;
+  private final BiPredicate<ClientRequestBatch, ClientRequestBatch> defaultConflict;
+  private final BiPredicate<ClientRequestBatch, ClientRequestBatch> applicationConflict;
 
   public ISOSApplication(
       ConfigurationManager configManager,
       ClientPayloadDeserializer deserializer,
-      BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict,
+      BiPredicate<ClientRequestBatch, ClientRequestBatch> applicationConflict,
       ExecuteInApplication executor)
       throws Exception {
     this.configManager = configManager;

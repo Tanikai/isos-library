@@ -1,7 +1,7 @@
 package isos.consensus.buffer;
 
 import isos.consensus.model.DependencySet;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageType;
 import isos.message.replica.ISOSMessageWithViewNumber;
@@ -223,7 +223,7 @@ public class ISOSMessageBuffer {
   }
 
   public boolean execQuorumWithSameContentsReached(
-      ClientRequestContainer clientRequest, DependencySet depSet, int quorumSize) {
+          ClientRequestBatch clientRequest, DependencySet depSet, int quorumSize) {
     if (!execQuorumSizeReached(quorumSize)) {
       return false;
     }

@@ -10,7 +10,6 @@ import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.consensus.model.viewchange.ReconciliationPathCertificate;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecutableRequestReceiver;
-import isos.message.client.OrderedClientRequest;
 import isos.message.replica.*;
 import isos.message.replica.fast.DepCommitMessage;
 import isos.message.replica.fast.DepProposeMessage;
@@ -553,7 +552,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     var depPropose = depProposeWithR.depPropose();
     // Requests can be null, in the case of ViewChange
-    ClientRequestContainer request = depProposeWithR.requests();
+    ClientRequestBatch request = depProposeWithR.requests();
 
     // Line 22: assert F is valid fast-path quorum
     // TODO Kai: what is a valid fast-path quorum?
@@ -1246,7 +1245,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    ClientRequestContainer dp = this.slot.getExec().clientRequest();
+    ClientRequestBatch dp = this.slot.getExec().clientRequest();
     DependencySet D = this.slot.getExec().depSet();
 
     ReplicaId[] receivers = new ReplicaId[] {queryExec.logicalSender()};

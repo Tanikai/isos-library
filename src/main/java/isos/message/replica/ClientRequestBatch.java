@@ -10,10 +10,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collection;
 
-public class ClientRequestContainer implements Serializable {
+public class ClientRequestBatch implements Serializable {
   OrderedClientRequest[] requests;
 
-  public ClientRequestContainer(Collection<OrderedClientRequest> requests) {
+  public ClientRequestBatch(Collection<OrderedClientRequest> requests) {
     this.requests = requests.toArray(new OrderedClientRequest[0]);
   }
 
@@ -25,7 +25,7 @@ public class ClientRequestContainer implements Serializable {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    ClientRequestContainer that = (ClientRequestContainer) o;
+    ClientRequestBatch that = (ClientRequestBatch) o;
     return Arrays.equals(requests, that.requests);
   }
 

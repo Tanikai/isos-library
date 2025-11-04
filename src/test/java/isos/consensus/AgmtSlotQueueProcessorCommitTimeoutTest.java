@@ -5,7 +5,7 @@ import isos.consensus.dependency.ConflictChecker;
 import isos.consensus.model.*;
 import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
@@ -32,7 +32,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
         new DepProposeMessage(
             seqNum, coordinatorId, "hash123", new DependencySet(), new HashSet<>());
     OrderedClientRequest clientRequest = mock(OrderedClientRequest.class);
-    var container = new ClientRequestContainer(List.of(clientRequest));
+    var container = new ClientRequestBatch(List.of(clientRequest));
     DepProposeWithRequest depProposeWithRequest =
         new DepProposeWithRequest(depPropose, container);
 

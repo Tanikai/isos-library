@@ -4,7 +4,7 @@ import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.consensus.model.viewchange.FastPathCertificate;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.fast.DepProposeMessage;
 import isos.message.replica.fast.DepProposeWithRequest;
 import isos.message.replica.fast.DepVerifyMessage;
@@ -32,7 +32,7 @@ class ViewChangeMessageSerializationTest {
         new DepProposeMessage(
             seqNum, coordinatorId, "hashViewChange", new DependencySet(), new HashSet<>());
     OrderedClientRequest req = new OrderedClientRequest(1, "test123".getBytes(), 0);
-    var container = new ClientRequestContainer(List.of(req));
+    var container = new ClientRequestBatch(List.of(req));
     DepProposeWithRequest dp = new DepProposeWithRequest(depPropose, container);
     List<DepVerifyMessage> depVerifys = new ArrayList<>();
     depVerifys.add(new DepVerifyMessage(seqNum, ReplicaId.of(3), "hash", new DependencySet()));

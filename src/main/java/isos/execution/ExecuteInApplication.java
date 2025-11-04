@@ -1,12 +1,11 @@
 package isos.execution;
 
-import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 
 @FunctionalInterface
 public interface ExecuteInApplication {
   /**
    * @param request The client request that can be executed by the application.
    */
-  void execute(ClientRequestContainer request);
+  void execute(ClientRequestBatch request);
 }

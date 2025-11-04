@@ -3,7 +3,7 @@ package isos.consensus.dependency;
 import isos.consensus.model.DependencySet;
 import isos.consensus.model.SequenceNumber;
 import isos.execution.CommittedCommand;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.utils.ReplicaId;
 
 import java.util.NavigableMap;
@@ -22,16 +22,16 @@ import java.util.stream.Collectors;
  */
 public class HighestConflictEachReplicaChecker implements ConflictChecker {
   private final ConcurrentMap<
-          ReplicaId, ConcurrentNavigableMap<SequenceNumber, ClientRequestContainer>>
+          ReplicaId, ConcurrentNavigableMap<SequenceNumber, ClientRequestBatch>>
       agreementSlots;
 
   // Conflict predicates
-  BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict;
-  BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict;
+  BiPredicate<ClientRequestBatch, ClientRequestBatch> defaultConflict;
+  BiPredicate<ClientRequestBatch, ClientRequestBatch> applicationConflict;
 
   public HighestConflictEachReplicaChecker(
-      BiPredicate<ClientRequestContainer, ClientRequestContainer> defaultConflict,
-      BiPredicate<ClientRequestContainer, ClientRequestContainer> applicationConflict) {
+      BiPredicate<ClientRequestBatch, ClientRequestBatch> defaultConflict,
+      BiPredicate<ClientRequestBatch, ClientRequestBatch> applicationConflict) {
     this.defaultConflict = defaultConflict;
     this.applicationConflict = applicationConflict;
 
@@ -39,7 +39,7 @@ public class HighestConflictEachReplicaChecker implements ConflictChecker {
   }
 
   @Override
-  public void addClientRequest(SequenceNumber slot, ClientRequestContainer r, DependencySet deps) {
+  public void addClientRequest(SequenceNumber slot, ClientRequestBatch r, DependencySet deps) {
     var depsByReplicaId =
         this.agreementSlots.computeIfAbsent(
             slot.replicaIdRec(), x -> new ConcurrentSkipListMap<>());
@@ -47,7 +47,7 @@ public class HighestConflictEachReplicaChecker implements ConflictChecker {
   }
 
   @Override
-  public void overwriteClientRequest(SequenceNumber slot, ClientRequestContainer r) {
+  public void overwriteClientRequest(SequenceNumber slot, ClientRequestBatch r) {
     var depsByReplicaId =
         this.agreementSlots.computeIfAbsent(
             slot.replicaIdRec(), x -> new ConcurrentSkipListMap<>());
@@ -61,14 +61,14 @@ public class HighestConflictEachReplicaChecker implements ConflictChecker {
   }
 
   @Override
-  public DependencySet getCompactDependencySet(SequenceNumber seqNum, ClientRequestContainer r) {
+  public DependencySet getCompactDependencySet(SequenceNumber seqNum, ClientRequestBatch r) {
     Set<SequenceNumber> depSet =
         this.agreementSlots.entrySet().parallelStream()
             .map(
                 entry -> {
                   // For each replicaId, we iterate through the dependencies top->down
                   // (newest->oldest), and return the first conflict
-                  NavigableMap<SequenceNumber, ClientRequestContainer> requests =
+                  NavigableMap<SequenceNumber, ClientRequestBatch> requests =
                       entry.getValue().descendingMap();
                   for (var candidate : requests.entrySet()) {
                     if (this.defaultConflict

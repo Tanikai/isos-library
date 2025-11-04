@@ -4,11 +4,9 @@ import bftsmart.configuration.ConfigurationManager;
 import bftsmart.demo.ycsb.YCSBMessage;
 import bftsmart.demo.ycsb.YCSBTable;
 import isos.api.ISOSApplication;
-import isos.benchmark.kvstore.model.KVCommandType;
-import isos.benchmark.kvstore.model.KVMessage;
 import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +65,7 @@ public class IsosYcsbServer {
     }
   }
 
-  private boolean conflict(ClientRequestContainer r1, ClientRequestContainer r2) {
+  private boolean conflict(ClientRequestBatch r1, ClientRequestBatch r2) {
     HashMap<String, YCSBMessage.Type> requests = new HashMap<>();
 
     for (OrderedClientRequest r : r1.getRequests()) {
@@ -100,7 +98,7 @@ public class IsosYcsbServer {
     return false;
   }
 
-  private void executeClientRequest(ClientRequestContainer container) {
+  private void executeClientRequest(ClientRequestBatch container) {
     for (OrderedClientRequest r : container.getRequests()) {
       YCSBMessage command = r.getDeserializedCommand();
       YCSBMessage reply = YCSBMessage.newErrorMessage("Undefined response");

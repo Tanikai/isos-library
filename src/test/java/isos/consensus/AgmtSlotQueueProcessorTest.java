@@ -6,7 +6,7 @@ import isos.consensus.model.*;
 import isos.execution.CommittedCommand;
 import isos.execution.ExecutableRequestReceiver;
 import isos.message.client.OrderedClientRequest;
-import isos.message.replica.ClientRequestContainer;
+import isos.message.replica.ClientRequestBatch;
 import isos.message.replica.ISOSMessage;
 import isos.message.replica.ISOSMessageWrapper;
 import isos.message.replica.fast.DepCommitMessage;
@@ -66,7 +66,7 @@ class AgmtSlotQueueProcessorTest {
     var seqNum = SequenceNumber.of(ownReplicaId, 1);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var container = new ClientRequestContainer(Set.of(clientRequest));
+    var container = new ClientRequestBatch(Set.of(clientRequest));
     var clientRequestHash = container.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
@@ -176,7 +176,7 @@ class AgmtSlotQueueProcessorTest {
     var seqNum = SequenceNumber.of(ownReplicaId, 1);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var container = new ClientRequestContainer(List.of(clientRequest));
+    var container = new ClientRequestBatch(List.of(clientRequest));
     var clientRequestHash = container.calculateHash();
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
@@ -317,7 +317,7 @@ class AgmtSlotQueueProcessorTest {
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var container = new ClientRequestContainer(List.of(clientRequest));
+    var container = new ClientRequestBatch(List.of(clientRequest));
     var clientRequestHash = container.calculateHash();
     var depPropose =
         new DepProposeMessage(seqNum, coordinatorId, clientRequestHash, depSet, followerQuorum);
@@ -417,7 +417,7 @@ class AgmtSlotQueueProcessorTest {
     var followerQuorum = Set.of(ownReplicaId, otherFollowerId);
 
     var clientRequest = new OrderedClientRequest(1, "MyCommand".getBytes(), 0L);
-    var container = new ClientRequestContainer(List.of(clientRequest));
+    var container = new ClientRequestBatch(List.of(clientRequest));
     var clientRequestHash = container.calculateHash();
     var depPropose =
         new DepProposeMessage(seqNum, coordinatorId, clientRequestHash, depSet, followerQuorum);
@@ -520,7 +520,7 @@ class AgmtSlotQueueProcessorTest {
     var otherReplicaIds = new ReplicaId[] {ReplicaId.of(1), ReplicaId.of(0), ReplicaId.of(3)};
     var seqNum = SequenceNumber.of(ownReplicaId, 2);
     var clientRequest = new OrderedClientRequest(2, "OutOfOrder".getBytes(), 0L);
-    var container = new ClientRequestContainer(List.of(clientRequest));
+    var container = new ClientRequestBatch(List.of(clientRequest));
 
     ConflictChecker conflictChecker = mock(ConflictChecker.class);
     when(conflictChecker.getCompactDependencySet(any(), any()))
