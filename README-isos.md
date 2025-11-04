@@ -9,7 +9,11 @@ networking stack.
 
 ### Tooling
 
-- Formatting: `google-java-format`
+- Build system: Gradle
+- Formatting: [google-java-format](https://github.com/google/google-java-format)
+- Running replicas simultaneously with single command, for development and
+  benchmarking: [tmux](https://github.com/tmux/tmux/wiki)
+- Deployment, Benchmark Result Collection: [Ansible](https://docs.ansible.com/)
 
 ### Running locally
 
@@ -47,7 +51,44 @@ system.isos.replica.agreementSlotSequenceLength = 5000
 system.isos.replica.initialIsosTimeoutDeltaMillis = 3000
 
 # The size of the expansion window of the 
-system.isos.replica.executionWindowSize = 100
+system.isos.replica.expansionLimitSize = 100
+
+
+# Timeout for an ordered request (in seconds)
+# Used in ISOS.
+system.client.invokeOrderedTimeout = 20
+
+
+##########################
+### ISOS Configuration ###
+##########################
+
+system.isos.client.initialWaitForPingsTimeoutMillis = 10000
+
+system.isos.client.pingIntervalMillis = 5000
+
+system.isos.replica.pingEwmaAlpha = 0.125
+system.isos.replica.pingIntervalMillis = 3000
+
+system.isos.replica.agreementSlotSequenceLength = 5000
+system.isos.replica.initialIsosTimeoutDeltaMillis = 3000
+system.isos.replica.expansionLimitSize = 100
+
+### ISOS Replica Optimizations
+system.isos.replica.opt.viewNumberCacheMapEnabled = true
+system.isos.replica.opt.sequenceNumberCacheMapEnabled = true
+system.isos.replica.opt.replicaIdCacheMapEnabled = true
+
+# "trivial", "highestPerReplica" (without quotes!)
+system.isos.replica.opt.compactDepSet.strategy = trivial
+
+# "trivial", "cached", "concurrent"
+system.isos.replica.opt.depGraphExecution.strategy = trivial
+
+# "sequentialTarjan", "concurrentTarjan"
+system.isos.replica.opt.scc.strategy = sequentialTarjan
+
+system.isos.replica.opt.deserializedCommandCacheEnabled = true
 ```
 
 ## Profiling
@@ -195,7 +236,18 @@ Run the YCSB replicas in each region:
 ./ssh-quad-replica.sh replica_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbServer ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3
 ```
 
-Then, run a client node in each region with the following command:
+Then, SSH into a single node and load the DB with initial YCSB data. This is
+only executed on a single node as the initial data only has to be loaded once.
+Use a client ID other than 0-3 to prevent the load phase from skewing the
+results of one of the clients during the transaction phase.
+
+```shell
+ssh ubuntu@host0
+cd isos
+/load_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w trivial_implementation 5
+```
+
+Then, run a YCSB client node in each region with the following command:
 
 ```shell
 ./ssh-quad-replica.sh client_ycsb_isos.sh isos.benchmark.ycsb.IsosYcsbClient isos_95r_5w trivial_implementation ubuntu@client0 ubuntu@client1 ubuntu@client2 ubuntu@client3
@@ -208,6 +260,13 @@ Meaning of arguments:
 3. Workload name from `config/ycsb_workloads/` directory
 4. Benchmark name (for result collection)
 5. Remaining four arguments: Username and Hostname for remote client nodes
+
+The measurements are stored in
+`~/benchmark_out/ycsb_{BENCH_NAME}/ycsb_l_{BENCH_NAME}_*.csv`
+for the load phase and
+`~/benchmark_out/ycsb_{BENCH_NAME}/ycsb_t_{BENCH_NAME}_*.csv`
+for the transaction phase, where `{BENCH_NAME}` is the benchmark name and `*` is
+the passed client ID.
 
 #### Local remote and clients
 
