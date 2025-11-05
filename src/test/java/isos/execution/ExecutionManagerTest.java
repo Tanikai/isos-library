@@ -7,8 +7,10 @@ import isos.execution.graph.builder.TrivialDependencyGraphBuilder;
 import isos.execution.graph.optimizations.CachedDependencyGraphBuilder;
 import isos.execution.manager.ExecutionManager;
 import isos.execution.scc.TarjanSCC;
+import isos.message.client.OrderedClientReply;
 import isos.message.client.OrderedClientRequest;
 import isos.message.replica.ClientRequestBatch;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -97,19 +99,26 @@ class ExecutionManagerTest {
             SequenceNumber.of(0, 2), secondContainer, new DependencySet(Set.of(dependencySeqNum))));
 
     Thread.sleep(1000);
-
     manager.submitCommittedRequest(
         new CommittedCommand(
             dependencySeqNum, secondDependencyContainer, new DependencySet(Set.of())));
 
+    var thirdRequest = new OrderedClientRequest(3, clientCommand, 123);
+    var duplicateContainer = new ClientRequestBatch(List.of(firstRequest, thirdRequest));
+    manager.submitCommittedRequest(
+        new CommittedCommand(new SequenceNumber(0, 3), duplicateContainer, new DependencySet()));
+
     var execCaptor = ArgumentCaptor.forClass(ClientRequestBatch.class);
-    verify(executor, timeout(500).times(3)).execute(execCaptor.capture());
+    verify(executor, timeout(500).times(4)).execute(execCaptor.capture());
 
     var actualValueList = execCaptor.getAllValues();
 
     assertEquals(firstContainer, actualValueList.getFirst()); // SeqNum 0.0
     assertEquals(secondDependencyContainer, actualValueList.get(1)); // SeqNum 0.1
     assertEquals(secondContainer, actualValueList.get(2)); // SeqNum 0.2
+    assertEquals(
+        1, actualValueList.get(3).getRequests().length); // SeqNum 0.0 should not be executed twice
+    assertEquals(thirdRequest, actualValueList.get(3).getRequests()[0]);
 
     // Stop the thread and wait for join
     managerThread.interrupt();

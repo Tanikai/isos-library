@@ -44,6 +44,11 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
 
   private final ConcurrentMap<SequenceNumber, ClientRequestBatch> requests;
 
+  private record ExecutedClientRequest(int clientId, long clientLocalTimestamp) {}
+
+  /** Keep track of client requests that have already been executed. */
+  private final Set<ExecutedClientRequest> executedClientTimestamps;
+
   public ExecutionManager(
       DependencyGraphBuilder dependencyGraphBuilder,
       SccFinder sccFinder,
@@ -58,6 +63,7 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
     this.requests = new ConcurrentHashMap<>();
     this.executor = executor;
     this.batchProcessingMaxSize = batchProcessingMaxSize;
+    this.executedClientTimestamps = ConcurrentHashMap.newKeySet();
   }
 
   /**
@@ -77,18 +83,34 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
    */
   private void execute(List<SequenceNumber> scc) {
     for (var seqNum : ExecutionManager.sortSCCVertices(scc)) {
-      var request = this.requests.get(seqNum);
-      if (request == null) {
+      var requestBatch = this.requests.get(seqNum);
+      if (requestBatch == null) {
         throw new RuntimeException(
             String.format(
                 "Cannot execute request with SeqNum %s, not present in requests. This is a bug.",
                 seqNum));
       }
+
+      var deduplicatedRequests =
+          Arrays.stream(requestBatch.getRequests())
+              .filter(
+                  req ->
+                      !this.executedClientTimestamps.contains(
+                          new ExecutedClientRequest(req.clientId(), req.clientLocalTimestamp())))
+              .toList();
+
       logger.debug(
-          "Execute request {} with dependencies {}", seqNum, this.deps.get(seqNum).dependencies());
-      this.executor.execute(request);
+          "Execute request batch {} with dependencies {}",
+          seqNum,
+          this.deps.get(seqNum).dependencies());
+      this.executor.execute(new ClientRequestBatch(deduplicatedRequests));
       this.depGraphBuilder.addExecuted(seqNum);
       this.executed.add(seqNum);
+
+      this.executedClientTimestamps.addAll(
+          deduplicatedRequests.stream()
+              .map(req -> new ExecutedClientRequest(req.clientId(), req.clientLocalTimestamp()))
+              .toList());
       // rhist variable is ignored
     }
   }
@@ -213,28 +235,12 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
         var adjList = DependencyGraph.toAdjacencyList(depGraph);
         List<Set<SequenceNumber>> SCCs = sccFinder.getSCC(adjList, depGraph.slots());
 
-        for (Set<SequenceNumber> scc : SCCs) {
-          // Line 178: Normal case execution
-          // Because the Dependency Graph can contain slots that are already executed, we have to
-          // filter out the already executed ones
-          // Ordering of vertices in the SCC for request execution is done in the execute function
-          var notExecutedInScc =
-              scc.stream().filter(element -> !this.executed.contains(element)).toList();
-          if (notExecutedInScc.isEmpty()) {
-            continue;
-          }
-          if (scc.size() > 1) {
-            logger.info(
-                "Normal case: execute unexecuted {} from SCC {} (more than 1 nodes in SCC)",
-                notExecutedInScc,
-                scc);
-          }
-
-
-          // submit
-            this.execute(notExecutedInScc);
-          didExecuteAgreementSlots = true;
+        if (!this.parallelSccExecution(SCCs)) {
+          // If we did not execute anything,
+          continue;
         }
+
+        didExecuteAgreementSlots = true;
 
         // We have executed some slots. Now we have to recalculate the execution window
         break;
@@ -243,6 +249,36 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
       // committed sequence numbers v, but we didn't execute any slot, because the dependencies of
       // each v is not fully contained in the execution window.
     } while (didExecuteAgreementSlots);
+  }
+
+  /**
+   * @param SCCs
+   * @return True if at least 1 SCC was executed, false otherwise.
+   */
+  private boolean parallelSccExecution(List<Set<SequenceNumber>> SCCs) {
+    boolean didExecuteAgreementSlots = false;
+    for (Set<SequenceNumber> scc : SCCs) {
+      // Line 178: Normal case execution
+      // Because the Dependency Graph can contain slots that are already executed, we have to
+      // filter out the already executed ones
+      // Ordering of vertices in the SCC for request execution is done in the execute function
+      List<SequenceNumber> notExecutedInScc =
+          scc.stream().filter(element -> !this.executed.contains(element)).toList();
+      if (notExecutedInScc.isEmpty()) {
+        continue;
+      }
+      if (scc.size() > 1) {
+        logger.info(
+            "Normal case: execute unexecuted {} from SCC {} (more than 1 nodes in SCC)",
+            notExecutedInScc,
+            scc);
+      }
+
+      // submit
+      this.execute(notExecutedInScc);
+      didExecuteAgreementSlots = true;
+    }
+    return didExecuteAgreementSlots;
   }
 
   private void doUnblockExecution() {
