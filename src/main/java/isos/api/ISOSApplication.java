@@ -140,6 +140,12 @@ public class ISOSApplication implements MessageHandler {
 
     this.scs = new ServerCommunicationSystem(configManager, this);
 
+    logger.info(
+        "OPT: Message batching with max {} batch count, max {} batch size in bytes, {} flushing timeout",
+        configManager.getStaticConf().getMaxBatchSize(),
+        configManager.getStaticConf().getMaxBatchSizeInBytes(),
+        configManager.getStaticConf().getBatchTimeout());
+
     this.agrSlotManager =
         new AgreementSlotManager(
             ownReplicaId,
@@ -168,11 +174,7 @@ public class ISOSApplication implements MessageHandler {
         this.configManager.getStaticConf().getDepGraphExecutionStrategy());
 
     this.executionManager =
-        new ExecutionManager(
-            this.dependencyGraphBuilder,
-            this.sccFinder,
-            executor,
-            100);
+        new ExecutionManager(this.dependencyGraphBuilder, this.sccFinder, executor, 100);
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
   }
 
