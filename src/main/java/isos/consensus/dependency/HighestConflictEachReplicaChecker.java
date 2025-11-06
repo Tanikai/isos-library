@@ -79,7 +79,7 @@ public class HighestConflictEachReplicaChecker implements ConflictChecker {
                   }
                   return null;
                 })
-            .filter(Objects::isNull)
+            .filter(Objects::nonNull)
             .collect(Collectors.toSet());
 
     return new DependencySet(depSet);
