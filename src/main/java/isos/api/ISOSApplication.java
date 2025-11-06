@@ -174,7 +174,12 @@ public class ISOSApplication implements MessageHandler {
         this.configManager.getStaticConf().getDepGraphExecutionStrategy());
 
     this.executionManager =
-        new ExecutionManager(this.dependencyGraphBuilder, this.sccFinder, executor, 100);
+        new ExecutionManager(
+            this.dependencyGraphBuilder,
+            this.sccFinder,
+            executor,
+            100,
+            this.configManager.getStaticConf().getMinSccCountForConcurrentExec());
     this.executionManagerThread = Thread.ofVirtual().start(this.executionManager);
   }
 

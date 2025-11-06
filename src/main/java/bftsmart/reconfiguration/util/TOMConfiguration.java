@@ -70,9 +70,8 @@ public class TOMConfiguration extends Configuration {
 
   // ISOS Replica
   private int agreementSlotSequenceLength;
-  /**
-   * Delta is the maximum one-way delay between replicas.
-   */
+
+  /** Delta is the maximum one-way delay between replicas. */
   private int initialIsosTimeoutDeltaMillis;
 
   private double pingEwmaAlpha;
@@ -87,12 +86,12 @@ public class TOMConfiguration extends Configuration {
   private DepGraphExecutionStrategy depGraphExecutionStrategy;
   private SccStrategy sccStrategy;
   private boolean deserializedCommandCacheEnabled;
+  private int minSccCountForConcurrentExec;
 
   // ISOS Client
-  /**
-   * Time after which the request times out at the client side
-   */
+  /** Time after which the request times out at the client side */
   private int clientInvokeOrderedTimeout; // in seconds
+
   private int clientPingIntervalMillis;
   private int initialWaitForPingsTimeoutMillis;
 
@@ -524,7 +523,7 @@ public class TOMConfiguration extends Configuration {
 
       s = configs.remove("system.isos.replica.opt.compactDepSet.strategy");
       if (s == null) {
-          compactDepSetStrategy = CompactDepSetStrategy.TRIVIAL;
+        compactDepSetStrategy = CompactDepSetStrategy.TRIVIAL;
       } else {
         compactDepSetStrategy = CompactDepSetStrategy.parse(s);
       }
@@ -550,9 +549,16 @@ public class TOMConfiguration extends Configuration {
         deserializedCommandCacheEnabled = Boolean.parseBoolean(s);
       }
 
+      s = configs.remove("system.isos.replica.opt.concurrentExecution.minSccCount");
+      if (s == null) {
+        minSccCountForConcurrentExec = -1; // Sequential execution
+      } else {
+        minSccCountForConcurrentExec = Integer.parseInt(s);
+      }
+
     } catch (Exception e) {
       System.err.println("Could not parse system configuration file: " + e);
-//      logger.error("Could not parse system configuration file", e);
+      //      logger.error("Could not parse system configuration file", e);
     }
   }
 
@@ -615,6 +621,7 @@ public class TOMConfiguration extends Configuration {
 
   /**
    * Used in BFT SMaRt and ISOS.
+   *
    * @return
    */
   public int getMaxBatchSize() {
@@ -811,5 +818,9 @@ public class TOMConfiguration extends Configuration {
 
   public boolean isDeserializedCommandCacheEnabled() {
     return deserializedCommandCacheEnabled;
+  }
+
+  public int getMinSccCountForConcurrentExec() {
+    return minSccCountForConcurrentExec;
   }
 }

@@ -8,16 +8,15 @@ import isos.execution.graph.Dependency;
 import isos.execution.graph.DependencyGraph;
 import isos.execution.graph.DependencyGraphBuilder;
 import isos.execution.scc.SccFinder;
+import isos.execution.scc.SccUtils;
 import isos.message.replica.ClientRequestBatch;
 import isos.utils.ReplicaId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class ExecutionManager implements ISOSExecutionManager, Runnable {
@@ -37,7 +36,9 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
 
   private final BlockingQueue<CommittedCommand> incomingCommittedSlots;
 
-  private final ExecuteInApplication executor;
+  private final int minSccCountForConcurrentExec;
+  private ExecutorService executor;
+  private final ExecuteInApplication executeInApplication;
 
   /** Returns the dependencies for a given slot. */
   private final ConcurrentMap<SequenceNumber, DependencySet> deps;
@@ -52,8 +53,9 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
   public ExecutionManager(
       DependencyGraphBuilder dependencyGraphBuilder,
       SccFinder sccFinder,
-      ExecuteInApplication executor,
-      int batchProcessingMaxSize) {
+      ExecuteInApplication executeInApplication,
+      int batchProcessingMaxSize,
+      int minSccCountForConcurrentExec) {
     this.committed = new HashSet<>();
     this.executed = new HashSet<>();
     this.depGraphBuilder = dependencyGraphBuilder;
@@ -61,9 +63,14 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
     this.incomingCommittedSlots = new LinkedBlockingQueue<>();
     this.deps = new ConcurrentHashMap<>();
     this.requests = new ConcurrentHashMap<>();
-    this.executor = executor;
+    this.executeInApplication = executeInApplication;
     this.batchProcessingMaxSize = batchProcessingMaxSize;
     this.executedClientTimestamps = ConcurrentHashMap.newKeySet();
+    this.minSccCountForConcurrentExec = minSccCountForConcurrentExec;
+
+    if (minSccCountForConcurrentExec > -1) {
+      this.executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    }
   }
 
   /**
@@ -103,7 +110,7 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
           "Execute request batch {} with dependencies {}",
           seqNum,
           this.deps.get(seqNum).dependencies());
-      this.executor.execute(new ClientRequestBatch(deduplicatedRequests));
+      this.executeInApplication.execute(new ClientRequestBatch(deduplicatedRequests));
       this.depGraphBuilder.addExecuted(seqNum);
       this.executed.add(seqNum);
 
@@ -232,18 +239,28 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
         // We have a v where all dependencies are committed
 
         // Now: Find not yet executed SCCs in rdeps(v) in inverse topological order
-        var adjList = DependencyGraph.toAdjacencyList(depGraph);
+        Map<SequenceNumber, Set<SequenceNumber>> adjList =
+            DependencyGraph.toAdjacencyList(depGraph);
         List<Set<SequenceNumber>> SCCs = sccFinder.getSCC(adjList, depGraph.slots());
 
-        if (!this.parallelSccExecution(SCCs)) {
-          // If we did not execute anything,
-          continue;
+        if (this.minSccCountForConcurrentExec > -1) {
+          if (SCCs.size() >= this.minSccCountForConcurrentExec) {
+            logger.info("Reached {} SCCs for parallel execution", SCCs.size());
+            didExecuteAgreementSlots = this.parallelSccExecution(adjList, SCCs);
+          } else {
+            // Concurrent execution enabled, but not enough SCCs reached for concurrent execution
+            didExecuteAgreementSlots = this.sequentialSccExecution(SCCs);
+          }
+        } else {
+          // concurrent execution disabled
+          didExecuteAgreementSlots = this.sequentialSccExecution(SCCs);
         }
 
-        didExecuteAgreementSlots = true;
-
-        // We have executed some slots. Now we have to recalculate the execution window
-        break;
+        if (didExecuteAgreementSlots) {
+          // We have executed some slots. Now we have to recalculate the execution window
+          break;
+        }
+        // If we did not execute any agreement slots, try to find another
       }
       // We want to repeat this loop until no further suitable v exists, i.e., we iterate over all
       // committed sequence numbers v, but we didn't execute any slot, because the dependencies of
@@ -252,10 +269,12 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
   }
 
   /**
+   * This execution is according to the pseudocode lines 180-182, 188-190
+   *
    * @param SCCs
-   * @return True if at least 1 SCC was executed, false otherwise.
+   * @return
    */
-  private boolean parallelSccExecution(List<Set<SequenceNumber>> SCCs) {
+  private boolean sequentialSccExecution(List<Set<SequenceNumber>> SCCs) {
     boolean didExecuteAgreementSlots = false;
     for (Set<SequenceNumber> scc : SCCs) {
       // Line 178: Normal case execution
@@ -279,6 +298,55 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
       didExecuteAgreementSlots = true;
     }
     return didExecuteAgreementSlots;
+  }
+
+  /**
+   * @param SCCs
+   * @return True if at least 1 SCC was executed, false otherwise.
+   */
+  private boolean parallelSccExecution(
+      Map<SequenceNumber, Set<SequenceNumber>> adjList, List<Set<SequenceNumber>> SCCs) {
+    AtomicBoolean didExecuteAgreementSlots = new AtomicBoolean(false);
+
+    // Build helper structures
+    var lookup = SccUtils.buildSccLookup(SCCs);
+    var sccDAG = SccUtils.buildSccDAG(adjList, lookup, SCCs);
+
+    // Get execution levels where SCCs in a level can be executed concurrently
+    List<Set<Integer>> levels = SccUtils.getSccConcurrencyGroups(sccDAG);
+
+    try {
+      for (Set<Integer> level : levels) {
+        // All SCCs in a level can be executed concurrently
+        var latch = new CountDownLatch(level.size());
+        for (int sccId : level) {
+          final int id = sccId;
+          this.executor.submit(
+              () -> {
+                try {
+                  var scc = SCCs.get(id);
+                  List<SequenceNumber> notExecutedInScc =
+                      scc.stream().filter(element -> !this.executed.contains(element)).toList();
+                  if (notExecutedInScc.isEmpty()) {
+                    return;
+                  }
+                  this.execute(notExecutedInScc);
+                  didExecuteAgreementSlots.set(true);
+                } finally {
+                  latch.countDown();
+                }
+              });
+        }
+
+        // Wait for all tasks to complete before starting the next level that can have dependencies
+        // on SCCs of the current level
+        latch.await();
+      }
+    } catch (InterruptedException e) {
+      logger.error("Interrupted while waiting on request execution: {}", e.getMessage());
+    }
+
+    return didExecuteAgreementSlots.get();
   }
 
   private void doUnblockExecution() {

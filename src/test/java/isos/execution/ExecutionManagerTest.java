@@ -68,7 +68,8 @@ class ExecutionManagerTest {
             new TrivialDependencyGraphBuilder(expansionLimitSize),
             sccFinder,
             executor,
-            batchProcessingMaxSize);
+            batchProcessingMaxSize,
+            -1);
     Thread managerThread = Thread.ofVirtual().start(manager);
 
     int clientId = 0;
@@ -140,7 +141,8 @@ class ExecutionManagerTest {
             new CachedDependencyGraphBuilder(expansionLimitSize),
             sccFinder,
             executor,
-            batchProcessingMaxSize);
+            batchProcessingMaxSize,
+            -1);
     Thread managerThread = Thread.ofVirtual().start(manager);
 
     int clientId = 0;
