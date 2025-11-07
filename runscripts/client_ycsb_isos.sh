@@ -21,6 +21,8 @@ CLIENT_ID="$4"
 
 mkdir -p "/home/ubuntu/benchmark_out_smart/ycsb_${BENCHMARK_NAME}/"
 
+rm -f "/home/ubuntu/benchmark_out_smart/ycsb_${BENCHMARK_NAME}/ycsb_t_${BENCHMARK_NAME}_${CLIENT_ID}.raw"
+
 # Each instance of YCSB can have up to 10.000 client IDs
 CLIENT_ID_START=$((CLIENT_ID * 10000))
 
@@ -31,9 +33,9 @@ java -Djava.security.properties="./config/java.security" \
   -t \
   -threads 50 \
   -P "config/ycsb_workloads/$WORKLOAD" \
-  -p measurementtype=timeseries \
+  -p measurementtype=raw \
+  -p measurement.raw.output_file="/home/ubuntu/benchmark_out_smart/ycsb_${BENCHMARK_NAME}/ycsb_t_${BENCHMARK_NAME}_${CLIENT_ID}.raw" \
   -p exportfile="/home/ubuntu/benchmark_out_smart/ycsb_${BENCHMARK_NAME}/ycsb_t_${BENCHMARK_NAME}_${CLIENT_ID}.csv" \
   -p smart-initkey="$CLIENT_ID_START" \
-  -p timeseries.granularity=1000 \
   -db $CLASSNAME \
   -s
