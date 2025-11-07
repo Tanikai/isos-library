@@ -3,6 +3,7 @@ package isos.benchmark.ycsb;
 import bftsmart.demo.ycsb.YCSBMessage;
 import com.yahoo.ycsb.ByteIterator;
 import com.yahoo.ycsb.DB;
+import com.yahoo.ycsb.Status;
 import isos.api.ISOSClient;
 import isos.message.client.OrderedClientReply;
 import org.slf4j.Logger;
@@ -39,10 +40,6 @@ public class IsosYcsbClient extends DB {
 
   private final int REQUEST_LOG_INTERVAL = 50;
 
-  private final int STATUS_OK = 0;
-  private final int STATUS_ERR = -1;
-  private final int STATUS_CLIENT_ERR = -2;
-
   private Logger logger;
   private static AtomicInteger counter = new AtomicInteger();
   private int ownClientId = -1;
@@ -72,12 +69,12 @@ public class IsosYcsbClient extends DB {
   public void cleanup() {}
 
   @Override
-  public int delete(String arg0, String arg1) {
+  public Status delete(String arg0, String arg1) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public int insert(String table, String key, HashMap<String, ByteIterator> values) {
+  public Status insert(String table, String key, Map<String, ByteIterator> values) {
     Iterator<String> keys = values.keySet().iterator();
     HashMap<String, byte[]> map = new HashMap<>();
     while (keys.hasNext()) {
@@ -97,24 +94,24 @@ public class IsosYcsbClient extends DB {
 
       if (replyMsg.getErrorMsg() != null && !replyMsg.getErrorMsg().isEmpty()) {
         logger.error("INSERT: Error message {}", replyMsg.getErrorMsg());
-        return STATUS_ERR;
+        return Status.ERROR;
       }
 
       if (replyMsg.getResult() != 0) {
         logger.error("Received unsuccessful result value {}, reason unknown", replyMsg.getResult());
-        return STATUS_ERR;
+        return Status.ERROR;
       }
 
-      return STATUS_OK;
+      return Status.OK;
     } catch (Exception e) {
       logger.error("INSERT: Exception {}", e.getMessage());
-      return STATUS_CLIENT_ERR;
+      return Status.ERROR;
     }
   }
 
   @Override
-  public int read(
-      String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
+  public Status read(
+      String table, String key, Set<String> fields, Map<String, ByteIterator> result) {
     HashMap<String, byte[]> results = new HashMap<>();
 
     try {
@@ -129,23 +126,23 @@ public class IsosYcsbClient extends DB {
 
       if (replyMsg.getErrorMsg() != null && !replyMsg.getErrorMsg().isEmpty()) {
         logger.error("READ: Error message {}", replyMsg.getErrorMsg());
-        return STATUS_ERR;
+        return Status.ERROR;
       }
 
       if (replyMsg.getResult() != 0) {
         logger.error("Received unsuccessful result value {}, reason unknown", replyMsg.getResult());
-        return STATUS_ERR;
+        return Status.ERROR;
       }
 
-      return STATUS_OK;
+      return Status.OK;
     } catch (Exception e) {
       logger.error("READ: Exception {}", e.getMessage());
-      return STATUS_CLIENT_ERR;
+      return Status.ERROR;
     }
   }
 
   @Override
-  public int scan(
+  public Status scan(
       String arg0,
       String arg1,
       int arg2,
@@ -155,7 +152,7 @@ public class IsosYcsbClient extends DB {
   }
 
   @Override
-  public int update(String table, String key, HashMap<String, ByteIterator> values) {
+  public Status update(String table, String key, Map<String, ByteIterator> values) {
     Iterator<String> keys = values.keySet().iterator();
     HashMap<String, byte[]> map = new HashMap<>();
     while (keys.hasNext()) {
@@ -174,18 +171,18 @@ public class IsosYcsbClient extends DB {
 
       if (replyMsg.getErrorMsg() != null && !replyMsg.getErrorMsg().isEmpty()) {
         logger.error("UPDATE: Error message {}", replyMsg.getErrorMsg());
-        return STATUS_ERR;
+        return Status.ERROR;
       }
 
       if (replyMsg.getResult() != 0) {
         logger.error("Received unsuccessful result value {}, reason unknown", replyMsg.getResult());
-        return STATUS_ERR;
+        return Status.ERROR;
       }
 
-      return STATUS_OK;
+      return Status.OK;
     } catch (Exception e) {
       logger.error("UPDATE: Exception {}", e.getMessage());
-      return STATUS_CLIENT_ERR;
+      return Status.ERROR;
     }
   }
 }
