@@ -16,3 +16,15 @@
         recursive: yes
         delete: no
         mode: pull
+
+    - name: Remove remote benchmark directory and contents
+      file:
+        path: "{{ benchmark_remote_src_dir }}"
+        state: absent
+
+    - name: Recreate empty remote benchmark directory
+      file:
+        path: "{{ benchmark_remote_src_dir }}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
