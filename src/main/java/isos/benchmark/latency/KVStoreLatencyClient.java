@@ -10,6 +10,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -116,7 +117,7 @@ public class KVStoreLatencyClient {
       this.client.put(key, value);
     }
     long endTime = System.nanoTime();
-    return endTime - startTime;
+    return TimeUnit.NANOSECONDS.toMicros(endTime - startTime);
   }
 
   public List<LatencyBenchmarkResult> getBenchmarkResult() throws IllegalStateException {
