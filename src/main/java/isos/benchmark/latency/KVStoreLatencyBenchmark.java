@@ -137,10 +137,10 @@ public class KVStoreLatencyBenchmark {
 
               // Store results
               List<LatencyBenchmarkResult> results = client.getBenchmarkResult();
-              OptionalDouble averageMs =
-                  results.stream().mapToLong(LatencyBenchmarkResult::latency).average();
+              OptionalDouble averageUs =
+                  results.stream().mapToLong(LatencyBenchmarkResult::latency_us).average();
               this.results.put(clientId, results);
-              logger.info("Average latencies: {}", averageMs.orElse(-1D));
+              logger.info("Average latencies (us): {}", averageUs.orElse(-1D));
             } catch (InterruptedException e) {
               logger.info("Thread was interrupted, stopping");
             } catch (IOException e) {
@@ -161,17 +161,14 @@ public class KVStoreLatencyBenchmark {
 
   /** Overwrites a potentially already existing file. */
   private void writeHeader() {
-    File outputFile =
-        this.outputDir
-            .resolve(this.getFileName())
-            .toFile();
+    File outputFile = this.outputDir.resolve(this.getFileName()).toFile();
     File parentDir = outputFile.getParentFile();
     if (parentDir != null && !parentDir.exists()) {
       parentDir.mkdirs();
     }
     try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile, false))) {
       // Header
-      writer.println("latency,wasWrite,clientId");
+      writer.println("op, timestamp(ms), latency(us)");
     } catch (IOException e) {
       logger.error("Failed to open results file");
     }
@@ -184,14 +181,13 @@ public class KVStoreLatencyBenchmark {
    * @param results
    */
   private void writeResults(int clientId, List<LatencyBenchmarkResult> results) {
-    File outputFile =
-        this.outputDir
-            .resolve(this.getFileName())
-            .toFile();
+    File outputFile = this.outputDir.resolve(this.getFileName()).toFile();
 
     try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile, true))) {
       for (var line : results) {
-        writer.printf("%d,%b,%d\n", line.latency(), line.wasWrite(), clientId);
+        writer.printf(
+            "%s,%d,%d\n",
+            line.wasUpdateOperation() ? "UPDATE" : "READ", line.timestamp_ms(), line.latency_us());
       }
     } catch (IOException e) {
       logger.error("Failed to open results file");
