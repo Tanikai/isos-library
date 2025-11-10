@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,11 +32,14 @@ public class KVStoreLatencyBenchmark {
   private final Path outputDir;
   private final String benchmarkName;
 
+  private final AtomicInteger completedRequests = new AtomicInteger();
+
   private final KVStoreLatencyClient[] clients;
   private final Map<Integer, List<LatencyBenchmarkResult>> results;
 
   ExecutorService executor;
 
+  private final CountDownLatch clientsReadyLatch;
   private final CountDownLatch startLatch;
   private final CountDownLatch endLatch;
 
@@ -90,6 +94,7 @@ public class KVStoreLatencyBenchmark {
             conflictRatioPercent,
             outputDir,
             benchmarkName);
+
     benchmark.runBenchmark();
 
     System.exit(0);
@@ -113,33 +118,46 @@ public class KVStoreLatencyBenchmark {
 
     this.clients = new KVStoreLatencyClient[clientCount];
     this.results = new ConcurrentHashMap<>();
-    this.executor = Executors.newFixedThreadPool(clientCount);
+    this.executor = Executors.newVirtualThreadPerTaskExecutor();
+
+    this.clientsReadyLatch = new CountDownLatch(clientCount);
     this.startLatch = new CountDownLatch(1);
     this.endLatch = new CountDownLatch(clientCount);
 
     var groupPrefix = clientGroupId * 10000;
 
-    // Create worker threads for client
-    for (var i = 0; i < clientCount; i++) {
-      this.clients[i] =
-          new KVStoreLatencyClient(
-              groupPrefix + i, this.writeRatioPercent, this.conflictRatioPercent);
+    RequestCompletedCallback onRequestCompleted =
+        (int totalRequests) -> {
+          var totalRequestsCompleted = this.completedRequests.addAndGet(1);
+          if (totalRequestsCompleted % 100 == 0) {
+            logger.info("Completed {} requests", totalRequestsCompleted);
+          }
+        };
 
+    // Create tasks for client
+    for (var i = 0; i < clientCount; i++) {
       int clientId = i;
       this.executor.submit(
           () -> {
-            logger.info("Start client {}", clientId);
-            var client = this.clients[clientId];
+            var client =
+                new KVStoreLatencyClient(
+                    groupPrefix + clientId,
+                    this.writeRatioPercent,
+                    this.conflictRatioPercent,
+                    onRequestCompleted);
+            this.clients[clientId] = client;
             try {
+              this.clientsReadyLatch.countDown();
+
               this.startLatch.await();
               client.runRequests(this.requestCount);
 
               // Store results
               List<LatencyBenchmarkResult> results = client.getBenchmarkResult();
-              OptionalDouble averageMs =
-                  results.stream().mapToLong(LatencyBenchmarkResult::latency).average();
+              OptionalDouble averageUs =
+                  results.stream().mapToLong(LatencyBenchmarkResult::latency_us).average();
               this.results.put(clientId, results);
-              logger.info("Average latencies: {}", averageMs.orElse(-1D));
+              logger.info("Average latencies (us): {}", averageUs.orElse(-1D));
             } catch (InterruptedException e) {
               logger.info("Thread was interrupted, stopping");
             } catch (IOException e) {
@@ -152,6 +170,12 @@ public class KVStoreLatencyBenchmark {
             this.endLatch.countDown();
           });
     }
+    try {
+      logger.info("Waiting for client initialization");
+      clientsReadyLatch.await();
+    } catch (InterruptedException e) {
+      logger.error("Interrupted while waiting for client initialization");
+    }
   }
 
   private String getFileName() {
@@ -160,17 +184,14 @@ public class KVStoreLatencyBenchmark {
 
   /** Overwrites a potentially already existing file. */
   private void writeHeader() {
-    File outputFile =
-        this.outputDir
-            .resolve(this.getFileName())
-            .toFile();
+    File outputFile = this.outputDir.resolve(this.getFileName()).toFile();
     File parentDir = outputFile.getParentFile();
     if (parentDir != null && !parentDir.exists()) {
       parentDir.mkdirs();
     }
     try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile, false))) {
       // Header
-      writer.println("latency,wasWrite,clientId");
+      writer.println("op, timestamp(ms), latency(us)");
     } catch (IOException e) {
       logger.error("Failed to open results file");
     }
@@ -179,18 +200,16 @@ public class KVStoreLatencyBenchmark {
   /**
    * Appends the results to the existing file.
    *
-   * @param clientId
    * @param results
    */
-  private void writeResults(int clientId, List<LatencyBenchmarkResult> results) {
-    File outputFile =
-        this.outputDir
-            .resolve(this.getFileName())
-            .toFile();
+  private void writeResults(List<LatencyBenchmarkResult> results) {
+    File outputFile = this.outputDir.resolve(this.getFileName()).toFile();
 
     try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile, true))) {
       for (var line : results) {
-        writer.printf("%d,%b,%d\n", line.latency(), line.wasWrite(), clientId);
+        writer.printf(
+            "%s,%d,%d\n",
+            line.wasUpdateOperation() ? "UPDATE" : "READ", line.timestamp_ms(), line.latency_us());
       }
     } catch (IOException e) {
       logger.error("Failed to open results file");
@@ -212,12 +231,11 @@ public class KVStoreLatencyBenchmark {
         return;
       }
       logger.info("Benchmark successful");
-      // TODO Kai: how to print results? Per client? Summary per region?
 
       this.writeHeader();
       for (Integer clientId : this.results.keySet().stream().sorted().toList()) {
         var singleResult = this.results.get(clientId);
-        this.writeResults(clientId, singleResult);
+        this.writeResults(singleResult);
       }
 
       logger.info("Stored results in directory");

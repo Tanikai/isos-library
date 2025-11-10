@@ -158,6 +158,7 @@ distributions {
 			}
 			from 'runscripts/smartrun.sh'
 			from 'runscripts/smartrun.cmd'
+            from 'runscripts/client_kvstore.sh'
             from 'runscripts/load_ycsb_isos.sh'
             from 'runscripts/client_ycsb_isos.sh'
             from 'runscripts/replica_ycsb_isos.sh'
