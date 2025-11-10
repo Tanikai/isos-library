@@ -16,7 +16,7 @@ middle_args=("${args[@]:1:count-5}")
 SCRIPT_ARGS="${middle_args[*]}"
 last_four=("${args[@]: -4}")
 
-SAFE_SCRIPT_NAME="${SCRIPTNAME//./-}"
+SAFE_SCRIPT_NAME=$(echo "$SCRIPTNAME" | tr '._' '-')
 SESSION_NAME="quad-setup-ssh-$SAFE_SCRIPT_NAME"
 BASE_DIR="/home/ubuntu/isos"
 HOST_DIR="./"
@@ -57,6 +57,8 @@ fi
 # Kill existing session if it exists
 tmux kill-session -t $SESSION_NAME 2>/dev/null
 
+echo "Create new session $SESSION_NAME"
+
 # Create new session with the first pane (top-left, #1)
 tmux new-session -d -s $SESSION_NAME -c $HOST_DIR $CMD_0
 
@@ -77,8 +79,8 @@ tmux select-layout -t $SESSION_NAME tiled
 # Select the first pane (top-left)
 tmux select-pane -t $SESSION_NAME:0.0
 
-echo "Waiting 5 seconds for SSH connections to establish..."
-sleep 5
+echo "Waiting 6 seconds for SSH connections to establish..."
+sleep 6
 
 PANE_0="${SESSION_NAME}:0.0"
 PANE_1="${SESSION_NAME}:0.1"

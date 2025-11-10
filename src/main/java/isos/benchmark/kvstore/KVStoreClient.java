@@ -20,7 +20,6 @@ public class KVStoreClient<K extends Serializable, V extends Serializable> {
 
   public KVStoreClient(int clientId) {
     this.client = new ISOSClient(clientId);
-    logger.info("Initialize KVStoreClient");
   }
 
   public V get(K key)

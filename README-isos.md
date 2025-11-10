@@ -132,7 +132,7 @@ Four replicas locally with tmux:
 ./quad-replica.sh smartrun.sh isos.benchmark.kvstore.KVStoreReplica
 ```
 
-Four SSH sessions automatically with tmux:
+Run four replicas via SSH and tmux:
 
 ```shell
 ./ssh-quad-replica.sh smartrun.sh isos.benchmark.kvstore.KVStoreReplica ubuntu@host0 ubuntu@host1 ubuntu@host2 ubuntu@host3
@@ -161,21 +161,20 @@ Client (one instance per region):
   --benchmarkName="Optimized_Ver1"
 ```
 
-#### Throughput
-
-Client (one instance per region):
+Four SSH sessions automatically with tmux:
+(Each client out of 50 runs 60 requests -> 3000 requests in total)
 
 ```shell
-./client.sh isos.benchmark.latency.KVStoreThroughputBenchmark \
-  --groupId=1 \
-  --clientCount=5 \
-  --requestCount=10 \
-  --writeRatioPercent=10 \
-  --conflictRatioPercent=10 \
+./ssh-quad-replica.sh client_kvstore.sh \
+  isos.benchmark.latency.KVStoreLatencyBenchmark \
+  --clientCount=50 \
+  --requestCount=60 \
+  --writeRatioPercent=5 \
+  --conflictRatioPercent=10 k\
   --outputDir="/home/ubuntu/benchmark_out/" \
-  --benchmarkName="Optimized_Ver1"
+  --benchmarkName="optimized-3000-1" \
+  ubuntu@client0 ubuntu@client1 ubuntu@client2 ubuntu@client3
 ```
-
 ### YCSB
 
 First, build the project and copy the files using the `copy_library.sh` script

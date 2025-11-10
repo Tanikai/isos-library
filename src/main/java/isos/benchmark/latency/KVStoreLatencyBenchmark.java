@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The KVStoreLatencyBenchmark runs clientCount threads that each send requestCount sequential
@@ -32,11 +33,14 @@ public class KVStoreLatencyBenchmark {
   private final Path outputDir;
   private final String benchmarkName;
 
+  private final AtomicInteger completedRequests = new AtomicInteger();
+
   private final KVStoreLatencyClient[] clients;
   private final Map<Integer, List<LatencyBenchmarkResult>> results;
 
   ExecutorService executor;
 
+  private final CountDownLatch clientsReadyLatch;
   private final CountDownLatch startLatch;
   private final CountDownLatch endLatch;
 
@@ -91,6 +95,7 @@ public class KVStoreLatencyBenchmark {
             conflictRatioPercent,
             outputDir,
             benchmarkName);
+
     benchmark.runBenchmark();
 
     System.exit(0);
@@ -114,24 +119,37 @@ public class KVStoreLatencyBenchmark {
 
     this.clients = new KVStoreLatencyClient[clientCount];
     this.results = new ConcurrentHashMap<>();
-    this.executor = Executors.newFixedThreadPool(clientCount);
+    this.executor = Executors.newVirtualThreadPerTaskExecutor();
+
+    this.clientsReadyLatch = new CountDownLatch(clientCount);
     this.startLatch = new CountDownLatch(1);
     this.endLatch = new CountDownLatch(clientCount);
 
     var groupPrefix = clientGroupId * 10000;
 
-    // Create worker threads for client
-    for (var i = 0; i < clientCount; i++) {
-      this.clients[i] =
-          new KVStoreLatencyClient(
-              groupPrefix + i, this.writeRatioPercent, this.conflictRatioPercent);
+    RequestCompletedCallback onRequestCompleted =
+        (int totalRequests) -> {
+          var totalRequestsCompleted = this.completedRequests.addAndGet(1);
+          if (totalRequestsCompleted % 100 == 0) {
+            logger.info("Completed {} requests", totalRequestsCompleted);
+          }
+        };
 
+    // Create tasks for client
+    for (var i = 0; i < clientCount; i++) {
       int clientId = i;
       this.executor.submit(
           () -> {
-            logger.info("Start client {}", clientId);
-            var client = this.clients[clientId];
+            var client =
+                new KVStoreLatencyClient(
+                    groupPrefix + clientId,
+                    this.writeRatioPercent,
+                    this.conflictRatioPercent,
+                    onRequestCompleted);
+            this.clients[clientId] = client;
             try {
+              this.clientsReadyLatch.countDown();
+
               this.startLatch.await();
               client.runRequests(this.requestCount);
 
@@ -152,6 +170,12 @@ public class KVStoreLatencyBenchmark {
             }
             this.endLatch.countDown();
           });
+    }
+    try {
+      logger.info("Waiting for client initialization");
+      clientsReadyLatch.await();
+    } catch (InterruptedException e) {
+      logger.error("Interrupted while waiting for client initialization");
     }
   }
 
@@ -177,10 +201,9 @@ public class KVStoreLatencyBenchmark {
   /**
    * Appends the results to the existing file.
    *
-   * @param clientId
    * @param results
    */
-  private void writeResults(int clientId, List<LatencyBenchmarkResult> results) {
+  private void writeResults(List<LatencyBenchmarkResult> results) {
     File outputFile = this.outputDir.resolve(this.getFileName()).toFile();
 
     try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile, true))) {
@@ -209,12 +232,11 @@ public class KVStoreLatencyBenchmark {
         return;
       }
       logger.info("Benchmark successful");
-      // TODO Kai: how to print results? Per client? Summary per region?
 
       this.writeHeader();
       for (Integer clientId : this.results.keySet().stream().sorted().toList()) {
         var singleResult = this.results.get(clientId);
-        this.writeResults(clientId, singleResult);
+        this.writeResults(singleResult);
       }
 
       logger.info("Stored results in directory");

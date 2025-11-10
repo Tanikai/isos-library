@@ -8,10 +8,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -28,17 +26,24 @@ public class KVStoreLatencyClient {
   private final KVStoreClient<String, String> client;
 
   // Result data
+  private final RequestCompletedCallback singleRequestCompleted;
+
   private int failureCount = 0;
   private final LinkedList<Boolean> wasWriteRequest;
   private final LinkedList<Long> timestamps_ms;
   private final LinkedList<Long> latencies_us; // -1 if it was failure
 
-  public KVStoreLatencyClient(int clientId, int writeRatioPercent, int conflictRatioPercent) {
+  public KVStoreLatencyClient(
+      int clientId,
+      int writeRatioPercent,
+      int conflictRatioPercent,
+      RequestCompletedCallback notifySingleRequestCompleted) {
     this.logger = LoggerFactory.getLogger(String.format("Client%d", clientId));
     this.clientId = clientId;
     this.client = new KVStoreClient<>(clientId);
     this.conflictRatio = (double) conflictRatioPercent / 100;
     this.writeRatio = (double) writeRatioPercent / 100;
+    this.singleRequestCompleted = notifySingleRequestCompleted;
     this.wasWriteRequest = new LinkedList<>();
     this.timestamps_ms = new LinkedList<>();
     this.latencies_us = new LinkedList<>();
@@ -66,7 +71,6 @@ public class KVStoreLatencyClient {
   public void runRequests(int requestCount)
       throws IOException, InterruptedException, ClassNotFoundException {
 
-    logger.info("Run {} requests", requestCount);
     for (int i = 0; i < requestCount; i++) {
       try {
         String key = getKey();
@@ -95,6 +99,7 @@ public class KVStoreLatencyClient {
         timestamps_ms.add(System.currentTimeMillis());
         latencies_us.add(-1L);
       }
+      this.singleRequestCompleted.onRequestCompleted(i + 1);
     }
     logger.info("Client {} is done!", this.clientId);
   }
