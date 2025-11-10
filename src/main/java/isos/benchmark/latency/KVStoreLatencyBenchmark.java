@@ -114,7 +114,7 @@ public class KVStoreLatencyBenchmark {
     this.requestCount = requestCount;
     this.writeRatioPercent = writeRatioPercent;
     this.conflictRatioPercent = conflictRatioPercent;
-    this.outputDir = Paths.get(outputDir);
+    this.outputDir = Paths.get(outputDir).resolve("kvstore_" + benchmarkName);
     this.benchmarkName = benchmarkName;
 
     this.clients = new KVStoreLatencyClient[clientCount];
@@ -180,7 +180,7 @@ public class KVStoreLatencyBenchmark {
   }
 
   private String getFileName() {
-    return String.format("%s_%d.csv", this.benchmarkName, this.clientGroupId);
+    return String.format("kvstore_%s_%d.raw", this.benchmarkName, this.clientGroupId);
   }
 
   /** Overwrites a potentially already existing file. */

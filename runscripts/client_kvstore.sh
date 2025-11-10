@@ -24,10 +24,6 @@ client_id=("${args[@]: -1}")
 echo "Benchmark Args: $middle_args"
 echo "Client Id: $client_id"
 
-mkdir -p "/home/ubuntu/benchmark_out/kvstore_${BENCHMARK_NAME}/"
-
-rm -f "/home/ubuntu/benchmark_out/kvstore_${BENCHMARK_NAME}/kvstore_${BENCHMARK_NAME}_${CLIENT_ID}.raw"
-
 ./smartrun.sh \
   $SCRIPT_ARGS \
   --groupId="$client_id"
