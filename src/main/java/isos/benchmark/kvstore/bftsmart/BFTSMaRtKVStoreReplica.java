@@ -75,32 +75,29 @@ public class BFTSMaRtKVStoreReplica<K extends Serializable, V extends Serializab
   @Override
   public byte[] appExecuteUnordered(byte[] command, MessageContext msgCtx) {
     try {
-      MapMessage<K, V> response = new MapMessage<>();
-      MapMessage<K, V> request = MapMessage.fromBytes(command);
-      MapRequestType cmd = request.getType();
+      KVMessage<K, V> request = KVMessage.fromBytes(command);
+      KVMessage<K, V> response;
 
-      switch (cmd) {
+      switch (request.commandType()) {
         // read operations on the map
         case GET:
-          V ret = replicaMap.get(request.getKey());
+          {
+            V ret = replicaMap.get(request.key());
 
-          if (ret != null) {
-            response.setValue(ret);
+            response = new KVMessage<>(KVCommandType.GET, request.key(), ret);
           }
-          return MapMessage.toBytes(response);
-        case SIZE:
-          int size = replicaMap.size();
-          response.setSize(size);
-          return MapMessage.toBytes(response);
-        case KEYSET:
-          response.setKeySet(replicaMap.keySet());
-          return MapMessage.toBytes(response);
+          break;
+        default:
+          {
+            response = new KVMessage<>(request.commandType(), request.key(), null);
+          }
       }
+
+      return KVMessage.toBytes(response);
     } catch (IOException | ClassNotFoundException ex) {
       logger.log(Level.SEVERE, "Failed to process unordered request", ex);
       return new byte[0];
     }
-    return new byte[0];
   }
 
   @Override

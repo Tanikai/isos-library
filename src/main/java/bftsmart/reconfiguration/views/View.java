@@ -41,7 +41,8 @@ public class View implements Serializable {
 
  		for(int i = 0; i < this.processes.length;i++)
  			this.addresses.put(processes[i],addresses[i]);
- 		Arrays.sort(this.processes);
+
+// 		Arrays.sort(this.processes);
  		this.f = f;
  	}
 

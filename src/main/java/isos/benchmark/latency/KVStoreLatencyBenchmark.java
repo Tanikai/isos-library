@@ -28,7 +28,7 @@ public class KVStoreLatencyBenchmark {
   private final int requestCount;
   private final int conflictRatioPercent;
   private final int writeRatioPercent;
-  private final int benchmarkTimeoutSecs = 60;
+  private final int benchmarkTimeoutSecs = 1200;
   private final Path outputDir;
   private final String benchmarkName;
 

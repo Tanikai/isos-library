@@ -16,6 +16,8 @@ limitations under the License.
 package bftsmart.reconfiguration.util;
 
 import bftsmart.tom.util.KeyLoader;
+
+import java.util.Arrays;
 import java.util.StringTokenizer;
 
 import java.util.regex.Pattern;
@@ -242,6 +244,7 @@ public class TOMConfiguration extends Configuration {
             s = (String) configs.remove("system.initial.view");
             if (s == null) {
                 initialView = new int[n];
+                System.out.println("No initial view defined, generate from 0 to " + n);
                 for (int i = 0; i < n; i++) {
                     initialView[i] = i;
                 }

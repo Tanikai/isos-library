@@ -295,6 +295,8 @@ public class ServerViewController extends ViewController {
 
             this.quorumBFT = (int) Math.ceil((this.currentView.getN() + this.currentView.getF()) / 2);
             this.quorumCFT = (int) Math.ceil(this.currentView.getN() / 2);
+
+            logger.info("Reconfigured to view {}", this.currentView.getProcesses());
         } else if (this.currentView != null && this.currentView.isMember(getStaticConf().getProcessId())) {
             //TODO: Left the system in newView -> LEAVE
             //CODE for LEAVE   

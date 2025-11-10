@@ -107,9 +107,13 @@ public final class ExecutionManager {
         //******* EDUARDO END **************//
 
         // Get initial leader
-        if (controller.getCurrentViewAcceptors().length > 0)
-            currentLeader = controller.getCurrentViewAcceptors()[0];
-        else currentLeader = 0;
+        if (controller.getCurrentViewAcceptors().length > 0) {
+          currentLeader = controller.getCurrentViewAcceptors()[0];
+          logger.info("Set initial leader first in view {}, i.e., {}", controller.getCurrentViewAcceptors(), currentLeader);
+        } else {
+          logger.info("No current view acceptors, set leader to 0");
+          currentLeader = 0;
+        }
     }
 
     /**
@@ -260,7 +264,7 @@ public final class ExecutionManager {
                             msg.getNumber() + " is out of context, adding it to out of context set");
 
 
-                    //System.out.println("(ExecutionManager.checkLimits) Message for consensus " + 
+                    //System.out.println("(ExecutionManager.checkLimits) Message for consensus " +
                     //       msg.getNumber() + " is out of context, adding it to out of context set; isRetrievingState="+isRetrievingState);
 
                     addOutOfContextMessage(msg);

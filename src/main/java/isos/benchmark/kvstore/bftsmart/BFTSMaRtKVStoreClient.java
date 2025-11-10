@@ -18,7 +18,7 @@ public class BFTSMaRtKVStoreClient<K extends Serializable, V extends Serializabl
   public V put(K key, V value) {
     byte[] rep;
     try {
-      var request = new KVMessage<>(KVCommandType.PUT, key, value);
+      var request = new KVMessage<K, V>(KVCommandType.PUT, key, value);
 
       // invokes BFT-SMaRt
       rep = serviceProxy.invokeOrdered(KVMessage.toBytes(request));
@@ -39,10 +39,10 @@ public class BFTSMaRtKVStoreClient<K extends Serializable, V extends Serializabl
     }
   }
 
-  public V get(Object key) {
+  public V get(K key) {
     byte[] rep;
     try {
-      var request = new KVMessage<>(KVCommandType.GET, null);
+      var request = new KVMessage<K, V>(KVCommandType.GET, key, null);
 
       // invokes BFT-SMaRt
       rep = serviceProxy.invokeUnordered(KVMessage.toBytes(request));
