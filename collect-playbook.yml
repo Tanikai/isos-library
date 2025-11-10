@@ -6,6 +6,7 @@
 
   vars:
     benchmark_remote_src_dir: /home/ubuntu/benchmark_out/
+    benchmark_remote_src_dir_smart: /home/ubuntu/benchmark_out_smart/
     benchmark_local_dst_dir: evaluation/data/
 
   tasks:
@@ -17,6 +18,15 @@
         delete: no
         mode: pull
 
+    - name: Synchronize remote BFT smart result directory
+      synchronize:
+        src: "{{ benchmark_remote_src_dir_smart }}"
+        dest: "{{ benchmark_local_dst_dir }}"
+        recursive: yes
+        delete: no
+        mode: pull
+
+
     - name: Remove remote benchmark directory and contents
       file:
         path: "{{ benchmark_remote_src_dir }}"
@@ -25,6 +35,18 @@
     - name: Recreate empty remote benchmark directory
       file:
         path: "{{ benchmark_remote_src_dir }}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
+
+    - name: Remove remote benchmark directory and contents
+      file:
+        path: "{{ benchmark_remote_src_dir_smart }}"
+        state: absent
+
+    - name: Recreate empty remote benchmark directory
+      file:
+        path: "{{ benchmark_remote_src_dir_smart }}"
         state: directory
         owner: ubuntu
         mode: '0755'
