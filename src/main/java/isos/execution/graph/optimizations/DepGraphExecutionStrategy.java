@@ -2,7 +2,8 @@ package isos.execution.graph.optimizations;
 
 public enum DepGraphExecutionStrategy {
   TRIVIAL,
-  CACHED;
+  CACHED,
+  CONCURRENT;
 
   public static DepGraphExecutionStrategy parse(String s) throws IllegalArgumentException {
     s = s.toLowerCase();
@@ -10,6 +11,8 @@ public enum DepGraphExecutionStrategy {
       return TRIVIAL;
     } else if (s.equals("cached")) {
       return CACHED;
+    } else if (s.equals("concurrent")) {
+      return CONCURRENT;
     } else {
       throw new IllegalArgumentException(s + " is not a valid DepGraphExecutionStrategy");
     }
