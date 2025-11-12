@@ -53,6 +53,9 @@ public interface DependencyGraphBuilder {
    */
   Set<SequenceNumber> getExecutionWindow();
 
+
+  Set<SequenceNumber> getExecutionWindowWithoutExecuted();
+
   /**
    * Calculate dependency graph for slot v. Excludes slots outside the execution window.
    *

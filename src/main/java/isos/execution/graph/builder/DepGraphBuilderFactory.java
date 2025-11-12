@@ -11,7 +11,7 @@ public class DepGraphBuilderFactory {
     return switch (strategy) {
       case TRIVIAL -> new TrivialDependencyGraphBuilder(expansionLimitSize);
       case CACHED -> new CachedDependencyGraphBuilder(expansionLimitSize);
-      case CONCURRENT -> new ConcurrentDependencyGraphBuilder(expansionLimitSize);
+      case CONCURRENT -> new ConcurrentDependencyGraphBuilder(expansionLimitSize, 4);
     };
   }
 }

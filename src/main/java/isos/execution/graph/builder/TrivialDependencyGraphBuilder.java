@@ -87,7 +87,13 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
   @Override
   public Set<SequenceNumber> getExecutionWindow() {
     return ExecutionUtils.executedAndExecutionWindowSlots(
-        this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.expansionLimitSize);
+        this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.expansionLimitSize, true);
+  }
+
+  @Override
+  public Set<SequenceNumber> getExecutionWindowWithoutExecuted() {
+    return ExecutionUtils.executedAndExecutionWindowSlots(
+            this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.expansionLimitSize, false);
   }
 
   /**

@@ -51,7 +51,7 @@ class ExecutionManagerTest {
             SequenceNumber.of(2, 3));
 
     var actualSlots =
-        ExecutionUtils.executedAndExecutionWindowSlots(committed, executed, expansionLimitSize);
+        ExecutionUtils.executedAndExecutionWindowSlots(committed, executed, expansionLimitSize, true);
 
     assertEquals(
         expectedSlotsInExecutionWindow.stream().sorted().toList(),
@@ -205,7 +205,7 @@ class ExecutionManagerTest {
     var sccFinder = new TarjanSCC();
     var manager =
             new ExecutionManager(
-                    new ConcurrentDependencyGraphBuilder(expansionLimitSize),
+                    new ConcurrentDependencyGraphBuilder(expansionLimitSize, 2),
                     sccFinder,
                     executor,
                     batchProcessingMaxSize,

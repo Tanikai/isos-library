@@ -13,9 +13,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder {
@@ -27,10 +24,13 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
 
   private final ExecutorService executor;
 
-  public ConcurrentDependencyGraphBuilder(int expansionLimitSize) {
+  private final int numWorkers;
+
+  public ConcurrentDependencyGraphBuilder(int expansionLimitSize, int numWorkers) {
     this.committedWithDepsMap = new ConcurrentHashMap<>();
     this.executedSet = new ConcurrentHashMap<>();
-    this.executor = Executors.newFixedThreadPool(2);
+    this.numWorkers = numWorkers;
+    this.executor = Executors.newFixedThreadPool(numWorkers);
     this.expansionLimitSize = expansionLimitSize;
   }
 
@@ -42,6 +42,21 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
   @Override
   public void addExecuted(SequenceNumber executedSlot) {
     this.executedSet.put(executedSlot, true);
+  }
+
+  static class DependencyIterationPhaser extends Phaser {
+    BlockingQueue<SequenceNumber> remainingTasks;
+
+    public DependencyIterationPhaser(BlockingQueue<SequenceNumber> remainingTasks) {
+      super();
+      this.remainingTasks = remainingTasks;
+    }
+
+    @Override
+    protected boolean onAdvance(int phase, int registeredParties) {
+      // End if we have no registered parties or we have no remaining tasks left
+      return registeredParties == 0 || remainingTasks.isEmpty();
+    }
   }
 
   /**
@@ -59,8 +74,6 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
       return new DependencyGraph(Set.of(), Set.of());
     }
 
-    int numWorkers = 2;
-
     Set<SequenceNumber> depGraphNodes = ConcurrentHashMap.newKeySet();
     BlockingQueue<SequenceNumber> unexecutedUnexplored = new LinkedBlockingQueue<>();
     // Mark initial node as visited and pending = 1
@@ -72,62 +85,18 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
 
     // Stop flags
     AtomicBoolean uncommittedRequestFound = new AtomicBoolean(false);
-    AtomicBoolean noMoreWork = new AtomicBoolean(false);
 
-    // await/signal termination
-    ReentrantLock waitingLock = new ReentrantLock();
-    Condition waitingForNewRequest = waitingLock.newCondition();
-    Condition allDone = waitingLock.newCondition();
-    AtomicInteger waitingWorkers = new AtomicInteger(0);
-    AtomicInteger finishedTasks = new AtomicInteger(0);
+    DependencyIterationPhaser processingDone = new DependencyIterationPhaser(unexecutedUnexplored);
+    CountDownLatch finished = new CountDownLatch(numWorkers);
 
     Runnable processNode =
         () -> {
-          try {
-            while (!uncommittedRequestFound.get() && !noMoreWork.get()) {
+          processingDone.register();
+          while (!uncommittedRequestFound.get() && !processingDone.isTerminated()) {
+            try {
               SequenceNumber current = unexecutedUnexplored.poll();
-
               if (current == null) {
-                // Currently no available task
-                int totalWaiting = waitingWorkers.incrementAndGet();
-                try {
-                  if (totalWaiting == numWorkers) {
-                    logger.info("All workers are waiting, stop depGraph");
-                    // All workers waiting and no queued work -> request termination
-                    noMoreWork.set(true);
-                    waitingLock.lock();
-                    logger.info("Acquired all waiting worker lock, stop depGraph");
-                    try {
-                      waitingForNewRequest.signalAll();
-                    } finally {
-                      waitingLock.unlock();
-                    }
-                    break;
-                  }
-
-                  try {
-                    // Only some workers waiting -> we will wait for new work
-                    logger.info("Some workers are waiting, self wait");
-                    waitingLock.lock();
-                    try {
-                      // Before awaiting, we have to check the stop conditions again -> we could
-                      // be woken up to stop
-                      if (uncommittedRequestFound.get() || noMoreWork.get()) {
-                        logger.info("Woken up and saw that all requests done");
-                        break;
-                      }
-                      logger.info("Acquired some workers waiting, self wait");
-                      waitingForNewRequest.await();
-                    } finally {
-                      waitingLock.unlock();
-                    }
-                  } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                  }
-                } finally {
-                  waitingWorkers.decrementAndGet();
-                }
+                // we did not get a new request
                 continue;
               }
 
@@ -169,29 +138,16 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
               }
               if (!toAdd.isEmpty()) {
                 unexecutedUnexplored.addAll(toAdd);
-
-                // If there are waiting workers, we can wake them up
-                if (waitingWorkers.get() > 0) {
-                  waitingLock.lock();
-                  waitingForNewRequest.signalAll();
-                  waitingLock.unlock();
-                }
               }
-            }
-          } finally {
-            logger.info("Runner finished");
-            int finished = finishedTasks.incrementAndGet();
-            if (finished == numWorkers) {
-              logger.info("All runners finished, try acquire lock");
-              waitingLock.lock();
-              logger.info("Acquired lock to signal main thread");
-              try {
-                allDone.signalAll();
-              } finally {
-                waitingLock.unlock();
-              }
+            } finally {
+              // At the end of each iteration, wait for other workers to finish processing
+              processingDone.arriveAndAwaitAdvance();
             }
           }
+
+          processingDone.arriveAndDeregister();
+          // Signal completion to main thread
+          finished.countDown();
         };
 
     for (int i = 0; i < numWorkers; i++) {
@@ -199,22 +155,10 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
     }
 
     // Wait until all workers signalled completion
-    logger.info("Main: Try awaiting allDone");
-    waitingLock.lock();
     try {
-      logger.info("Main: Acquired await allDone");
-      if (!uncommittedRequestFound.get()  && !noMoreWork.get()) {
-        logger.info("Main: Acquired awaiting allDone, wait for all threads to finish");
-        allDone.await();
-      } else {
-        logger.info("Main: Acquired await allDone, but already done");
-      }
-      logger.info("Main: All workers finished, return dependency graph");
+      finished.await();
     } catch (InterruptedException e) {
-      logger.error("Interrupted while waiting for DependencyGraph");
       Thread.currentThread().interrupt();
-    } finally {
-      waitingLock.unlock();
     }
 
     return new DependencyGraph(depGraphNodes, edges);
@@ -234,7 +178,19 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
   @Override
   public Set<SequenceNumber> getExecutionWindow() {
     return ExecutionUtils.executedAndExecutionWindowSlots(
-        this.committedWithDepsMap.keySet(), this.executedSet.keySet(), this.expansionLimitSize);
+        this.committedWithDepsMap.keySet(),
+        this.executedSet.keySet(),
+        this.expansionLimitSize,
+        true);
+  }
+
+  @Override
+  public Set<SequenceNumber> getExecutionWindowWithoutExecuted() {
+    return ExecutionUtils.executedAndExecutionWindowSlots(
+        this.committedWithDepsMap.keySet(),
+        this.executedSet.keySet(),
+        this.expansionLimitSize,
+        false);
   }
 
   /**

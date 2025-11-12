@@ -32,7 +32,7 @@ public class ExecutionUtils {
    * @return
    */
   public static Set<SequenceNumber> executedAndExecutionWindowSlots(
-          Set<SequenceNumber> committed, Set<SequenceNumber> executed, int expansionLimitSize) {
+          Set<SequenceNumber> committed, Set<SequenceNumber> executed, int expansionLimitSize, boolean includeExecutedRequests) {
     // We need all slots where the sequence number is smaller than the first not executed request
     // of the replica of that sequence number plus the execution window size.
     // i.e., all v, where v.sequenceCounter < exp(v.replicaId) + k
@@ -63,8 +63,9 @@ public class ExecutionUtils {
                                       .mapToObj(seqCounter -> SequenceNumber.of(entry.getKey(), seqCounter));
                             })
                     .collect(Collectors.toSet());
-
-    executionWindow.addAll(executed);
+    if (includeExecutedRequests) {
+      executionWindow.addAll(executed);
+    }
 
     return executionWindow;
   }
