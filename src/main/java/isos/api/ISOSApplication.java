@@ -173,6 +173,10 @@ public class ISOSApplication implements MessageHandler {
         "OPT: DepGraphBuilder Strategy: {}",
         this.configManager.getStaticConf().getDepGraphExecutionStrategy());
 
+    logger.info(
+        "OPT: Minimum SCC count for concurrent execution: {}",
+        this.configManager.getStaticConf().getMinSccCountForConcurrentExec());
+
     this.executionManager =
         new ExecutionManager(
             this.dependencyGraphBuilder,

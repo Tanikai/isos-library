@@ -10,10 +10,15 @@ import isos.message.replica.ClientRequestBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.Cipher;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 /**
@@ -98,8 +103,28 @@ public class IsosYcsbServer {
     return false;
   }
 
+  public byte[] simulateWorkload(long iterations, long seed) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      byte[] buffer = Long.toString(seed).getBytes();
+      for (int i = 0; i < iterations; i++) {
+        buffer = digest.digest(buffer);
+      }
+      return buffer;
+    } catch (NoSuchAlgorithmException e) {
+      logger.error("Algorithm not found: {}", e.getMessage());
+      throw new RuntimeException(e);
+    }
+  }
+
   private void executeClientRequest(ClientRequestBatch container) {
     for (OrderedClientRequest r : container.getRequests()) {
+      // Simulate workload that cannot be optimized away by JVM
+//      var buffer = simulateWorkload(25000, r.clientLocalTimestamp());
+//      if (Arrays.equals(buffer, r.command())) {
+//        logger.debug("Buffer equals to client request");
+//      }
+
       YCSBMessage command = r.getDeserializedCommand();
       YCSBMessage reply = YCSBMessage.newErrorMessage("Undefined response");
       String table = command.getTable();

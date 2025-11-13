@@ -245,7 +245,7 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
 
         if (this.minSccCountForConcurrentExec > -1) {
           if (SCCs.size() >= this.minSccCountForConcurrentExec) {
-            logger.info("Reached {} SCCs for parallel execution", SCCs.size());
+            logger.warn("Reached {} SCCs for parallel execution", SCCs.size());
             didExecuteAgreementSlots = this.parallelSccExecution(adjList, SCCs);
           } else {
             // Concurrent execution enabled, but not enough SCCs reached for concurrent execution
