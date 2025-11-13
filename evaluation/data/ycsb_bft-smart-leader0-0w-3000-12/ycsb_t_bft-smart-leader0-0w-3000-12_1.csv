@@ -1,0 +1,38 @@
+[OVERALL], RunTime(ms), 23004
+[OVERALL], Throughput(ops/sec), 130.41210224308816
+[TOTAL_GCS_Copy], Count, 23
+[TOTAL_GC_TIME_Copy], Time(ms), 252
+[TOTAL_GC_TIME_%_Copy], Time(%), 1.0954616588419406
+[TOTAL_GCS_MarkSweepCompact], Count, 1
+[TOTAL_GC_TIME_MarkSweepCompact], Time(ms), 207
+[TOTAL_GC_TIME_%_MarkSweepCompact], Time(%), 0.8998435054773083
+[TOTAL_GCs], Count, 24
+[TOTAL_GC_TIME], Time(ms), 459
+[TOTAL_GC_TIME_%], Time(%), 1.9953051643192488
+[READ], Total Operations, 3000
+[READ], Below is a summary of latency in microseconds:, -1
+[READ], Average, 213233.741
+[READ], Min, 150136
+[READ], Max, 1231261
+[READ], p1, 152318
+[READ], p5, 159424
+[READ], p50, 199770
+[READ], p90, 227721
+[READ], p95, 292838
+[READ], p99, 721909
+[READ], p99.9, 1104531
+[READ], p99.99, 1231261
+[READ], Return=OK, 3000
+[CLEANUP], Total Operations, 50
+[CLEANUP], Below is a summary of latency in microseconds:, -1
+[CLEANUP], Average, 0.68
+[CLEANUP], Min, 0
+[CLEANUP], Max, 21
+[CLEANUP], p1, 0
+[CLEANUP], p5, 0
+[CLEANUP], p50, 0
+[CLEANUP], p90, 1
+[CLEANUP], p95, 1
+[CLEANUP], p99, 21
+[CLEANUP], p99.9, 21
+[CLEANUP], p99.99, 21
