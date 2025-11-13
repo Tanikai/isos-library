@@ -1,0 +1,38 @@
+[OVERALL], RunTime(ms), 15085
+[OVERALL], Throughput(ops/sec), 6.629101756711965
+[TOTAL_GCS_Copy], Count, 15
+[TOTAL_GC_TIME_Copy], Time(ms), 212
+[TOTAL_GC_TIME_%_Copy], Time(%), 1.4053695724229367
+[TOTAL_GCS_MarkSweepCompact], Count, 2
+[TOTAL_GC_TIME_MarkSweepCompact], Time(ms), 372
+[TOTAL_GC_TIME_%_MarkSweepCompact], Time(%), 2.466025853496851
+[TOTAL_GCs], Count, 17
+[TOTAL_GC_TIME], Time(ms), 584
+[TOTAL_GC_TIME_%], Time(%), 3.871395425919788
+[CLEANUP], Total Operations, 50
+[CLEANUP], Below is a summary of latency in microseconds:, -1
+[CLEANUP], Average, 0.12
+[CLEANUP], Min, 0
+[CLEANUP], Max, 3
+[CLEANUP], p1, 0
+[CLEANUP], p5, 0
+[CLEANUP], p50, 0
+[CLEANUP], p90, 0
+[CLEANUP], p95, 1
+[CLEANUP], p99, 3
+[CLEANUP], p99.9, 3
+[CLEANUP], p99.99, 3
+[INSERT], Total Operations, 100
+[INSERT], Below is a summary of latency in microseconds:, -1
+[INSERT], Average, 1127325.9
+[INSERT], Min, 495091
+[INSERT], Max, 2326122
+[INSERT], p1, 568234
+[INSERT], p5, 583710
+[INSERT], p50, 983962
+[INSERT], p90, 1923130
+[INSERT], p95, 2190283
+[INSERT], p99, 2326122
+[INSERT], p99.9, 2326122
+[INSERT], p99.99, 2326122
+[INSERT], Return=OK, 100
