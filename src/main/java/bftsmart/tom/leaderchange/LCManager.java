@@ -100,26 +100,28 @@ public class LCManager {
      * @return The new leader
      */
     public int getNewLeader() {
+      logger.warn("Tried to get new leader, return current leader");
+      return currentLeader;
 
-        int[] proc = SVController.getCurrentViewProcesses();
-        int minProc = proc[0];
-        int maxProc = proc[0];
-                    
-        for (int p : proc) {
-            if (p < minProc) minProc = p;
-            if (p > maxProc) maxProc = p;
-        }
- 
-        
-        do {
-            currentLeader++;
-            if (currentLeader > maxProc) {
-
-                currentLeader = minProc;    
-            }
-        } while(!SVController.isCurrentViewMember(currentLeader));
-        
-        return currentLeader;
+//        int[] proc = SVController.getCurrentViewProcesses();
+//        int minProc = proc[0];
+//        int maxProc = proc[0];
+//
+//        for (int p : proc) {
+//            if (p < minProc) minProc = p;
+//            if (p > maxProc) maxProc = p;
+//        }
+//
+//
+//        do {
+//            currentLeader++;
+//            if (currentLeader > maxProc) {
+//
+//                currentLeader = minProc;
+//            }
+//        } while(!SVController.isCurrentViewMember(currentLeader));
+//
+//        return currentLeader;
     }
     
     /**

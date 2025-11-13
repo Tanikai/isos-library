@@ -806,102 +806,104 @@ public class Synchronizer {
      * @param msg Message received from the other replica
      */
     public void deliverTimeoutRequest(LCMessage msg) {
-
-        switch (msg.getType()) {
-            case TOMUtil.STOP: { // message STOP
-
-                logger.info("Last regency: " + lcManager.getLastReg() + ", next regency: " + lcManager.getNextReg());
-
-                // this message is for the next leader change?
-                if (msg.getReg() == lcManager.getLastReg() + 1) {
-
-                    logger.debug("Received regency change request");
-
-                    TOMMessage[] requests = deserializeTOMMessages(msg.getPayload());
-
-                    // store requests that came with the STOP message
-                    lcManager.addRequestsFromSTOP(requests);
-
-                    // store information about the message STOP
-                    lcManager.addStop(msg.getReg(), msg.getSender());
-
-                    processOutOfContextSTOPs(msg.getReg()); // the replica might have received STOPs
-                                                            // that were out of context at the time they
-                                                            // were received, but now can be processed
-
-                    startSynchronization(msg.getReg()); // evaluate STOP messages
-
-                } else if (msg.getReg() > lcManager.getLastReg()) { // send STOP to out of context if
-                                                                    // it is for a future regency
-                    logger.debug("Keeping STOP message as out of context for regency " + msg.getReg());
-                    outOfContextLC.add(msg);
-
-                } else {
-                    logger.debug("Discarding STOP message");
-                }
-            }
-            break;
-            case TOMUtil.STOPDATA: { // STOPDATA messages
-
-                int regency = msg.getReg();
-
-                logger.info("Last regency: " + lcManager.getLastReg() + ", next regency: " + lcManager.getNextReg());
-
-                // Am I the new leader, and am I expecting this messages?
-                if (regency == lcManager.getLastReg()
-                        && this.controller.getStaticConf().getProcessId() == execManager.getCurrentLeader()/*(regency % this.reconfManager.getCurrentViewN())*/) {
-
-                    logger.debug("I'm the new leader and I received a STOPDATA");
-                    processSTOPDATA(msg, regency);
-                } else if (msg.getReg() > lcManager.getLastReg()) { // send STOPDATA to out of context if
-                                                                    // it is for a future regency
-
-                    logger.debug("Keeping STOPDATA message as out of context for regency " + msg.getReg());
-                    outOfContextLC.add(msg);
-
-                } else {
-                    logger.debug("Discarding STOPDATA message");
-                }
-            }
-            break;
-            case TOMUtil.SYNC: { // message SYNC
-
-                int regency = msg.getReg();
-
-                logger.info("Last regency: " + lcManager.getLastReg() + ", next regency: " + lcManager.getNextReg());
-
-                // I am expecting this sync?
-                boolean isExpectedSync = (regency == lcManager.getLastReg() && regency == lcManager.getNextReg());
-
-                // Is this sync what I wanted to get in the previous iteration of the synchoronization phase?
-                boolean islateSync = (regency == lcManager.getLastReg() && regency == (lcManager.getNextReg() - 1));
-
-                //Did I already sent a stopdata in this iteration?
-                boolean sentStopdata = (lcManager.getStopsSize(lcManager.getNextReg()) == 0); //if 0, I already purged the stops,
-                                                                                              //which I only do when I am about to
-                                                                                              //send the stopdata
-
-                // I am (or was) waiting for this message, and did I received it from the new leader?
-                if ((isExpectedSync || // Expected case
-                        (islateSync && !sentStopdata)) && // might happen if I timeout before receiving the SYNC
-                        (msg.getSender() == execManager.getCurrentLeader())) {
-
-                //if (msg.getReg() == lcManager.getLastReg() &&
-                //		msg.getReg() == lcManager.getNextReg() && msg.getSender() == lm.getCurrentLeader()/*(regency % this.reconfManager.getCurrentViewN())*/) {
-                    processSYNC(msg.getPayload(), regency);
-
-                } else if (msg.getReg() > lcManager.getLastReg()) { // send SYNC to out of context if
-                    // it is for a future regency
-                    logger.debug("Keeping SYNC message as out of context for regency " + msg.getReg());
-                    outOfContextLC.add(msg);
-
-                } else {
-                    logger.debug("Discarding SYNC message");
-                }
-            }
-            break;
-
-        }
+      logger.warn("Received timeout request, but ignore");
+      return;
+//
+//        switch (msg.getType()) {
+//            case TOMUtil.STOP: { // message STOP
+//
+//                logger.info("Last regency: " + lcManager.getLastReg() + ", next regency: " + lcManager.getNextReg());
+//
+//                // this message is for the next leader change?
+//                if (msg.getReg() == lcManager.getLastReg() + 1) {
+//
+//                    logger.debug("Received regency change request");
+//
+//                    TOMMessage[] requests = deserializeTOMMessages(msg.getPayload());
+//
+//                    // store requests that came with the STOP message
+//                    lcManager.addRequestsFromSTOP(requests);
+//
+//                    // store information about the message STOP
+//                    lcManager.addStop(msg.getReg(), msg.getSender());
+//
+//                    processOutOfContextSTOPs(msg.getReg()); // the replica might have received STOPs
+//                                                            // that were out of context at the time they
+//                                                            // were received, but now can be processed
+//
+//                    startSynchronization(msg.getReg()); // evaluate STOP messages
+//
+//                } else if (msg.getReg() > lcManager.getLastReg()) { // send STOP to out of context if
+//                                                                    // it is for a future regency
+//                    logger.debug("Keeping STOP message as out of context for regency " + msg.getReg());
+//                    outOfContextLC.add(msg);
+//
+//                } else {
+//                    logger.debug("Discarding STOP message");
+//                }
+//            }
+//            break;
+//            case TOMUtil.STOPDATA: { // STOPDATA messages
+//
+//                int regency = msg.getReg();
+//
+//                logger.info("Last regency: " + lcManager.getLastReg() + ", next regency: " + lcManager.getNextReg());
+//
+//                // Am I the new leader, and am I expecting this messages?
+//                if (regency == lcManager.getLastReg()
+//                        && this.controller.getStaticConf().getProcessId() == execManager.getCurrentLeader()/*(regency % this.reconfManager.getCurrentViewN())*/) {
+//
+//                    logger.debug("I'm the new leader and I received a STOPDATA");
+//                    processSTOPDATA(msg, regency);
+//                } else if (msg.getReg() > lcManager.getLastReg()) { // send STOPDATA to out of context if
+//                                                                    // it is for a future regency
+//
+//                    logger.debug("Keeping STOPDATA message as out of context for regency " + msg.getReg());
+//                    outOfContextLC.add(msg);
+//
+//                } else {
+//                    logger.debug("Discarding STOPDATA message");
+//                }
+//            }
+//            break;
+//            case TOMUtil.SYNC: { // message SYNC
+//
+//                int regency = msg.getReg();
+//
+//                logger.info("Last regency: " + lcManager.getLastReg() + ", next regency: " + lcManager.getNextReg());
+//
+//                // I am expecting this sync?
+//                boolean isExpectedSync = (regency == lcManager.getLastReg() && regency == lcManager.getNextReg());
+//
+//                // Is this sync what I wanted to get in the previous iteration of the synchoronization phase?
+//                boolean islateSync = (regency == lcManager.getLastReg() && regency == (lcManager.getNextReg() - 1));
+//
+//                //Did I already sent a stopdata in this iteration?
+//                boolean sentStopdata = (lcManager.getStopsSize(lcManager.getNextReg()) == 0); //if 0, I already purged the stops,
+//                                                                                              //which I only do when I am about to
+//                                                                                              //send the stopdata
+//
+//                // I am (or was) waiting for this message, and did I received it from the new leader?
+//                if ((isExpectedSync || // Expected case
+//                        (islateSync && !sentStopdata)) && // might happen if I timeout before receiving the SYNC
+//                        (msg.getSender() == execManager.getCurrentLeader())) {
+//
+//                //if (msg.getReg() == lcManager.getLastReg() &&
+//                //		msg.getReg() == lcManager.getNextReg() && msg.getSender() == lm.getCurrentLeader()/*(regency % this.reconfManager.getCurrentViewN())*/) {
+//                    processSYNC(msg.getPayload(), regency);
+//
+//                } else if (msg.getReg() > lcManager.getLastReg()) { // send SYNC to out of context if
+//                    // it is for a future regency
+//                    logger.debug("Keeping SYNC message as out of context for regency " + msg.getReg());
+//                    outOfContextLC.add(msg);
+//
+//                } else {
+//                    logger.debug("Discarding SYNC message");
+//                }
+//            }
+//            break;
+//
+//        }
 
     }
 

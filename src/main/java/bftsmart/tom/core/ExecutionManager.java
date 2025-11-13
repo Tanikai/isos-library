@@ -110,6 +110,9 @@ public final class ExecutionManager {
         if (controller.getCurrentViewAcceptors().length > 0) {
           currentLeader = controller.getCurrentViewAcceptors()[0];
           logger.info("Set initial leader first in view {}, i.e., {}", controller.getCurrentViewAcceptors(), currentLeader);
+          if (this.controller.getStaticConf().getProcessId() == currentLeader) {
+            logger.info("I am the leader!");
+          }
         } else {
           logger.info("No current view acceptors, set leader to 0");
           currentLeader = 0;
@@ -121,7 +124,8 @@ public final class ExecutionManager {
      * @param leader Current leader
      */
     public void setNewLeader (int leader) {
-            this.currentLeader = leader;
+      logger.warn("Tried to set new leader, keep old leader");
+//            this.currentLeader = leader;
     }
 
     /**

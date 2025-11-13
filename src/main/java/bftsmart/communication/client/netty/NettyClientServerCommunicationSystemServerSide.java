@@ -230,7 +230,7 @@ public class NettyClientServerCommunicationSystemServerSide extends SimpleChanne
 			closeChannelAndEventLoop(ctx.channel());
 			return;
 		}
-		logger.info("Session Created, active clients=" + sessionReplicaToClient.size());
+		logger.debug("Session Created, active clients=" + sessionReplicaToClient.size());
 	}
 
 	@Override
