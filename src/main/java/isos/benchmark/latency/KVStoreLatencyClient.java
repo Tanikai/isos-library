@@ -78,7 +78,7 @@ public class KVStoreLatencyClient {
         if (random.nextDouble() < writeRatio) {
           // Write
           wasWriteRequest.add(true);
-          var latency = executeRequest(key, "asdf");
+          var latency = executeRequest(key, UUID.randomUUID().toString());
           timestamps_ms.add(System.currentTimeMillis());
           latencies_us.add(latency);
         } else {
