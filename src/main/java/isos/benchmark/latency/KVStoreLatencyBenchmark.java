@@ -207,9 +207,11 @@ public class KVStoreLatencyBenchmark {
 
     try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile, true))) {
       for (var line : results) {
-        writer.printf(
-            "%s,%d,%d\n",
-            line.wasUpdateOperation() ? "UPDATE" : "READ", line.timestamp_ms(), line.latency_us());
+        String operation = line.wasUpdateOperation() ? "UPDATE" : "READ";
+        if (line.latency_us() == -1L) {
+          operation += "-ERROR";
+        }
+        writer.printf("%s,%d,%d\n", operation, line.timestamp_ms(), line.latency_us());
       }
     } catch (IOException e) {
       logger.error("Failed to open results file");
@@ -221,6 +223,7 @@ public class KVStoreLatencyBenchmark {
         "Starting benchmark with {} clients, {} requests each, {}% write rate, {}% conflict rate",
         clientCount, requestCount, writeRatioPercent, conflictRatioPercent);
     this.startLatch.countDown();
+    var startTime = System.nanoTime();
 
     logger.info("Waiting for benchmark to end, timeout of {} seconds", benchmarkTimeoutSecs);
     try {
@@ -231,6 +234,9 @@ public class KVStoreLatencyBenchmark {
         return;
       }
       logger.info("Benchmark successful");
+      var endTime = System.nanoTime();
+      var benchDuration = TimeUnit.NANOSECONDS.toSeconds(endTime-startTime);
+      logger.info("Benchmark duration: {}", benchDuration);
 
       this.writeHeader();
       for (Integer clientId : this.results.keySet().stream().sorted().toList()) {
