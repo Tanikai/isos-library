@@ -138,7 +138,7 @@ public class AgreementSlotManager implements RequestReceiver {
    * @param replicaId
    */
   private void initializeReplicaId(ReplicaId replicaId, boolean startNewThread) {
-    var sequence = new AgreementSlotSequence(replicaId, agreementSlotSequenceLength);
+    var sequence = new AgreementSlotSequence(replicaId, agreementSlotSequenceLength, maxFaults + 1);
     this.replicaAgreementSlots.put(replicaId, sequence);
 
     for (int i = 0; i < agreementSlotSequenceLength; i++) {
@@ -230,28 +230,17 @@ public class AgreementSlotManager implements RequestReceiver {
   public void waitForDeps(Set<SequenceNumber> depSet) throws InterruptedException {
     CountDownLatch allDepLatch = new CountDownLatch(depSet.size());
 
-    // TODO Kai: maybe use structured concurrency for this use case?
-    try (var taskExecutor = Executors.newVirtualThreadPerTaskExecutor()) {
-      for (var dep : depSet) {
-        taskExecutor.submit(
-            () -> {
-              var processorSlot = this.queueProcessors.get(dep);
-              try {
-                processorSlot.awaitConditionCompleted(this.maxFaults);
-                // After this, the condition of the agreement slot is
-                allDepLatch.countDown();
-              } catch (InterruptedException e) {
-                // what to do here? Rethrow interrupted exception?
-                logger.error("Interrupted while waiting for slot {}", dep);
-              } catch (Exception e) {
-                logger.error("Exception in waitForDeps for slot {}: {}", dep, e.getMessage());
-              }
-            });
+    for (var dep : depSet) {
+      try {
+        var processorSlot = this.queueProcessors.get(dep);
+        processorSlot.awaitConditionCompleted();
+      } catch (InterruptedException e) {
+        // what to do here? Rethrow interrupted exception?
+        logger.error("Interrupted while waiting for slot {}", dep);
+      } catch (Exception e) {
+        logger.error("Exception in waitForDeps for slot {}: {}", dep, e.getMessage());
       }
     }
-
-    // For CountDownLatch, we do not have to wait in a while loop
-    allDepLatch.await();
   }
 
   /**
@@ -351,7 +340,6 @@ public class AgreementSlotManager implements RequestReceiver {
       // and deserializing it here, so that
       r.updateDeserializedCommandCache(clientPayloadDeserializer);
 
-
       // when we receive a new request, we first add it to the pending requests.
       // set the request for the latest entry in th
       // AgreementSlots
@@ -368,8 +356,8 @@ public class AgreementSlotManager implements RequestReceiver {
         var requests = this.pendingRequests.awaitPendingRequests();
 
         if (requests.getRequests().length == 0) {
-            logger.warn("Proposed batch is empty!");
-            continue;
+          logger.warn("Proposed batch is empty!");
+          continue;
         }
 
         SequenceNumber newSlot =

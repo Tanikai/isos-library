@@ -33,7 +33,7 @@ public class AgreementSlotSequence {
   private final int length;
   private final Lock addEntryLock;
 
-  public AgreementSlotSequence(ReplicaId replicaId, int sequenceLength) {
+  public AgreementSlotSequence(ReplicaId replicaId, int sequenceLength, int waitQuorumSize) {
     this.replicaId = replicaId; // required to return SequenceNumber
     this.slots = new AgreementSlot[sequenceLength];
     this.lowestUninitialized = 0;
@@ -41,7 +41,7 @@ public class AgreementSlotSequence {
     this.addEntryLock = new ReentrantLock();
 
     for (int i = 0; i < sequenceLength; i++) {
-      this.slots[i] = new AgreementSlot(SequenceNumber.of(replicaId, i));
+      this.slots[i] = new AgreementSlot(SequenceNumber.of(replicaId, i), waitQuorumSize);
     }
   }
 

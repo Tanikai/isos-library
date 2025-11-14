@@ -206,16 +206,10 @@ public class AgmtSlotQueueProcessor implements Runnable {
   /**
    * Pseudocode line 60
    *
-   * @param maxFaults
    * @throws InterruptedException
    */
-  public void awaitConditionCompleted(int maxFaults) throws InterruptedException {
-    if (maxFaults < 0) {
-      throw new IllegalArgumentException("Maximum faults is smaller than 0");
-    } else if (maxFaults == 0) {
-      logger.warn("Maximum faults is 0. Is ISOS configured correctly?");
-    }
-    this.slot.awaitConditionCompleted(maxFaults + 1);
+  public void awaitConditionCompleted() throws InterruptedException {
+    this.slot.awaitConditionCompleted();
   }
 
   /**

@@ -12,7 +12,7 @@ class AgreementSlotSequenceTest {
   @Test
   void testInitialSlotsEmpty() {
     ReplicaId replicaId = ReplicaId.of(1);
-    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5);
+    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5, 2);
     List<AgreementSlot> slots = seq.getAgreementSlotsReadOnly();
     assertEquals(0, slots.size());
   }
@@ -20,7 +20,7 @@ class AgreementSlotSequenceTest {
   @Test
   void testCreateLowestUnusedSequenceNumberEntryFillsSlot() {
     ReplicaId replicaId = ReplicaId.of(2);
-    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 3);
+    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 3, 2);
     assertEquals(0, seq.getLowestUninitialized());
     var actualSeqNum = seq.createLowestSeqNumEntry(null);
     SequenceNumber expectedSeqNum = SequenceNumber.of(2, 0);
@@ -34,10 +34,10 @@ class AgreementSlotSequenceTest {
 
   @Test
   void testReplicaIdEnforced() {
-    var seq = new AgreementSlotSequence(ReplicaId.of(1), 5);
+    var seq = new AgreementSlotSequence(ReplicaId.of(1), 5, 2);
     seq.createLowestSeqNumEntry(null);
     var invalidSequenceNum = SequenceNumber.of(42, 0);
-    var invalidAgreementSlot = new AgreementSlot(invalidSequenceNum);
+    var invalidAgreementSlot = new AgreementSlot(invalidSequenceNum, 2);
     assertThrowsExactly(
         InvalidReplicaIdException.class, () -> seq.putAgreementSlotValue(invalidAgreementSlot));
   }
@@ -45,17 +45,17 @@ class AgreementSlotSequenceTest {
   @Test
   void testPutAgreementSlotOutOfBounds() {
     ReplicaId replicaId = ReplicaId.of(1);
-    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 3);
+    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 3, 2);
     seq.createLowestSeqNumEntry(null);
     SequenceNumber wrongCounter = SequenceNumber.of(replicaId, 2);
-    AgreementSlot wrongSlot = new AgreementSlot(wrongCounter);
+    AgreementSlot wrongSlot = new AgreementSlot(wrongCounter, 2);
     assertThrows(IndexOutOfBoundsException.class, () -> seq.putAgreementSlotValue(wrongSlot));
   }
 
   @Test
   void testGetAgreementSlotsReadOnlyIsUnmodifiable() {
     ReplicaId replicaId = ReplicaId.of(3);
-    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5);
+    AgreementSlotSequence seq = new AgreementSlotSequence(replicaId, 5, 2);
     var num0 = seq.createLowestSeqNumEntry(null);
     var num1 = seq.createLowestSeqNumEntry(null);
     var num2 = seq.createLowestSeqNumEntry(null);

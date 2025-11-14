@@ -12,6 +12,8 @@ import isos.utils.ReplicaId;
 import isos.utils.ViewNumber;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -55,18 +57,16 @@ public class AgreementSlot {
 
   private CommittedCommand exec;
 
-  // Fields required for waiting / notifying efficiently (not for concurrency control)
-
-  private final Lock slotLock;
-
   /**
    * When the DepPropose, DepVerify, or ViewChange messages change, this condition has to be
    * notified
    */
-  private final Condition messageCountCondition;
+  private final CountDownLatch messageCountCondition;
 
-  public AgreementSlot(SequenceNumber seqNum) {
-    this(seqNum, null);
+  private final int waitQuorumSize;
+
+  public AgreementSlot(SequenceNumber seqNum, int waitQuorumSize) {
+    this(seqNum, null, waitQuorumSize);
   }
 
   /**
@@ -75,16 +75,16 @@ public class AgreementSlot {
    *     acts as the coordinator for this agreement slot when this AgreementSlot object is passed to
    *     it. When it is null, it acts as the follower.
    */
-  public AgreementSlot(SequenceNumber seqNum, ClientRequestBatch r) {
+  public AgreementSlot(SequenceNumber seqNum, ClientRequestBatch r, int waitQuorumSize) {
     this(
         seqNum,
         r,
         null,
         AgreementSlotPhase.INIT,
-        new HashMap<>(),
         ViewNumber.defaultViewNumber(),
         new HashMap<>(),
-        new EmptyCertificate());
+        new EmptyCertificate(),
+        waitQuorumSize);
   }
 
   public AgreementSlot(
@@ -92,10 +92,10 @@ public class AgreementSlot {
       ClientRequestBatch requests,
       DepProposeMessage depPropose,
       AgreementSlotPhase step,
-      Map<ReplicaId, ViewChangeMessage> viewChanges,
       ViewNumber viewNumber,
       Map<ReplicaId, ViewNumber> peerViewNumbers,
-      ViewChangeCertificate viewChangeCertificate) {
+      ViewChangeCertificate viewChangeCertificate,
+      int waitQuorumSize) {
     this.seqNum = seqNum;
     this.requests = requests;
     this.depPropose = depPropose;
@@ -106,25 +106,12 @@ public class AgreementSlot {
     this.peerViewNumbers = peerViewNumbers;
     this.viewChangeCertificate = viewChangeCertificate;
 
-    this.slotLock = new ReentrantLock();
-    this.messageCountCondition = this.slotLock.newCondition();
+    this.messageCountCondition = new CountDownLatch(1);
+    this.waitQuorumSize = waitQuorumSize;
   }
 
-  public void awaitConditionCompleted(int quorumSize) throws InterruptedException {
-    this.slotLock.lock();
-    try {
-      while (this.depPropose == null // received valid DepPropose
-          && !this.reachedDepVerifyQuorum(quorumSize) // received f+1 correctly signed DepVerifys
-          && !this.reachedViewChangeQuorum(
-              this.viewNumber, quorumSize) // received f+1 correctly signed ViewChanges (of the view that we are currently in)
-      // TODO Kai: do we have to check for a correct view number here?
-      ) {
-        // if depPropose, depVerify, or viewChanges get changed, the condition will be notified
-        this.messageCountCondition.await();
-      }
-    } finally {
-      this.slotLock.unlock();
-    }
+  public void awaitConditionCompleted() throws InterruptedException {
+    this.messageCountCondition.await();
   }
 
   public SequenceNumber getSeqNum() {
@@ -152,15 +139,12 @@ public class AgreementSlot {
       throw new IllegalStateException("DepPropose cannot be set again");
     }
 
-    this.slotLock.lock();
-    try {
-      this.depPropose = depPropose;
-      this.depVerifys.setFollowerQuroum(depPropose.followerQuorum());
-    } finally {
-      // We are signaling so that other agreement slots that wait for us can check the wait
-      // condition
-      this.messageCountCondition.signalAll();
-      this.slotLock.unlock();
+    this.depPropose = depPropose;
+    this.depVerifys.setFollowerQuroum(depPropose.followerQuorum());
+
+    // received valid DepPropose, or
+    if (this.depPropose != null) {
+      this.messageCountCondition.countDown();
     }
   }
 
@@ -169,12 +153,11 @@ public class AgreementSlot {
   }
 
   public void setDepVerify(ReplicaId replicaId, DepVerifyMessage depVerify) {
-    this.slotLock.lock();
-    try {
-      this.depVerifys.setDepVerify(replicaId, depVerify);
-    } finally {
-      this.messageCountCondition.signalAll();
-      this.slotLock.unlock();
+    this.depVerifys.setDepVerify(replicaId, depVerify);
+
+    // received f+1 correctly signed DepVerifys, or
+    if (this.reachedDepVerifyQuorum(this.waitQuorumSize)) {
+      this.messageCountCondition.countDown();
     }
   }
 
@@ -183,15 +166,12 @@ public class AgreementSlot {
    * deleted.
    */
   public void replaceDepVerifys(List<DepVerifyMessage> depVerifys) {
-    this.slotLock.lock();
-    try {
-      this.depVerifys.clearDepVerifys();
-      for (var d: depVerifys) {
-        this.depVerifys.setDepVerify(d.followerId(), d);
-      }
-    } finally {
-      this.messageCountCondition.signalAll();
-      this.slotLock.unlock();
+    this.depVerifys.clearDepVerifys();
+    for (var d : depVerifys) {
+      this.depVerifys.setDepVerify(d.followerId(), d);
+    }
+    if (this.reachedDepVerifyQuorum(this.waitQuorumSize)) {
+      this.messageCountCondition.countDown();
     }
   }
 
@@ -229,17 +209,16 @@ public class AgreementSlot {
   }
 
   public void setViewChange(ViewChangeMessage viewChange) {
-    this.slotLock.lock();
-    try {
-      this.viewChanges.setViewChange(viewChange);
-    } finally {
-      this.messageCountCondition.signalAll();
-      this.slotLock.unlock();
+    // received f+1 correctly signed ViewChanges (of the view that we are currently in)
+    this.viewChanges.setViewChange(viewChange);
+    if (this.reachedViewChangeQuorum(viewChange.viewNumber(), this.waitQuorumSize)) {
+      this.messageCountCondition.countDown();
     }
   }
 
   /**
    * Returns the current view number of the agreement slot.
+   *
    * @return
    */
   public ViewNumber getViewNumber() {
@@ -266,7 +245,8 @@ public class AgreementSlot {
 
   public void setPeerViewNumber(ReplicaId replicaId, ViewNumber newPeerViewNumber) {
     var currentViewNumber = this.peerViewNumbers.get(replicaId);
-    if (currentViewNumber != null && newPeerViewNumber.compareTo(currentViewNumber) <= 0) { // smaller or equal
+    if (currentViewNumber != null
+        && newPeerViewNumber.compareTo(currentViewNumber) <= 0) { // smaller or equal
       throw new ViewNumberNotLargerException(currentViewNumber, newPeerViewNumber);
     }
 
@@ -282,9 +262,10 @@ public class AgreementSlot {
     Map<ViewNumber, Long> groupedByCount =
         viewNumbers.values().stream().collect(Collectors.groupingBy(v -> v, Collectors.counting()));
 
-    var result = groupedByCount.entrySet().stream()
-        .filter(entry -> entry.getValue() >= quorumSize)
-        .max(Map.Entry.comparingByKey());
+    var result =
+        groupedByCount.entrySet().stream()
+            .filter(entry -> entry.getValue() >= quorumSize)
+            .max(Map.Entry.comparingByKey());
 
     return result.map(Map.Entry::getKey);
   }

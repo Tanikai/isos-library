@@ -75,7 +75,7 @@ class AgmtSlotQueueProcessorTest {
 
     // by initially setting a clientRequests, we communicate to the Queue Processor that it is the
     // coordinator
-    var slot = new AgreementSlot(seqNum, container);
+    var slot = new AgreementSlot(seqNum, container, 2);
 
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
         .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
@@ -187,7 +187,7 @@ class AgmtSlotQueueProcessorTest {
 
     // by initially setting a clientRequests, we communicate to the Queue Processor that it is the
     // coordinator
-    var slot = new AgreementSlot(seqNum, container);
+    var slot = new AgreementSlot(seqNum, container, 2);
 
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
         .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
@@ -330,7 +330,7 @@ class AgmtSlotQueueProcessorTest {
 
     // We have 1 dependencySet with 0.0 and 2 with 0.0+1.0
 
-    var slot = new AgreementSlot(seqNum);
+    var slot = new AgreementSlot(seqNum, 2);
     var queueProcessor =
         new AgmtSlotQueueProcessor(
             ownReplicaId,
@@ -428,7 +428,7 @@ class AgmtSlotQueueProcessorTest {
     when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(SequenceNumber.of(0, 0), SequenceNumber.of(1, 0)));
 
-    var slot = new AgreementSlot(seqNum);
+    var slot = new AgreementSlot(seqNum, 2);
     var queueProcessor =
         new AgmtSlotQueueProcessor(
             ownReplicaId,
@@ -526,7 +526,7 @@ class AgmtSlotQueueProcessorTest {
     when(conflictChecker.getCompactDependencySet(any(), any()))
         .thenReturn(new DependencySet(SequenceNumber.of(ownReplicaId, 0)));
 
-    var slot = new AgreementSlot(seqNum, container);
+    var slot = new AgreementSlot(seqNum, container, 2);
     when(msgSenderMock.getLowestPingReplicas(anyInt()))
         .thenReturn(new HashSet<>(List.of(ReplicaId.of(0), ReplicaId.of(3))));
 

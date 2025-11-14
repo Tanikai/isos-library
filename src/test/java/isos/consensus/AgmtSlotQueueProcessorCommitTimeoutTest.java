@@ -36,7 +36,7 @@ class AgmtSlotQueueProcessorCommitTimeoutTest {
     DepProposeWithRequest depProposeWithRequest =
         new DepProposeWithRequest(depPropose, container);
 
-    AgreementSlot slot = new AgreementSlot(seqNum);
+    AgreementSlot slot = new AgreementSlot(seqNum, 2);
 
     var incomingQueue = new LinkedBlockingDeque<ISOSMessage>();
     var timeoutConfig = new TimeoutConfiguration(100); // commit timeout is delta * 9 -> 0.9 sec
