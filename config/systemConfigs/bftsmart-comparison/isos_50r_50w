@@ -15,25 +15,34 @@
 
 
 # Yahoo! Cloud System Benchmark
-# Workload B: Read mostly workload
-#   Application example: photo tagging; add a tag is an update, but most operations are to read tags
-#
-#   Read/update ratio: 95/5
+# Workload A: Update heavy workload
+#   Application example: Session store recording recent actions
+#                        
+#   Read/update ratio: 50/50
 #   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
 #   Request distribution: zipfian
 
+# Template: https://github.com/brianfrankcooper/YCSB/blob/master/workloads/workload_template
 
 fieldcount=1
 fieldlength=1024
 
-recordcount=100
-operationcount=500
+# There is no default setting for recordcount but it is
+# required to be set.
+# The number of records in the table to be inserted in
+# the load phase or the number of records already in the
+# table before the run phase.
+recordcount=1000
+# There is no default setting for operationcount but it is
+# required to be set.
+# The number of operations to use during the run phase.
+operationcount=3000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 
 readallfields=true
 
-readproportion=0.95
-updateproportion=0.05
+readproportion=0.5
+updateproportion=0.5
 scanproportion=0
 insertproportion=0
 
