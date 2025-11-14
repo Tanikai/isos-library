@@ -79,7 +79,7 @@ public class PingHandler implements Runnable {
   public void handlePingResponse(PingMessage pm) {
     // nonce has to match with our nonce
     if (!Arrays.equals(lastPingNonce, pm.getNonce())) {
-      logger.error(
+      logger.warn(
           "Nonce mismatch with sent ping and received pong message, stop processing pong message");
     }
 

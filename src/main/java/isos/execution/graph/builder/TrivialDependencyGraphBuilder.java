@@ -73,7 +73,7 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
         // else branch: Ignore rhist in the implementation
       }
     }
-    return new DependencyGraph(D, edges);
+    return new DependencyGraph(D, edges, true);
   }
 
   /**
@@ -129,7 +129,7 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
     // there will be another v that is inside of the execution window, as the window starts from
     // the lowest, not executed slot.
     if (DPrime.isEmpty()) {
-      return new DependencyGraph(Set.of(), Set.of());
+      return new DependencyGraph(Set.of(), Set.of(), false);
     }
     Set<SequenceNumber> D = new HashSet<>();
     Set<Dependency> edges = new HashSet<>();
@@ -161,6 +161,6 @@ public class TrivialDependencyGraphBuilder implements DependencyGraphBuilder {
       }
     }
 
-    return new DependencyGraph(D, edges);
+    return new DependencyGraph(D, edges, true);
   }
 }

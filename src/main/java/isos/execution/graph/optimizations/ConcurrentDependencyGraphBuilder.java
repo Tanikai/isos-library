@@ -71,7 +71,7 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
       SequenceNumber v, Set<SequenceNumber> executionWindowSlots) {
     if (this.executedSet.containsKey(v)) {
       logger.error("SequenceNumber {} is already executed", v);
-      return new DependencyGraph(Set.of(), Set.of());
+      return new DependencyGraph(Set.of(), Set.of(), false);
     }
 
     Set<SequenceNumber> depGraphNodes = ConcurrentHashMap.newKeySet();
@@ -111,7 +111,7 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
               if (slotDeps == null) {
                 // Uncommitted dependency -> abort early and return dependency graph
                 uncommittedRequestFound.set(true);
-                break;
+                continue;
               }
 
               var unexecutedDeps =
@@ -131,6 +131,10 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
               // Enqueue newly discovered deps, mark visited at enqueue time
               List<SequenceNumber> toAdd = new ArrayList<>(unexecutedDeps.size());
               for (SequenceNumber dep : unexecutedDeps) {
+                if (!committedWithDepsMap.containsKey(dep)) {
+                  uncommittedRequestFound.set(true);
+                  continue;
+                }
                 // If it was not yet visited, add the dependency to the visited
                 if (visited.putIfAbsent(dep, Boolean.TRUE) == null) {
                   toAdd.add(dep);
@@ -161,7 +165,7 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
       Thread.currentThread().interrupt();
     }
 
-    return new DependencyGraph(depGraphNodes, edges);
+    return new DependencyGraph(depGraphNodes, edges, !uncommittedRequestFound.get());
   }
 
   /**
@@ -205,7 +209,7 @@ public class ConcurrentDependencyGraphBuilder implements DependencyGraphBuilder 
     // that can be executed
     // Pseudocode line 166
     if (!executionWindowSlots.contains(v)) {
-      return new DependencyGraph(Set.of(), Set.of());
+      return new DependencyGraph(Set.of(), Set.of(), false);
     }
 
     return this.buildDependencyGraphConcurrently(v, executionWindowSlots);

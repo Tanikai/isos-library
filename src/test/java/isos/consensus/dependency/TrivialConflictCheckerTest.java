@@ -63,7 +63,7 @@ class TrivialConflictCheckerTest {
     edges.add(createEdge(0, 8, 7));
     edges.add(createEdge(0, 8, 8));
 
-    return new DependencyGraph(nodes, edges);
+    return new DependencyGraph(nodes, edges, true);
   }
 
   SequenceNumber getSeqNum(int nodeId) {

@@ -219,6 +219,11 @@ public class ExecutionManager implements ISOSExecutionManager, Runnable {
         // Build dependency graph
         DependencyGraph depGraph = this.depGraphBuilder.buildDependencyGraph(v);
 
+        // If the request cannot be executed, go to next candidate
+        if (!depGraph.canBeExecuted()) {
+          continue;
+        }
+
         // Checking whether all dependencies are contained in the vertices is wrong. Instead, we
         // have to check whether all **edge destinations** are contained in the execution window.
         // If any dependencies are not committed, we cannot proceed.

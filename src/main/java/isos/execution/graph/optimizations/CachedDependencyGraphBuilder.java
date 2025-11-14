@@ -56,7 +56,7 @@ public class CachedDependencyGraphBuilder implements DependencyGraphBuilder {
       SequenceNumber v, Set<SequenceNumber> executionWindowSlots) {
     if (this.executedSet.containsKey(v)) {
       logger.error("SequenceNumber {} is already executed", v);
-      return new DependencyGraph(Set.of(), Set.of());
+      return new DependencyGraph(Set.of(), Set.of(), false);
     }
 
     Set<SequenceNumber> depGraphNodes;
@@ -189,7 +189,7 @@ public class CachedDependencyGraphBuilder implements DependencyGraphBuilder {
       }
     }
 
-    return new DependencyGraph(depGraphNodes, edges);
+    return new DependencyGraph(depGraphNodes, edges, uncommittedCommands.isEmpty());
   }
 
   /**
@@ -233,7 +233,7 @@ public class CachedDependencyGraphBuilder implements DependencyGraphBuilder {
     // that can be executed
     // Pseudocode line 166
     if (!executionWindowSlots.contains(v)) {
-      return new DependencyGraph(Set.of(), Set.of());
+      return new DependencyGraph(Set.of(), Set.of(), false);
     }
 
     return this.buildDependencyGraphWithCache(v, executionWindowSlots);

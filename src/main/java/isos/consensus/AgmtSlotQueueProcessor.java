@@ -195,12 +195,12 @@ public class AgmtSlotQueueProcessor implements Runnable {
         this.handleMessage(msg);
       } catch (InterruptedException e) {
         // interrupted while waiting to take new message from incomingQueue
-        logger.info("Interrupted while waiting for message in incomingQueue. Exiting.");
+        logger.debug("Interrupted while waiting for message in incomingQueue. Exiting.");
         Thread.currentThread().interrupt(); // Re-interrupt to keep interrupted status
         break;
       }
     }
-    logger.info("QueueProcessor has been stopped.");
+    logger.debug("QueueProcessor has been stopped.");
   }
 
   /**
@@ -619,7 +619,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       // New step -> handle DepVerify that were buffered
       this.processBufferedMessages(this.slot.getStep(), this.slot.getViewNumber());
     } else {
-      logger.info(
+      logger.debug(
           "Received DepPropose message without request, propose timeout reached in replica {}",
           depProposeWithR.logicalSender());
     }
@@ -685,7 +685,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     if (!fpVerified) {
       // At least 1 dependency is not reported by at least f+1 followers
       // Enter reconciliation path, stop participating in fast path
-      logger.info(
+      logger.debug(
           "At least 1 dependency is not reported by at least f+1 followers. DepPropose conflicts: {}. DepVerify conflicts: {}. Enter reconciliation path.",
           this.slot.getDepPropose().depSet().dependencies(),
           this.slot.getDepVerifys().entrySet().stream()
@@ -731,7 +731,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // has to match with the hash from the received DepCommit messages as well
     if (!this.bufferedMessages.depCommitQuorumWithSameHashReached(
         this.slot.getDepVerifyHashCached(), (2 * this.maxFaults) + 1)) {
-      logger.info("Commit Quorum with same DepVerifyHash not reached yet");
+      logger.debug("Commit Quorum with same DepVerifyHash not reached yet");
       return;
     }
 
@@ -800,7 +800,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
     // Before we can continue processing, we need to fulfill the preconditions
 
     if (!this.slot.getViewNumber().equals(prepare.viewNumber())) {
-      logger.info(
+      logger.debug(
           "View number mismatch in prepare, own view number: {}, received: {}",
           this.slot.getViewNumber(),
           prepare.viewNumber());
@@ -817,7 +817,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    logger.info(
+    logger.debug(
         "Received 2f+1 prepare messages for view {}, enter RP_PREPARED step",
         this.slot.getViewNumber());
 
@@ -850,7 +850,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     // Before we can continue processing, we need to fulfill the preconditions
     if (!this.slot.getViewNumber().equals(commit.viewNumber())) {
-      logger.info(
+      logger.debug(
           "View number mismatch in commit, own view number: {}, received: {}",
           this.slot.getViewNumber(),
           commit.viewNumber());
@@ -865,7 +865,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
       return;
     }
 
-    logger.info(
+    logger.debug(
         "We have reached 2f+1 RpCommit messages for view {}! Slot is committed by reconciliation path",
         this.slot.getViewNumber());
 
@@ -1240,7 +1240,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
   private void handleQueryExecMessage(QueryExecMessage queryExec) {
     if (this.slot.getExec() == null) {
-      logger.info(
+      logger.debug(
           "Received QueryExec, but did not forward request to execution yet. Throwing message away");
       return;
     }
@@ -1267,7 +1267,7 @@ public class AgmtSlotQueueProcessor implements Runnable {
 
     if (!this.bufferedMessages.execQuorumWithSameContentsReached(
         exec.clientRequests(), exec.dependencySet(), this.maxFaults + 1)) {
-      logger.info("Did not reach f+1 quorum for exec messages yet.");
+      logger.debug("Did not reach f+1 quorum for exec messages yet.");
       return;
     }
 

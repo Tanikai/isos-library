@@ -244,17 +244,17 @@ public class NettyClientServerCommunicationSystemClientSide
     var lastPingNanos = this.lastPingNanos.get(sender);
 
     if (lastPingNonce == null) {
-      logger.error("LastPingNonce of Replica {} does not exist", sender);
+      logger.warn("LastPingNonce of Replica {} does not exist", sender);
       return;
     }
 
     if (lastPingNanos == null) {
-      logger.error("LastPingNanos of Replica {} does not exist", sender);
+      logger.warn("LastPingNanos of Replica {} does not exist", sender);
       return;
     }
 
     if (!Arrays.equals(lastPingNonce, pingMsg.getNonce())) {
-      logger.error("Nonce mismatch with sent ping and received pong from {}", sender);
+      logger.warn("Nonce mismatch with sent ping and received pong from {}", sender);
     }
 
     long roundTripNanos = System.nanoTime() - lastPingNanos;
@@ -262,7 +262,6 @@ public class NettyClientServerCommunicationSystemClientSide
 
     if (!this.replicaPingMillis.containsKey(sender)) {
       this.remainingPings.countDown();
-      logger.debug("Remaining first pings to receive: {}", this.remainingPings.getCount());
     }
 
     this.replicaPingMillis.put(sender, roundTripMillis);

@@ -3,7 +3,6 @@ package isos.execution.graph;
 import isos.consensus.model.SequenceNumber;
 
 import java.util.*;
-import java.util.function.Consumer;
 
 /**
  * The dependency graph is a simple graph G = (V, E) data structure.
@@ -11,7 +10,8 @@ import java.util.function.Consumer;
  * @param slots
  * @param edges
  */
-public record DependencyGraph(Set<SequenceNumber> slots, Set<Dependency> edges) {
+public record DependencyGraph(
+    Set<SequenceNumber> slots, Set<Dependency> edges, boolean canBeExecuted) {
 
   public static Map<SequenceNumber, Set<SequenceNumber>> toAdjacencyList(DependencyGraph graph)
       throws MissingSourceVertexException {

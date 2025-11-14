@@ -179,7 +179,7 @@ class SccUtilsTest {
     edges.add(createEdge(0, 8, 7));
     edges.add(createEdge(0, 8, 8));
 
-    DependencyGraph depGraph = new DependencyGraph(nodes, edges);
+    DependencyGraph depGraph = new DependencyGraph(nodes, edges, true);
     var adjList = DependencyGraph.toAdjacencyList(depGraph);
     List<Set<SequenceNumber>> SCCs = sccFinder.getSCC(adjList, depGraph.slots());
 

@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class IsosYcsbClient extends DB {
   private static final AtomicLong requestCounter = new AtomicLong(0);
 
-  private final int REQUEST_LOG_INTERVAL = 50;
+  private final int REQUEST_LOG_INTERVAL = 250;
 
   private Logger logger;
   private static AtomicInteger counter = new AtomicInteger();
